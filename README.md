@@ -20,6 +20,12 @@ chmod +x *.py
 ```
 
 Then enter the movie name, choose the result number, and press Enter for 1080p.
+The first final link is printed immediately. On Termux, install clipboard
+support to auto-copy it:
+
+```bash
+pkg install termux-api
+```
 
 You can also pass the name directly:
 

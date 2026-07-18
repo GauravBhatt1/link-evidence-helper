@@ -12,6 +12,8 @@ use, and prints the 1080p report links.
 from __future__ import annotations
 
 import sys
+import shutil
+import subprocess
 
 from movie_report_finder import build_evidence, print_rows, search_movie
 
@@ -60,8 +62,24 @@ def main() -> int:
         timeout=20,
         max_hops=10,
         max_html_bytes=2_000_000,
+        first_only=True,
     )
-    print_rows(rows, "pretty")
+    best = ""
+    for row in rows:
+        best = row.final_inner_url or row.final_wrapper or row.instant_link or row.listing_link
+        if best:
+            break
+    if best:
+        print("FINAL LINK:")
+        print(best)
+        print()
+        if shutil.which("termux-clipboard-set"):
+            subprocess.run(["termux-clipboard-set"], input=best.encode("utf-8"), check=False)
+            print("Copied to Termux clipboard.")
+        else:
+            print("Tip: install clipboard support with: pkg install termux-api")
+    else:
+        print_rows(rows, "pretty")
     return 0
 
 

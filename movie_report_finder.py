@@ -148,7 +148,15 @@ def find_deep_links(landing_url: str, original_url: str, timeout: int, max_html_
     return deep_links
 
 
-def build_evidence(query: str, candidate: Candidate, quality: str, timeout: int, max_hops: int, max_html_bytes: int) -> list[EvidenceRow]:
+def build_evidence(
+    query: str,
+    candidate: Candidate,
+    quality: str,
+    timeout: int,
+    max_hops: int,
+    max_html_bytes: int,
+    first_only: bool = False,
+) -> list[EvidenceRow]:
     rows: list[EvidenceRow] = []
     try:
         listing_links = find_listing_links(candidate.url, quality, timeout, max_html_bytes)
@@ -198,6 +206,8 @@ def build_evidence(query: str, candidate: Candidate, quality: str, timeout: int,
                     "ok",
                 )
             )
+            if first_only:
+                return rows
     return rows
 
 
