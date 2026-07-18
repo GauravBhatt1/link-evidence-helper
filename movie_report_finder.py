@@ -143,7 +143,10 @@ def find_deep_links(landing_url: str, original_url: str, timeout: int, max_html_
     deep_links: list[Link] = []
     for link in parser.links:
         haystack = norm(f"{link.section} {link.text} {link.href}")
-        if any(term in haystack for term in ["instant", "direct download", "10gbps", "busycdn"]):
+        href_norm = norm(link.href)
+        if "login" in href_norm:
+            continue
+        if any(term in haystack for term in ["instant", "10gbps", "busycdn"]):
             deep_links.append(link)
     return deep_links
 
@@ -206,7 +209,7 @@ def build_evidence(
                     "ok",
                 )
             )
-            if first_only:
+            if first_only and (rows[-1].final_inner_url or rows[-1].final_wrapper):
                 return rows
     return rows
 
