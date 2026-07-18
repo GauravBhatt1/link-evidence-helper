@@ -178,6 +178,60 @@ def follow_redirects(url: str, max_hops: int, timeout: int) -> list[Hop]:
         except URLError as exc:
             hops.append(Hop(current, None, None, None, None, str(exc.reason)))
             break
+    curl_hops = follow_redirects_with_curl(url, max_hops, timeout)
+    if curl_hops and len(curl_hops) > len(hops):
+        return curl_hops
+    return hops
+
+
+def follow_redirects_with_curl(url: str, max_hops: int, timeout: int) -> list[Hop]:
+    curl = subprocess.run(
+        [
+            "curl",
+            "-I",
+            "-L",
+            "--max-redirs",
+            str(max_hops),
+            "--max-time",
+            str(timeout),
+            "-A",
+            USER_AGENT,
+            url,
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if curl.returncode != 0:
+        return []
+    blocks = re.split(r"\r?\n\r?\n", curl.stdout.decode("utf-8", errors="replace").strip())
+    hops: list[Hop] = []
+    current = url
+    for block in blocks:
+        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        if not lines or not lines[0].startswith("HTTP/"):
+            continue
+        status_match = re.search(r"\s(\d{3})\s", lines[0])
+        status = int(status_match.group(1)) if status_match else None
+        headers: dict[str, str] = {}
+        for line in lines[1:]:
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            headers[key.lower()] = value.strip()
+        location = headers.get("location")
+        absolute_location = urljoin(current, location) if location else None
+        hops.append(
+            Hop(
+                url=current,
+                status=status,
+                location=absolute_location,
+                content_type=headers.get("content-type"),
+                content_length=headers.get("content-length"),
+            )
+        )
+        if absolute_location:
+            current = absolute_location
     return hops
 
 

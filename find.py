@@ -18,6 +18,12 @@ import subprocess
 from movie_report_finder import build_evidence, print_rows, search_movie
 
 
+DIRECT_HOST_MARKERS = (
+    "video-downloads.googleusercontent.com",
+    "instant.busycdn.xyz",
+)
+
+
 def ask(prompt: str, default: str = "") -> str:
     suffix = f" [{default}]" if default else ""
     value = input(f"{prompt}{suffix}: ").strip()
@@ -66,7 +72,8 @@ def main() -> int:
     )
     best = ""
     for row in rows:
-        best = row.final_inner_url or row.final_wrapper or row.instant_link or row.listing_link
+        candidates = [row.final_inner_url, row.final_wrapper, row.instant_link]
+        best = next((url for url in candidates if any(marker in url for marker in DIRECT_HOST_MARKERS)), "")
         if best:
             break
     if best:
@@ -79,6 +86,7 @@ def main() -> int:
         else:
             print("Tip: install clipboard support with: pkg install termux-api")
     else:
+        print("Direct link not found automatically. Debug details:\n")
         print_rows(rows, "pretty")
     return 0
 
