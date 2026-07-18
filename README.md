@@ -8,8 +8,8 @@ movie listing pages without downloading movie files.
 ```bash
 pkg update -y
 pkg install git python curl -y
-git clone https://github.com/GauravBhatt1/report-link-tools.git
-cd report-link-tools
+git clone https://github.com/GauravBhatt1/link-evidence-helper.git
+cd link-evidence-helper
 chmod +x *.py
 ```
 
