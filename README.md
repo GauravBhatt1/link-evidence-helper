@@ -13,6 +13,20 @@ cd link-evidence-helper
 chmod +x *.py
 ```
 
+## Easiest Mode
+
+```bash
+./find.py
+```
+
+Then enter the movie name, choose the result number, and press Enter for 1080p.
+
+You can also pass the name directly:
+
+```bash
+./find.py "Alpha"
+```
+
 ## Search Results
 
 ```bash
