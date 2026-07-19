@@ -24,6 +24,7 @@ DIRECT_HOST_MARKERS = (
     "video-downloads.googleusercontent.com",
     "instant.busycdn.xyz",
 )
+ACCESS_TOKEN = ""
 
 
 HTML = """<!doctype html>
@@ -472,11 +473,15 @@ HTML = """<!doctype html>
       }[char]));
     }
 
+    const accessToken = new URLSearchParams(location.search).get("token") || localStorage.getItem("accessToken") || "";
+    if (accessToken) localStorage.setItem("accessToken", accessToken);
+
     async function api(path, options = {}) {
       const response = await fetch(path, {
         ...options,
         headers: {
           "content-type": "application/json",
+          "x-app-token": accessToken,
           ...(options.headers || {}),
         },
       });
@@ -661,6 +666,16 @@ def response(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload: Any) 
     handler.wfile.write(raw)
 
 
+def is_authorized(handler: BaseHTTPRequestHandler, parsed: Any | None = None) -> bool:
+    if not ACCESS_TOKEN:
+        return True
+    query_token = ""
+    if parsed is not None:
+        query_token = parse_qs(parsed.query).get("token", [""])[0]
+    header_token = handler.headers.get("x-app-token", "")
+    return ACCESS_TOKEN in {query_token, header_token}
+
+
 class AppHandler(BaseHTTPRequestHandler):
     server_version = "EvidenceLinkWeb/1.0"
 
@@ -670,6 +685,9 @@ class AppHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
         if parsed.path == "/":
+            if not is_authorized(self, parsed):
+                response(self, HTTPStatus.FORBIDDEN, {"ok": False, "error": "Token required"})
+                return
             raw = HTML.encode("utf-8")
             self.send_response(HTTPStatus.OK)
             self.send_header("content-type", "text/html; charset=utf-8")
@@ -681,6 +699,9 @@ class AppHandler(BaseHTTPRequestHandler):
             response(self, HTTPStatus.OK, {"ok": True})
             return
         if parsed.path == "/api/search":
+            if not is_authorized(self, parsed):
+                response(self, HTTPStatus.FORBIDDEN, {"ok": False, "error": "Token required"})
+                return
             query = parse_qs(parsed.query).get("q", [""])[0].strip()
             if not query:
                 response(self, HTTPStatus.BAD_REQUEST, {"ok": False, "error": "Name required"})
@@ -698,6 +719,9 @@ class AppHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path != "/api/find":
             response(self, HTTPStatus.NOT_FOUND, {"ok": False, "error": "Not found"})
+            return
+        if not is_authorized(self):
+            response(self, HTTPStatus.FORBIDDEN, {"ok": False, "error": "Token required"})
             return
         length = int(self.headers.get("content-length") or "0")
         if length > 16_384:
@@ -754,10 +778,13 @@ class AppHandler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
+    global ACCESS_TOKEN
     parser = argparse.ArgumentParser(description="Run the Evidence Link Helper web UI.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--token", default="", help="Optional access token for public hosting.")
     args = parser.parse_args()
+    ACCESS_TOKEN = args.token.strip()
     httpd = ThreadingHTTPServer((args.host, args.port), AppHandler)
     print(f"Serving on http://{args.host}:{args.port}")
     try:

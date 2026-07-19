@@ -69,13 +69,13 @@ qualities` is heavier because it checks each quality separately.
 Run locally or on a VPS:
 
 ```bash
-./web_app.py --host 0.0.0.0 --port 8765
+./web_app.py --host 0.0.0.0 --port 8765 --token "change-me"
 ```
 
 Then open:
 
 ```text
-http://SERVER_IP:8765
+http://SERVER_IP:8765/?token=change-me
 ```
 
 ## Extract 1080p Report Links
