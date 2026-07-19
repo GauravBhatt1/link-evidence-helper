@@ -47,6 +47,7 @@ class EvidenceRow:
     instant_link: str
     final_wrapper: str
     final_inner_url: str
+    content_length: str
     status: str
 
 
@@ -165,11 +166,11 @@ def build_evidence(
         listing_links = find_listing_links(candidate.url, quality, timeout, max_html_bytes)
     except Exception as exc:
         return [
-            EvidenceRow(query, candidate.title, candidate.url, "", "", "", "", "", "", f"page fetch failed: {exc}")
+            EvidenceRow(query, candidate.title, candidate.url, "", "", "", "", "", "", "", f"page fetch failed: {exc}")
         ]
     if not listing_links:
         return [
-            EvidenceRow(query, candidate.title, candidate.url, "", "", "", "", "", "", f"no {quality} listing link found")
+            EvidenceRow(query, candidate.title, candidate.url, "", "", "", "", "", "", "", f"no {quality} listing link found")
         ]
 
     for listing in listing_links:
@@ -188,6 +189,7 @@ def build_evidence(
                     "",
                     "",
                     "",
+                    "",
                     "listing found; no instant/direct link extracted",
                 )
             )
@@ -195,6 +197,7 @@ def build_evidence(
         for deep in deep_links:
             deep_hops = follow_redirects(deep.href, max_hops, timeout)
             final = final_or_next_url(deep_hops) or ""
+            content_length = next((hop.content_length for hop in reversed(deep_hops) if hop.content_length), "")
             rows.append(
                 EvidenceRow(
                     query,
@@ -206,6 +209,7 @@ def build_evidence(
                     deep.href,
                     final,
                     extract_inner_url(final),
+                    content_length,
                     "ok",
                 )
             )
@@ -225,6 +229,7 @@ def print_rows(rows: list[EvidenceRow], output: str) -> None:
         "instant_link",
         "final_wrapper",
         "final_inner_url",
+        "content_length",
         "status",
     ]
     if output == "tsv":
@@ -250,6 +255,7 @@ def print_rows(rows: list[EvidenceRow], output: str) -> None:
         print(f"Instant link: {row.instant_link}")
         print(f"Final wrapper: {row.final_wrapper}")
         print(f"Final inner URL: {row.final_inner_url}")
+        print(f"Content-Length: {row.content_length}")
         print(f"Status: {row.status}")
 
 
@@ -288,7 +294,7 @@ def main() -> int:
         try:
             candidates = search_movie(query, args.search_limit, args.timeout, args.max_html_bytes)
         except Exception as exc:
-            all_rows.append(EvidenceRow(query, "", "", "", "", "", "", "", "", f"search failed: {exc}"))
+            all_rows.append(EvidenceRow(query, "", "", "", "", "", "", "", "", "", f"search failed: {exc}"))
             continue
         if args.show_results:
             if args.output == "pretty":
@@ -298,11 +304,11 @@ def main() -> int:
                     print(f"   {candidate.url}")
             continue
         if not candidates:
-            all_rows.append(EvidenceRow(query, "", "", "", "", "", "", "", "", "no search result found"))
+            all_rows.append(EvidenceRow(query, "", "", "", "", "", "", "", "", "", "no search result found"))
             continue
         pick_index = max(args.pick - 1, 0)
         if pick_index >= len(candidates):
-            all_rows.append(EvidenceRow(query, "", "", "", "", "", "", "", "", f"pick {args.pick} unavailable"))
+            all_rows.append(EvidenceRow(query, "", "", "", "", "", "", "", "", "", f"pick {args.pick} unavailable"))
             continue
         all_rows.extend(
             build_evidence(query, candidates[pick_index], args.quality, args.timeout, args.max_hops, args.max_html_bytes)
