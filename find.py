@@ -24,6 +24,8 @@ DIRECT_HOST_MARKERS = (
     "instant.busycdn.xyz",
 )
 
+DEFAULT_QUALITIES = ("480p", "720p", "1080p", "2160p", "4k")
+
 
 def ask(prompt: str, default: str = "") -> str:
     suffix = f" [{default}]" if default else ""
@@ -39,6 +41,12 @@ def main() -> int:
         action="store_true",
         help="Stop after the first usable candidate. Faster, but may miss a later direct link.",
     )
+    parser.add_argument(
+        "-q",
+        "--quality",
+        default="",
+        help="Quality to scan, for example 480p, 720p, 1080p, or all.",
+    )
     args = parser.parse_args()
 
     query = " ".join(args.query).strip()
@@ -48,7 +56,6 @@ def main() -> int:
         print("Movie name required.")
         return 1
 
-    quality = "1080p"
     print(f"\nSearching: {query}\n")
     candidates = search_movie(query, limit=10, timeout=20, max_html_bytes=2_000_000)
     if not candidates:
@@ -69,35 +76,47 @@ def main() -> int:
         print("Result number out of range.")
         return 1
 
-    quality = ask("Quality", quality)
+    quality = args.quality.strip() or ask("Quality (480p/720p/1080p/all)", "1080p")
+    qualities = DEFAULT_QUALITIES if quality.lower() in {"all", "*"} else (quality,)
+
     print("\nFinding report links. No file body will be downloaded...\n")
-    rows = build_evidence(
-        query=query,
-        candidate=candidates[pick - 1],
-        quality=quality,
-        timeout=20,
-        max_hops=10,
-        max_html_bytes=2_000_000,
-        first_only=args.fast,
-    )
-    best = ""
-    for row in rows:
-        candidates = [row.final_inner_url, row.final_wrapper, row.instant_link]
-        best = next((url for url in candidates if any(marker in url for marker in DIRECT_HOST_MARKERS)), "")
+    final_links: list[tuple[str, str]] = []
+    debug_rows = []
+    for item_quality in qualities:
+        rows = build_evidence(
+            query=query,
+            candidate=candidates[pick - 1],
+            quality=item_quality,
+            timeout=20,
+            max_hops=10,
+            max_html_bytes=2_000_000,
+            first_only=args.fast,
+        )
+        debug_rows.extend(rows)
+        best = ""
+        for row in rows:
+            row_candidates = [row.final_inner_url, row.final_wrapper, row.instant_link]
+            best = next((url for url in row_candidates if any(marker in url for marker in DIRECT_HOST_MARKERS)), "")
+            if best:
+                break
         if best:
-            break
-    if best:
-        print("FINAL LINK:")
-        print(best)
+            final_links.append((item_quality, best))
+
+    if final_links:
+        print("FINAL LINKS:")
+        for item_quality, link in final_links:
+            print(f"\n[{item_quality}]")
+            print(link)
         print()
+        clipboard_text = "\n\n".join(f"[{item_quality}]\n{link}" for item_quality, link in final_links)
         if shutil.which("termux-clipboard-set"):
-            subprocess.run(["termux-clipboard-set"], input=best.encode("utf-8"), check=False)
-            print("Copied to Termux clipboard.")
+            subprocess.run(["termux-clipboard-set"], input=clipboard_text.encode("utf-8"), check=False)
+            print("Copied final links to Termux clipboard.")
         else:
             print("Tip: install clipboard support with: pkg install termux-api")
     else:
         print("Direct link not found automatically. Debug details:\n")
-        print_rows(rows, "pretty")
+        print_rows(debug_rows, "pretty")
     return 0
 
 
