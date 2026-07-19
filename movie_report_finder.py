@@ -21,6 +21,7 @@ from urllib.parse import quote_plus, urlparse, parse_qs
 from evidence_link_finder import (
     Link,
     LinkParser,
+    content_length_from_range,
     fetch_html,
     final_or_next_url,
     follow_redirects,
@@ -197,7 +198,10 @@ def build_evidence(
         for deep in deep_links:
             deep_hops = follow_redirects(deep.href, max_hops, timeout)
             final = final_or_next_url(deep_hops) or ""
+            final_inner_url = extract_inner_url(final)
             content_length = next((hop.content_length for hop in reversed(deep_hops) if hop.content_length), "")
+            if not content_length:
+                content_length = content_length_from_range(final_inner_url or final, timeout)
             rows.append(
                 EvidenceRow(
                     query,
@@ -208,7 +212,7 @@ def build_evidence(
                     landing,
                     deep.href,
                     final,
-                    extract_inner_url(final),
+                    final_inner_url,
                     content_length,
                     "ok",
                 )

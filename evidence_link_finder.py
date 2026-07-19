@@ -235,6 +235,46 @@ def follow_redirects_with_curl(url: str, max_hops: int, timeout: int) -> list[Ho
     return hops
 
 
+def content_length_from_range(url: str, timeout: int) -> str:
+    curl = subprocess.run(
+        [
+            "curl",
+            "-L",
+            "--range",
+            "0-0",
+            "--max-time",
+            str(timeout),
+            "-A",
+            USER_AGENT,
+            "-D",
+            "-",
+            "-o",
+            "/dev/null",
+            url,
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if curl.returncode != 0:
+        return ""
+    blocks = re.split(r"\r?\n\r?\n", curl.stdout.decode("utf-8", errors="replace").strip())
+    for block in reversed(blocks):
+        headers: dict[str, str] = {}
+        for line in block.splitlines():
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            headers[key.lower()] = value.strip()
+        content_range = headers.get("content-range", "")
+        match = re.search(r"/(\d+)\s*$", content_range)
+        if match:
+            return match.group(1)
+        if headers.get("content-length"):
+            return headers["content-length"]
+    return ""
+
+
 def score_link(link: Link, terms: Iterable[str]) -> bool:
     haystack = f"{link.section} {link.text} {link.href}".lower()
     return all(term.lower() in haystack for term in terms)
