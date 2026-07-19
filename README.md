@@ -54,6 +54,10 @@ You can also use numbers from the command line:
 ./find.py -q 5 "Alpha"     # all qualities
 ```
 
+For less load and faster results, choose one quality. In easy mode the script
+stops scanning that quality as soon as it finds a usable final link. `All
+qualities` is heavier because it checks each quality separately.
+
 ## Search Results
 
 ```bash

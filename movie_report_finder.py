@@ -29,6 +29,10 @@ from evidence_link_finder import (
 
 
 DEFAULT_SITE = "https://bollyflix.at"
+DIRECT_HOST_MARKERS = (
+    "video-downloads.googleusercontent.com",
+    "instant.busycdn.xyz",
+)
 
 
 @dataclass
@@ -114,6 +118,10 @@ def extract_inner_url(wrapper: str) -> str:
     return values[0] if values else ""
 
 
+def has_direct_marker(*urls: str) -> bool:
+    return any(marker in url for url in urls for marker in DIRECT_HOST_MARKERS)
+
+
 def find_listing_links(page_url: str, quality: str, timeout: int, max_html_bytes: int) -> list[Link]:
     page = fetch_html(page_url, max_html_bytes, timeout)
     parser = LinkParser(page_url)
@@ -161,6 +169,7 @@ def build_evidence(
     max_hops: int,
     max_html_bytes: int,
     first_only: bool = False,
+    stop_after_direct: bool = False,
 ) -> list[EvidenceRow]:
     rows: list[EvidenceRow] = []
     try:
@@ -217,6 +226,8 @@ def build_evidence(
                     "ok",
                 )
             )
+            if stop_after_direct and has_direct_marker(final_inner_url, final, deep.href):
+                return rows
             if first_only and (rows[-1].final_inner_url or rows[-1].final_wrapper):
                 return rows
     return rows

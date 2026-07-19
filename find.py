@@ -132,7 +132,10 @@ def main() -> int:
     quality = normalize_quality(args.quality) if args.quality.strip() else ask_quality()
     qualities = DEFAULT_QUALITIES if quality.lower() in {"all", "*"} else (quality,)
 
-    print("\nFinding report links. No file body will be downloaded...\n")
+    if len(qualities) == 1:
+        print(f"\nFinding {qualities[0]} report link only. No file body will be downloaded...\n")
+    else:
+        print("\nFinding one report link per quality. No file body will be downloaded...\n")
     final_links: list[tuple[str, str, str]] = []
     debug_rows = []
     for item_quality in qualities:
@@ -144,6 +147,7 @@ def main() -> int:
             max_hops=10,
             max_html_bytes=2_000_000,
             first_only=args.fast,
+            stop_after_direct=True,
         )
         debug_rows.extend(rows)
         best = ""
