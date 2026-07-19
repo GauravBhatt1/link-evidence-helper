@@ -64,6 +64,20 @@ qualities` is heavier because it checks each quality separately.
 ./movie_report_finder.py "Alpha" --show-results
 ```
 
+## Web UI
+
+Run locally or on a VPS:
+
+```bash
+./web_app.py --host 0.0.0.0 --port 8765
+```
+
+Then open:
+
+```text
+http://SERVER_IP:8765
+```
+
 ## Extract 1080p Report Links
 
 ```bash
