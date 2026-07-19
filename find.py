@@ -25,6 +25,13 @@ DIRECT_HOST_MARKERS = (
 )
 
 DEFAULT_QUALITIES = ("480p", "720p", "1080p", "2160p", "4k")
+QUALITY_MENU = (
+    ("480p", "480p"),
+    ("720p", "720p"),
+    ("1080p", "1080p"),
+    ("2160p", "2160p / 4K"),
+    ("all", "All qualities"),
+)
 
 
 def human_size(content_length: str) -> str:
@@ -47,6 +54,36 @@ def ask(prompt: str, default: str = "") -> str:
     suffix = f" [{default}]" if default else ""
     value = input(f"{prompt}{suffix}: ").strip()
     return value or default
+
+
+def ask_quality() -> str:
+    print("\nQuality:")
+    for index, (_, label) in enumerate(QUALITY_MENU, 1):
+        print(f"{index}. {label}")
+    raw = ask("Which quality number", "3").strip()
+    if raw.isdigit():
+        index = int(raw)
+        if 1 <= index <= len(QUALITY_MENU):
+            return QUALITY_MENU[index - 1][0]
+        print("Quality number out of range, using 1080p.")
+        return "1080p"
+    return raw or "1080p"
+
+
+def normalize_quality(value: str) -> str:
+    raw = value.strip()
+    if raw.isdigit():
+        index = int(raw)
+        if 1 <= index <= len(QUALITY_MENU):
+            return QUALITY_MENU[index - 1][0]
+    return raw
+
+
+def copy_to_clipboard(text: str) -> bool:
+    if not shutil.which("termux-clipboard-set"):
+        return False
+    subprocess.run(["termux-clipboard-set"], input=text.encode("utf-8"), check=False)
+    return True
 
 
 def main() -> int:
@@ -92,7 +129,7 @@ def main() -> int:
         print("Result number out of range.")
         return 1
 
-    quality = args.quality.strip() or ask("Quality (480p/720p/1080p/all)", "1080p")
+    quality = normalize_quality(args.quality) if args.quality.strip() else ask_quality()
     qualities = DEFAULT_QUALITIES if quality.lower() in {"all", "*"} else (quality,)
 
     print("\nFinding report links. No file body will be downloaded...\n")
@@ -121,16 +158,33 @@ def main() -> int:
 
     if final_links:
         print("FINAL LINKS:")
-        for item_quality, size_label, link in final_links:
-            print(f"\n[{item_quality}] {size_label}")
+        for index, (item_quality, size_label, link) in enumerate(final_links, 1):
+            print(f"\n{index}. [{item_quality}] {size_label}")
             print(link)
         print()
+
         clipboard_text = "\n\n".join(
             f"[{item_quality}] {size_label}\n{link}" for item_quality, size_label, link in final_links
         )
-        if shutil.which("termux-clipboard-set"):
-            subprocess.run(["termux-clipboard-set"], input=clipboard_text.encode("utf-8"), check=False)
-            print("Copied final links to Termux clipboard.")
+        selected_text = clipboard_text
+        selected_label = "final links"
+        if len(final_links) > 1 and sys.stdin.isatty():
+            pick_link_raw = ask("Copy which link number? Type all for full report", "all").strip().lower()
+            if pick_link_raw not in {"", "all", "*"}:
+                try:
+                    pick_link = int(pick_link_raw)
+                except ValueError:
+                    print("Invalid link number, copying all links.")
+                else:
+                    if 1 <= pick_link <= len(final_links):
+                        item_quality, size_label, link = final_links[pick_link - 1]
+                        selected_text = link
+                        selected_label = f"{item_quality} link"
+                    else:
+                        print("Link number out of range, copying all links.")
+
+        if copy_to_clipboard(selected_text):
+            print(f"Copied {selected_label} to Termux clipboard.")
         else:
             print("Tip: install clipboard support with: pkg install termux-api")
     else:

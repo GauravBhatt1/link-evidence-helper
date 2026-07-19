@@ -33,6 +33,27 @@ You can also pass the name directly:
 ./find.py "Alpha"
 ```
 
+Quality can be selected by number:
+
+```text
+Quality:
+1. 480p
+2. 720p
+3. 1080p
+4. 2160p / 4K
+5. All qualities
+```
+
+When multiple final links are found, the output is numbered too. Type the link
+number to copy only that link, or press Enter for `all`.
+
+You can also use numbers from the command line:
+
+```bash
+./find.py -q 2 "Alpha"     # 720p
+./find.py -q 5 "Alpha"     # all qualities
+```
+
 ## Search Results
 
 ```bash
