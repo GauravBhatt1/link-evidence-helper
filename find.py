@@ -14,6 +14,7 @@ from __future__ import annotations
 import sys
 import shutil
 import subprocess
+import argparse
 
 from movie_report_finder import build_evidence, print_rows, search_movie
 
@@ -31,7 +32,16 @@ def ask(prompt: str, default: str = "") -> str:
 
 
 def main() -> int:
-    query = " ".join(sys.argv[1:]).strip()
+    parser = argparse.ArgumentParser(description="Easy interactive report-link finder.")
+    parser.add_argument("query", nargs="*", help="Movie/file name to search")
+    parser.add_argument(
+        "--fast",
+        action="store_true",
+        help="Stop after the first usable candidate. Faster, but may miss a later direct link.",
+    )
+    args = parser.parse_args()
+
+    query = " ".join(args.query).strip()
     if not query:
         query = ask("Movie name")
     if not query:
@@ -68,7 +78,7 @@ def main() -> int:
         timeout=20,
         max_hops=10,
         max_html_bytes=2_000_000,
-        first_only=True,
+        first_only=args.fast,
     )
     best = ""
     for row in rows:
