@@ -24,6 +24,40 @@ class _FakeSession:
 
 
 class WorkflowAnalyzerTests(TestCase):
+    def test_blocked_host_does_not_cancel_later_queued_mirror(self):
+        class Session:
+            def __init__(self, *args, **kwargs):
+                self.rows = {
+                    "https://site.example/": ("<html></html>", 200, None, "text/html"),
+                    "https://site.example/movie": ('<a href="https://landing.example/1080">1080p Download</a>', 200, None, "text/html"),
+                    "https://landing.example/1080": ('<a href="https://gdflix.example/file">GDFLIX DOWNLOAD</a><a href="https://mirror.example/file.mkv">Mirror B</a>', 200, None, "text/html"),
+                    "https://gdflix.example/file": ('<div class="cf-turnstile"></div>', 200, None, "text/html"),
+                    "https://mirror.example/file.mkv": ("", 200, None, "video/x-matroska"),
+                }
+            def fetch_html_once(self, url, referer=""):
+                body, status, location, content_type = self.rows[url]
+                return body, SimpleNamespace(url=url, status=status, location=location, content_type=content_type, content_length="", headers={}), location
+        class Renderer:
+            def __enter__(self): return self
+            def close(self): pass
+            def render(self, url):
+                body, status, _, content_type = Session().rows[url]
+                return RenderedPage(url, body, status, content_type, "", url)
+
+        with patch.object(workflow_analyzer, "SafeSession", Session), patch.object(workflow_analyzer, "PlaywrightRenderer", Renderer), patch.object(workflow_analyzer, "validate_public_url", lambda url: url):
+            result = workflow_analyzer.analyze_movie_workflow("https://site.example/", "https://site.example/movie", "1080p")
+        self.assertEqual(result["status"], "success")
+        self.assertTrue(any(item["blocked_by"] == "cloudflare_turnstile" for item in result["results"]))
+        self.assertTrue(any(item["final_url"] == "https://mirror.example/file.mkv" for item in result["results"]))
+
+    def test_host_priority_prefers_direct_then_vcloud_then_gdflix(self):
+        actions = [
+            workflow_analyzer.Action("https://g.example/file", "GDFLIX DOWNLOAD", "https://page.example", "visible link"),
+            workflow_analyzer.Action("https://v.example/file", "VCLOUD DOWNLOAD", "https://page.example", "visible link"),
+            workflow_analyzer.Action("https://d.example/file", "DIRECT DOWNLOAD", "https://page.example", "visible link"),
+        ]
+        self.assertEqual([item.label for item in workflow_analyzer._branch_actions(actions)], ["DIRECT DOWNLOAD", "VCLOUD DOWNLOAD", "GDFLIX DOWNLOAD"])
+
     def test_quality_root_ignores_navigation_with_inherited_heading(self):
         class Session:
             def __init__(self, *args, **kwargs):

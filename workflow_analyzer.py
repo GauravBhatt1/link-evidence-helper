@@ -20,6 +20,7 @@ from playwright_renderer import PlaywrightRenderer, RendererUnavailable
 QUALITY_RE = re.compile(r"\b(?:2160|1440|1080|720|480)p\b|\b4k\b", re.I)
 DOWNLOAD_RE = re.compile(r"\b(?:download|direct|instant|mirror|server|drive|gdf[l]?ix|vcloud|fast\s*cloud|zipdisk|cloud\s*resume|quick\s*download|get\s*(?:link|file)|continue)\b", re.I)
 NAVIGATION_RE = re.compile(r"\b(?:home|menu|privacy|terms|contact|telegram|trailer|login|sign\s*in|download\s*tips|tips)\b", re.I)
+HOST_PRIORITY = ((re.compile(r"\bdirect\s*download\b", re.I), 0), (re.compile(r"\bvcloud\b", re.I), 1), (re.compile(r"\bgdf[l]?ix\b", re.I), 2))
 BLOCKER_RE = re.compile(r"cloudflare\s*turnstile|cf-turnstile|g-recaptcha|hcaptcha|captcha|verify\s+(?:that\s+)?you(?:'re| are)\s+human", re.I)
 LOGIN_RE = re.compile(r"\b(?:sign in|log in|login required|authentication required)\b", re.I)
 FILE_RE = re.compile(r"\.(?:mkv|mp4|webm|avi|zip)(?:$|[?#])", re.I)
@@ -147,9 +148,11 @@ def _merge_actions(*groups: list[Action]) -> list[Action]:
 def _branch_actions(actions: list[Action]) -> list[Action]:
     """Prefer download actions, but do not discard an unlabeled real branch."""
     direct = _pick(actions, lambda item: item.method != "GET" or _is_download(item) or bool(item.quality) or "static" in item.reason, MAX_ACTIONS_PER_PAGE)
-    if direct:
-        return direct
-    return _pick(actions, lambda item: item.method != "GET" or not NAVIGATION_RE.search(item.label), MAX_ACTIONS_PER_PAGE)
+    candidates = direct or _pick(actions, lambda item: item.method != "GET" or not NAVIGATION_RE.search(item.label), MAX_ACTIONS_PER_PAGE)
+    def rank(item: Action) -> int:
+        text = f"{item.label} {item.url}"
+        return next((priority for pattern, priority in HOST_PRIORITY if pattern.search(text)), 3)
+    return sorted(candidates, key=rank)
 
 
 def _same_resource(left: str, right: str) -> bool:
@@ -350,8 +353,11 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
     elif any(item["status"] == "success" for item in results):
         message, status = "Verified final file response found.", "success"
     elif any(item["status"] == "blocked" for item in results):
-        blocked = next(item for item in results if item["status"] == "blocked")
-        message, status = blocked["message"], "blocked"
+        blocked_items = [item for item in results if item["status"] == "blocked"]
+        if len(blocked_items) == len(results):
+            message, status = blocked_items[0]["message"], "blocked"
+        else:
+            message, status = "Some branches require manual verification; remaining branches were exhausted.", "partial"
     else:
         message, status = "Final file URL not reached.", "partial"
     return {"status": status, "site": site_url, "movie_url": movie_url, "results": results, "execution_log": log, "workflow_steps": _workflow_steps(True, results), "message": message}
