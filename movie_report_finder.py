@@ -10,7 +10,10 @@ pages to produce report-ready URLs. It does not download movie files.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import csv
+import html
+import os
 import re
 import sys
 import time
@@ -32,6 +35,14 @@ DEFAULT_SITE = "https://bollyflix.at"
 DIRECT_HOST_MARKERS = (
     "video-downloads.googleusercontent.com",
     "instant.busycdn.xyz",
+    "cloud-dl.",
+    "quick.cloudpaglu",
+)
+LISTING_HOST_MARKERS = (
+    "google",
+    "drive",
+    "dl.fastdlserver",
+    "fxlinks",
 )
 
 
@@ -39,6 +50,7 @@ DIRECT_HOST_MARKERS = (
 class Candidate:
     title: str
     url: str
+    source: str = ""
 
 
 @dataclass
@@ -60,16 +72,30 @@ def norm(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
 
 
-def unique_candidates(links: list[Link], query: str) -> list[Candidate]:
+def configured_sites() -> list[str]:
+    raw_sites = os.environ.get("BOLLYFLIX_SITES", DEFAULT_SITE)
+    sites: list[str] = []
+    for raw_site in raw_sites.split(","):
+        site = raw_site.strip().rstrip("/")
+        if not site:
+            continue
+        if not site.startswith(("http://", "https://")):
+            site = f"https://{site}"
+        if site not in sites:
+            sites.append(site)
+    return sites or [DEFAULT_SITE]
+
+
+def unique_candidates(links: list[Link], query: str, site: str) -> list[Candidate]:
     terms = [term for term in norm(query).split() if term]
     seen: set[str] = set()
     candidates: list[Candidate] = []
     for link in links:
-        if not link.href.startswith(DEFAULT_SITE):
+        if not link.href.startswith(site):
             continue
         if "/search/" in link.href or "/movies" in link.href:
             continue
-        title = link.text or link.section
+        title = html.unescape(link.text)
         title_norm = norm(title)
         if not title or not title_norm.startswith("download "):
             continue
@@ -82,8 +108,42 @@ def unique_candidates(links: list[Link], query: str) -> list[Candidate]:
     return candidates
 
 
-def search_movie(query: str, limit: int, timeout: int, max_html_bytes: int) -> list[Candidate]:
-    search_url = f"{DEFAULT_SITE}/search/{quote_plus(query).replace('+', '%20')}/"
+def clean_result_title(title: str) -> str:
+    cleaned = html.unescape(title or "")
+    cleaned = re.sub(r"\bdownload\b", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"[^a-z0-9]+", " ", cleaned.lower()).strip()
+    return cleaned
+
+
+def rank_candidates(candidates: list[Candidate], query: str) -> list[Candidate]:
+    query_norm = clean_result_title(query)
+    terms = [term for term in query_norm.split() if term]
+
+    def score(indexed: tuple[int, Candidate]) -> tuple[int, int]:
+        index, candidate = indexed
+        title = html.unescape(candidate.title)
+        title_norm = clean_result_title(title)
+        value = 0
+        if query_norm and query_norm in title_norm:
+            value += 60
+        if terms and all(term in title_norm for term in terms):
+            value += 40
+        if title_norm.startswith(query_norm):
+            value += 30
+        if re.search(r"\bseason\s*0*1\s*(?:-|–|to)\s*\d+\b", title, flags=re.IGNORECASE):
+            value += 25
+        if re.search(r"\bseason\s*0*1\b", title, flags=re.IGNORECASE):
+            value += 10
+        if re.search(rf"\b{re.escape(query)}\s*:", title, flags=re.IGNORECASE):
+            value -= 20
+        value -= min(20, max(0, len(title_norm.split()) - len(terms) - 10))
+        return (value, -index)
+
+    return [candidate for _, candidate in sorted(enumerate(candidates), key=score, reverse=True)]
+
+
+def search_movie_on_site(query: str, limit: int, timeout: int, max_html_bytes: int, site: str) -> list[Candidate]:
+    search_url = f"{site.rstrip('/')}/search/{quote_plus(query).replace('+', '%20')}/"
     page = fetch_html(search_url, max_html_bytes, timeout)
     terms = [term for term in norm(query).split() if term]
     candidates: list[Candidate] = []
@@ -95,7 +155,7 @@ def search_movie(query: str, limit: int, timeout: int, max_html_bytes: int) -> l
         flags=re.IGNORECASE | re.DOTALL,
     ):
         url = match.group(1)
-        title = re.sub(r"<[^>]+>", " ", match.group(2))
+        title = html.unescape(re.sub(r"<[^>]+>", " ", match.group(2)))
         title = re.sub(r"\s+", " ", title).strip()
         if not title or url in seen:
             continue
@@ -103,13 +163,42 @@ def search_movie(query: str, limit: int, timeout: int, max_html_bytes: int) -> l
             continue
         seen.add(url)
         candidates.append(Candidate(title=title, url=url))
-        if len(candidates) >= limit:
+        if len(candidates) >= limit * 2:
             break
-    if candidates:
-        return candidates
     parser = LinkParser(search_url)
     parser.feed(page)
-    return unique_candidates(parser.links, query)[:limit]
+    for candidate in unique_candidates(parser.links, query, site.rstrip("/")):
+        if candidate.url not in seen:
+            seen.add(candidate.url)
+            candidates.append(candidate)
+    if candidates:
+        return rank_candidates(candidates, query)[:limit]
+    return rank_candidates(unique_candidates(parser.links, query, site.rstrip("/")), query)[:limit]
+
+
+def search_movie(query: str, limit: int, timeout: int, max_html_bytes: int) -> list[Candidate]:
+    errors: list[str] = []
+    collected: list[Candidate] = []
+    seen: set[tuple[str, str]] = set()
+    for site in configured_sites():
+        try:
+            candidates = search_movie_on_site(query, limit, timeout, max_html_bytes, site)
+        except Exception as exc:
+            errors.append(f"{site}: {exc}")
+            continue
+        for candidate in candidates:
+            candidate.source = site.rstrip("/")
+            key = (candidate.url, candidate.source)
+            if key not in seen:
+                seen.add(key)
+                collected.append(candidate)
+    if collected:
+        # Keep results grouped by configured source order so the UI can make
+        # it clear which provider returned each title.
+        return collected
+    if errors:
+        raise RuntimeError("; ".join(errors))
+    return []
 
 
 def extract_inner_url(wrapper: str) -> str:
@@ -129,7 +218,7 @@ def find_listing_links(page_url: str, quality: str, timeout: int, max_html_bytes
     links: list[Link] = []
     for link in parser.links:
         haystack = norm(f"{link.section} {link.text} {link.href}")
-        if quality.lower() in haystack and ("google" in haystack or "drive" in haystack or "dl.fastdlserver" in haystack):
+        if quality.lower() in haystack and any(marker in haystack for marker in LISTING_HOST_MARKERS):
             if link.href.startswith("http"):
                 links.append(link)
     return links
@@ -152,13 +241,73 @@ def find_deep_links(landing_url: str, original_url: str, timeout: int, max_html_
     parser.feed(html)
     deep_links: list[Link] = []
     for link in parser.links:
-        haystack = norm(f"{link.section} {link.text} {link.href}")
+        raw_haystack = f"{link.section} {link.text} {link.href}".lower()
+        haystack = norm(raw_haystack)
         href_norm = norm(link.href)
         if "login" in href_norm:
             continue
-        if any(term in haystack for term in ["instant", "10gbps", "busycdn"]):
+        if any(term in haystack for term in ["instant", "10gbps", "busycdn"]) or any(
+            term in raw_haystack for term in ["dl.fastdlserver", "gdflix"]
+        ):
             deep_links.append(link)
     return deep_links
+
+
+def evidence_for_listing(
+    query: str,
+    candidate: Candidate,
+    listing: Link,
+    timeout: int,
+    max_hops: int,
+    max_html_bytes: int,
+) -> list[EvidenceRow]:
+    rows: list[EvidenceRow] = []
+    hops = follow_redirects(listing.href, max_hops, timeout)
+    landing = final_or_next_url(hops) or ""
+    deep_links = find_deep_links(landing, listing.href, timeout, max_html_bytes)
+    if not deep_links:
+        time.sleep(1.2)
+        deep_links = find_deep_links(landing, listing.href, timeout, max_html_bytes)
+    if not deep_links:
+        return [
+            EvidenceRow(
+                query,
+                candidate.title,
+                candidate.url,
+                listing.section,
+                listing.href,
+                landing,
+                "",
+                "",
+                "",
+                "",
+                "listing found; no instant/direct link extracted",
+            )
+        ]
+    for deep in deep_links:
+        deep_hops = follow_redirects(deep.href, max_hops, timeout)
+        final = final_or_next_url(deep_hops) or ""
+        final_inner_url = extract_inner_url(final)
+        content_length = next((hop.content_length for hop in reversed(deep_hops) if hop.content_length), "")
+        if not content_length:
+            content_length = content_length_from_range(final_inner_url or final, timeout)
+        section_text = " ".join(part for part in (listing.section, listing.text, deep.section, deep.text) if part)
+        rows.append(
+            EvidenceRow(
+                query,
+                candidate.title,
+                candidate.url,
+                section_text,
+                listing.href,
+                landing,
+                deep.href,
+                final,
+                final_inner_url,
+                content_length,
+                "ok",
+            )
+        )
+    return rows
 
 
 def build_evidence(
@@ -170,6 +319,9 @@ def build_evidence(
     max_html_bytes: int,
     first_only: bool = False,
     stop_after_direct: bool = False,
+    max_direct_links: int = 0,
+    max_listing_workers: int = 0,
+    listing_delay: float = 0,
 ) -> list[EvidenceRow]:
     rows: list[EvidenceRow] = []
     try:
@@ -183,52 +335,45 @@ def build_evidence(
             EvidenceRow(query, candidate.title, candidate.url, "", "", "", "", "", "", "", f"no {quality} listing link found")
         ]
 
-    for listing in listing_links:
-        hops = follow_redirects(listing.href, max_hops, timeout)
-        landing = final_or_next_url(hops) or ""
-        deep_links = find_deep_links(landing, listing.href, timeout, max_html_bytes)
-        if not deep_links:
-            rows.append(
-                EvidenceRow(
-                    query,
-                    candidate.title,
-                    candidate.url,
-                    listing.section,
-                    listing.href,
-                    landing,
-                    "",
-                    "",
-                    "",
-                    "",
-                    "listing found; no instant/direct link extracted",
+    direct_count = 0
+    if len(listing_links) > 1 and (max_direct_links > 1 or max_listing_workers > 1):
+        worker_count = max_listing_workers or max_direct_links
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=min(worker_count, len(listing_links), 8))
+        try:
+            futures = [
+                executor.submit(evidence_for_listing, query, candidate, listing, timeout, max_hops, max_html_bytes)
+                for listing in listing_links
+            ]
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    listing_rows = future.result()
+                except Exception:
+                    continue
+                rows.extend(listing_rows)
+                direct_count += sum(
+                    1
+                    for row in listing_rows
+                    if has_direct_marker(row.final_inner_url, row.final_wrapper, row.instant_link)
                 )
-            )
-            continue
-        for deep in deep_links:
-            deep_hops = follow_redirects(deep.href, max_hops, timeout)
-            final = final_or_next_url(deep_hops) or ""
-            final_inner_url = extract_inner_url(final)
-            content_length = next((hop.content_length for hop in reversed(deep_hops) if hop.content_length), "")
-            if not content_length:
-                content_length = content_length_from_range(final_inner_url or final, timeout)
-            rows.append(
-                EvidenceRow(
-                    query,
-                    candidate.title,
-                    candidate.url,
-                    listing.section,
-                    listing.href,
-                    landing,
-                    deep.href,
-                    final,
-                    final_inner_url,
-                    content_length,
-                    "ok",
-                )
-            )
-            if stop_after_direct and has_direct_marker(final_inner_url, final, deep.href):
+                if max_direct_links and direct_count >= max_direct_links:
+                    return rows
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
+        return rows
+
+    for index, listing in enumerate(listing_links):
+        if index and listing_delay > 0:
+            time.sleep(listing_delay)
+        listing_rows = evidence_for_listing(query, candidate, listing, timeout, max_hops, max_html_bytes)
+        rows.extend(listing_rows)
+        for row in listing_rows:
+            if stop_after_direct and has_direct_marker(row.final_inner_url, row.final_wrapper, row.instant_link):
                 return rows
-            if first_only and (rows[-1].final_inner_url or rows[-1].final_wrapper):
+            if max_direct_links and has_direct_marker(row.final_inner_url, row.final_wrapper, row.instant_link):
+                direct_count += 1
+                if direct_count >= max_direct_links:
+                    return rows
+            if first_only and (row.final_inner_url or row.final_wrapper):
                 return rows
     return rows
 

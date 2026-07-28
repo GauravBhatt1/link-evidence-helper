@@ -1,0 +1,7 @@
+.git
+__pycache__/
+*.pyc
+web_app.log
+library.db
+tests/
+download_workflow_analyzer.py

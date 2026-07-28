@@ -1,0 +1,15 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 APP_DATA_DIR=/data LIBRARY_DB_PATH=/data/library.db
+
+COPY . /app
+RUN mkdir -p /app/default-data/adapters /data /home/ubuntu/Config/Jellyfin/data/data \
+    && cp -a /app/adapters/. /app/default-data/adapters/ 2>/dev/null || true
+
+COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod 0755 /app/docker-entrypoint.sh
+
+EXPOSE 8765
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["python3", "web_app.py", "--host", "0.0.0.0", "--port", "8765"]

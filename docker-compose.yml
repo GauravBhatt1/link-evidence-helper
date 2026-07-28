@@ -1,0 +1,24 @@
+services:
+  app:
+    build: .
+    image: report-link-tools:integrated
+    restart: unless-stopped
+    env_file:
+      - /home/ubuntu/.env
+    environment:
+      APP_DATA_DIR: /data
+      LIBRARY_DB_PATH: /data/library.db
+      JELLYFIN_URL: http://host.docker.internal:8096
+    ports:
+      - "8765:8765"
+    volumes:
+      - report_link_data:/data
+      - /home/ubuntu/Cloud:/home/ubuntu/Cloud:ro
+      - /home/ubuntu/Config/Jellyfin/data/data/jellyfin.db:/home/ubuntu/Config/Jellyfin/data/data/jellyfin.db:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  report_link_data:
+    external: true
+    name: report-link-tools-repo_report_link_data

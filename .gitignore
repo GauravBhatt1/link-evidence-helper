@@ -1,0 +1,17 @@
+# Runtime state and credentials
+.env
+*.env
+library.db
+*.db-shm
+*.db-wal
+web_app.log
+
+# Python/build artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local backups and test output
+backups/
+*.tar.gz
+/tmp/

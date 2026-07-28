@@ -1,0 +1,99 @@
+{
+  "content_page": {
+    "download_terms": [
+      "download",
+      "direct",
+      "instant",
+      "drive",
+      "server",
+      "mirror"
+    ],
+    "ignore_terms": [
+      "trailer",
+      "sample",
+      "telegram",
+      "advertisement",
+      "privacy",
+      "contact"
+    ],
+    "link_selectors": [
+      "a[href]"
+    ],
+    "quality_patterns": {
+      "1080p": [
+        "\\\\b1080p\\\\b",
+        "\\\\bFHD\\\\b",
+        "Full HD"
+      ],
+      "2160p": [
+        "\\\\b2160p\\\\b",
+        "\\\\b4K\\\\b",
+        "\\\\bUHD\\\\b"
+      ],
+      "480p": [
+        "\\\\b480p\\\\b"
+      ],
+      "720p": [
+        "\\\\b720p\\\\b",
+        "\\\\bHD\\\\b"
+      ]
+    }
+  },
+  "domains": [
+    "new3.hdhub4u.cl"
+  ],
+  "enabled": true,
+  "final_link_detection": {
+    "content_type_prefixes": [
+      "video/",
+      "application/octet-stream"
+    ],
+    "file_extensions": [
+      ".mp4",
+      ".mkv",
+      ".zip"
+    ],
+    "host_markers": [
+      "hubdrive.tips",
+      "new3.hdhub4u.cl"
+    ]
+  },
+  "health": {
+    "last_test_status": "passed",
+    "last_tested_at": "2026-07-26T20:15:00Z",
+    "status": "Working"
+  },
+  "id": "new_site",
+  "name": "New Site",
+  "redirects": {
+    "allow_get_html_fallback": true,
+    "max_hops": 8,
+    "use_head_first": true
+  },
+  "search": {
+    "json_results_path": "hits",
+    "link_path": "document.permalink",
+    "mode": "json_api",
+    "referer": "https://new3.hdhub4u.cl/",
+    "result_container_selectors": [
+      "a",
+      ".__internal",
+      ".custom-button",
+      "a.__internal"
+    ],
+    "title_path": "document.post_title",
+    "title_selectors": [
+      "a",
+      ".__internal",
+      ".custom-button",
+      "a.__internal"
+    ],
+    "url_template": "https://search.pingora.fyi/collections/post/documents/search?q={query}&query_by=post_title%2Ccategory%2Cstars%2Cdirector%2Cimdb_id&query_by_weights=4%2C2%2C2%2C2%2C4&sort_by=sort_by_date%3Adesc&limit=15&highlight_fields=none&use_cache=true&page=1"
+  },
+  "session": {
+    "cookies_required": false,
+    "csrf_token_required": false,
+    "javascript_required": false,
+    "referer_required": false
+  }
+}
