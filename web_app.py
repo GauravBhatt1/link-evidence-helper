@@ -42,7 +42,6 @@ from adapter_storage import AdapterStorage
 from adapter_models import adapter_id
 from adapter_runtime import SiteAdapter, normalized_title
 from workflow_analyzer import analyze_movie_workflow
-from workflow_analyzer_admin import page_html as workflow_analyzer_admin_page
 
 
 DEFAULT_QUALITIES = ("480p", "720p", "1080p", "2160p", "4k")
@@ -135,6 +134,17 @@ def normalize_workflow_result(workflow: dict[str, Any], source_url: str, source_
     ]
     message = "" if links else "No verified final link is available for this source."
     return {"ok": True, "links": links, "message": message, "debug": workflow.get("execution_log", []) if include_debug else [], "cached": False, "temporary": True, "workflow_status": workflow.get("status", "partial")}
+
+
+def combined_sources() -> list[dict[str, Any]]:
+    """Present runtime sources and JSON adapters as one user-facing inventory."""
+    rows: list[dict[str, Any]] = []
+    for item in (LIBRARY.list_sources() if LIBRARY else []):
+        rows.append({"id": item["id"], "kind": "runtime", "name": item["name"], "domain": urlparse(item["base_url"]).hostname or item["base_url"], "enabled": item["enabled"], "search_status": item.get("last_status") or "Not tested", "resolver_status": item.get("last_status") or "Not tested", "last_tested_at": item.get("last_checked_at") or ""})
+    for item in ENABLED_ADAPTERS:
+        health = item.get("health", {})
+        rows.append({"id": item["id"], "kind": "adapter", "name": item.get("name") or item["id"], "domain": (item.get("domains") or [""])[0], "enabled": bool(item.get("enabled")), "search_status": health.get("status") or "Not tested", "resolver_status": health.get("last_test_status") or "Not tested", "last_tested_at": health.get("last_tested_at") or ""})
+    return sorted(rows, key=lambda row: (not row["enabled"], row["name"].lower()))
 
 
 HTML = """<!doctype html>
@@ -1097,7 +1107,7 @@ HTML = """<!doctype html>
     </div>
 
     <nav class="app-nav" aria-label="Main navigation" id="appNav">
-      <button data-view="search" class="active">Search</button><button data-view="movies">Movies</button><button data-view="tv">TV Shows</button><button data-view="missing">Missing</button><button data-view="recent">Recently Added</button><button data-view="admin">Admin</button><button id="workflowAnalyzerNav" type="button">Workflow Analyzer</button>
+      <button data-view="search" class="active">Search</button><button data-view="movies">Movies</button><button data-view="tv">TV Shows</button><button data-view="missing">Missing</button><button data-view="recent">Recently Added</button><button data-view="admin">Admin</button><button data-view="sources">Sources</button>
     </nav>
 
     <section class="layout search-workspace" id="searchWorkspace">
@@ -1957,9 +1967,9 @@ HTML = """<!doctype html>
     const libraryImage = (path) => path ? `${basePrefix()}${path}` : "";
     const bytes = (size) => { const n=Number(size||0); if(!n) return "—"; const units=["B","KB","MB","GB","TB"]; const i=Math.min(units.length-1,Math.floor(Math.log(n)/Math.log(1024))); return `${(n/1024**i).toFixed(i?1:0)} ${units[i]}`; };
     const statusBadge = (value) => { const text=String(value||"NEEDS MATCH").toUpperCase(); const key=text.toLowerCase().replace("needs match","match"); return `<span class="status-badge ${escapeHtml(key)}">${escapeHtml(text)}</span>`; };
-    const isLibraryRoute = () => location.pathname.includes("/library/") || /\/admin$/.test(location.pathname);
-    function libraryRoute(view) { return { search: "/index/", movies:"/index/library/movies", tv:"/index/library/tv", missing:"/index/library/missing", recent:"/index/library/recent", admin:"/index/admin" }[view] || "/index/"; }
-    function libraryViewFromPath() { const part=location.pathname.split("/").filter(Boolean).pop(); return ({movies:"movies",tv:"tv",missing:"missing",recent:"recent",admin:"admin"})[part] || "search"; }
+    const isLibraryRoute = () => location.pathname.includes("/library/") || /\/admin(?:\/sources)?$/.test(location.pathname);
+    function libraryRoute(view) { return { search: "/index/", movies:"/index/library/movies", tv:"/index/library/tv", missing:"/index/library/missing", recent:"/index/library/recent", admin:"/index/admin", sources:"/index/admin/sources" }[view] || "/index/"; }
+    function libraryViewFromPath() { const parts=location.pathname.split("/").filter(Boolean); return parts.at(-1)==="sources"?"sources":({movies:"movies",tv:"tv",missing:"missing",recent:"recent",admin:"admin"})[parts.at(-1)] || "search"; }
     function libraryDetailFromUrl() { const params=new URLSearchParams(location.search), id=params.get("item"), kind=params.get("kind"), season=Number(params.get("season")); return id && (kind==="movie" || kind==="tv") ? {id,kind,season:Number.isFinite(season)&&season>0?season:null} : null; }
     function libraryDetailUrl(kind,id,season=null) { const params=new URLSearchParams({item:id,kind}); if(season) params.set("season",String(season)); return `${libraryRoute(kind==="movie"?"movies":"tv")}?${params}`; }
     function saveLibraryScroll() { try { sessionStorage.setItem(`jobinfo:library-scroll:${location.pathname}${location.search}`, String(window.scrollY)); } catch (_) {} }
@@ -1990,6 +2000,7 @@ HTML = """<!doctype html>
     const displayTime=(value)=>{if(!value)return "—"; const date=new Date(value);return Number.isNaN(date.valueOf())?String(value):date.toLocaleString();};
     function adminRow(title, meta="") { return `<div class="admin-row"><strong>${escapeHtml(title||"Unknown")}</strong>${meta?`<small>${escapeHtml(meta)}</small>`:""}</div>`; }
     async function renderAdmin() { try { const data=await api("/api/admin/library/dashboard"); const stats=data.stats||{}, movies=stats.movies||{}, tv=stats.tv||{}; const events=data.events||[], scans=data.scans||[], unmatched=data.unmatched||[], duplicates=data.duplicates||[]; libraryViewEl.innerHTML=`<div class="library-toolbar"><h2>Admin Dashboard</h2><button class="btn secondary" id="scanLibrary">Scan Library</button><button class="btn secondary" id="refreshAdmin">Refresh</button></div><div class="admin-kpi"><span>Movies<b>${Number(movies.count||0)}</b></span><span>TV Shows<b>${Number(tv.count||0)}</b></span><span>Needs Match<b>${unmatched.length}</b></span><span>Possible Duplicates<b>${duplicates.length}</b></span></div><div class="admin-grid"><section class="admin-panel"><h3>Broken links & resolver failures</h3><div class="admin-list">${events.length?events.map(e=>adminRow(e.message,`${e.category.replace("_"," ")} · ${displayTime(e.created_at)}`)).join(""):'<div class="admin-row"><small>No failures logged yet. New resolver failures will appear here.</small></div>'}</div></section><section class="admin-panel"><h3>Recent scans</h3><div class="admin-list">${scans.length?scans.map(s=>{const p=s.progress||{};return adminRow(`${String(s.kind||"scan").toUpperCase()} · ${s.status||"unknown"}`,`${displayTime(s.started_at)} · ${p.filesChecked||0} files · ${p.errors?.length||0} errors`)}).join(""):'<div class="admin-row"><small>No scan history yet.</small></div>'}</div></section><section class="admin-panel"><h3>Unmatched titles</h3><div class="admin-list">${unmatched.length?unmatched.map(i=>adminRow(`${i.title}${i.year?` (${i.year})`:""}`,`${i.type} · ${i.total_files||0} file(s) · ${bytes(i.total_size)}`)).join(""):'<div class="admin-row"><small>All scanned titles are matched.</small></div>'}</div></section><section class="admin-panel"><h3>Possible duplicates</h3><div class="admin-list">${duplicates.length?duplicates.map(d=>adminRow(`${d.title}${d.year?` (${d.year})`:""}`,`${d.copies} copies across library roots · ${d.type}`)).join(""):'<div class="admin-row"><small>No same-title copies detected across configured library roots.</small></div>'}</div></section></div>`; $("scanLibrary").onclick=startLibraryScan; $("refreshAdmin").onclick=renderAdmin; } catch(error) { libraryViewEl.innerHTML=`<div class="library-empty">${escapeHtml(error.message||"Admin dashboard unavailable.")}</div>`; setStatus(error.message||"Admin dashboard unavailable",true); } }
+    async function renderSources() { try { const body=await api("/api/admin/sources"), rows=body.sources||[]; const card=row=>`<div class="admin-row"><strong>${escapeHtml(row.name)}</strong><small>Domain: ${escapeHtml(row.domain)} · ${row.enabled?"Enabled":"Disabled"}<br>Search: ${escapeHtml(row.search_status)} · Link resolver: ${escapeHtml(row.resolver_status)}<br>Last test: ${escapeHtml(row.last_tested_at?displayTime(row.last_tested_at):"Never")}</small><span class="episode-row-actions"><button class="btn secondary source-test" data-id="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind)}">Test</button><button class="btn secondary source-edit" data-id="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind)}">Edit</button><button class="btn secondary source-toggle" data-id="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind)}" data-enabled="${row.enabled?"0":"1"}">${row.enabled?"Disable":"Enable"}</button><button class="btn secondary source-advanced" data-id="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind)}">Advanced Diagnostics</button><button class="btn secondary source-delete" data-id="${escapeHtml(row.id)}" data-kind="${escapeHtml(row.kind)}">Delete</button></span></div>`; libraryViewEl.innerHTML=`<div class="library-toolbar"><h2>Sources</h2><button class="btn" id="addSource">Add New Source</button></div><div class="pending-note">Configured sources and saved adapters are managed together.</div><div class="admin-list" id="sourceRows">${rows.map(card).join("")||"<div class='pending-note'>No sources configured.</div>"}</div><section class="admin-panel" id="sourceWizard" hidden></section>`; const request=(action,data)=>api(`/api/admin/sources/${action}`,{method:"POST",body:JSON.stringify(data)}); $("addSource").onclick=()=>{const panel=$("sourceWizard");panel.hidden=false;panel.innerHTML=`<h3>Add New Source</h3><div class="field"><label>Website URL</label><input id="newSourceUrl" placeholder="https://example.com"></div><div class="field"><label>Example search title</label><input id="newSourceQuery" placeholder="Example title"></div><button class="btn" id="newSourceSearch">1. Detect and Test Search</button><div id="newSourceResult" class="pending-note"></div>`; $("newSourceSearch").onclick=async()=>{const out=$("newSourceResult");out.textContent="Checking search…";try{const r=await request("wizard/search",{siteUrl:$("newSourceUrl").value,query:$("newSourceQuery").value});out.innerHTML=`<strong>2. Select a verified result</strong><br>${(r.candidates||[]).map((x,i)=>`<button class="btn secondary wizard-result" data-i="${i}">${escapeHtml(x.title)}</button>`).join("")||"No verified results."}`;out.querySelectorAll(".wizard-result").forEach(b=>b.onclick=async()=>{const item=r.candidates[Number(b.dataset.i)];out.textContent="Testing link workflow…";const a=await request("wizard/analyze",{siteUrl:$("newSourceUrl").value,query:$("newSourceQuery").value,candidate:item});out.innerHTML=`<strong>3. Result summary</strong><br>Search: ${a.report?.search_test_successful?"Verified":"Needs review"}<br>Link workflow: ${a.report?.final_link_detected?"Verified":"No final link verified"}<br><button class="btn" id="saveNewSource">Save and Enable Source</button>`;$("saveNewSource").onclick=async()=>{await api("/api/adapters/save",{method:"POST",body:JSON.stringify({adapter:a.adapter,saveMode:"new"})});renderSources();};});}catch(e){out.textContent=e.message}};}; libraryViewEl.querySelectorAll(".source-toggle,.source-delete,.source-test").forEach(b=>b.onclick=async()=>{if(b.classList.contains("source-delete")&&!confirm("Delete this source?"))return;await request(b.classList.contains("source-toggle")?"toggle":b.classList.contains("source-delete")?"delete":"test",{id:b.dataset.id,kind:b.dataset.kind,enabled:b.dataset.enabled==="1"});renderSources();}); libraryViewEl.querySelectorAll(".source-edit").forEach(b=>b.onclick=()=>{setStatus("Edit uses the Add New Source guided flow; existing runtime settings are preserved until saved.");}); libraryViewEl.querySelectorAll(".source-advanced").forEach(b=>b.onclick=()=>{const panel=$("sourceWizard");panel.hidden=false;panel.innerHTML=`<h3>Advanced Diagnostics</h3><p class="pending-note">Enter a page URL to run a read-only workflow check for this source.</p><div class="field"><input id="diagPage" placeholder="https://example.com/title"></div><button class="btn" id="diagRun">Run diagnostics</button><pre id="diagOutput"></pre>`;$("diagRun").onclick=async()=>{const page=$("diagPage").value;const row=rows.find(x=>x.id===b.dataset.id&&x.kind===b.dataset.kind);const r=await api("/api/admin/workflow-analyzer",{method:"POST",body:JSON.stringify({siteUrl:`https://${row.domain}`,movieUrl:page})});$("diagOutput").textContent=JSON.stringify(r,null,2);};}); } catch(error) { libraryError(error); } }
     const linesValue=(value)=>Array.isArray(value)?value.join("\\n"):String(value||"");
     const splitLines=(value)=>String(value||"").split(/\\n|,/).map(x=>x.trim()).filter(Boolean);
     async function renderSetup() {
@@ -2018,11 +2029,9 @@ HTML = """<!doctype html>
       if(libraryState.view==="movies") return renderCollection("movie");
       if(libraryState.view==="tv") return renderCollection("tv");
       if(libraryState.view==="missing") return renderMissing();
+      if(libraryState.view==="sources") return renderSources();
       if(libraryState.view==="admin") {
-        // Wait for the dashboard DOM before adding Saved Adapters.  The old
-        // timeout raced slow/mobile API responses and made the section vanish.
-        await renderAdmin();
-        return renderSavedAdapters();
+        return renderAdmin();
       }
       return renderRecent();
     }
@@ -2117,7 +2126,6 @@ HTML = """<!doctype html>
     new MutationObserver(attachSeasonZipActions).observe(libraryDetailEl,{childList:true,subtree:true});
     function closeLibraryDetail(){ const wasDeepLink=Boolean(libraryDetailFromUrl()); libraryDetailEl.classList.remove("open");libraryDetailEl.innerHTML="";libraryState.detail=null; if(wasDeepLink){ history.replaceState({view:libraryState.view},"",libraryRoute(libraryState.view)); restoreLibraryScroll(); } }
     document.querySelectorAll("#appNav [data-view],#bottomNav [data-view]").forEach(button=>button.addEventListener("click",()=>navigate(button.dataset.view)));
-    $("workflowAnalyzerNav")?.addEventListener("click",()=>{ location.href=`${basePrefix()}/admin/workflow-analyzer`; });
     window.addEventListener("popstate",async()=>{const view=libraryViewFromPath(), detail=libraryDetailFromUrl(); await navigate(view,false); if(detail) openLibraryDetail(detail.kind,detail.id,{push:false,season:detail.season}); else {closeLibraryDetail();restoreLibraryScroll();}}); libraryDetailEl.addEventListener("click",e=>{if(e.target===libraryDetailEl)closeLibraryDetail()}); window.addEventListener("scroll",()=>backToTopEl.classList.toggle("visible",window.scrollY>700)); backToTopEl.onclick=()=>window.scrollTo({top:0,behavior:"smooth"});
     if(isLibraryRoute()) { const detail=libraryDetailFromUrl(); navigate(libraryViewFromPath(),false).then(()=>{ if(detail) openLibraryDetail(detail.kind,detail.id,{push:false,season:detail.season}); else restoreLibraryScroll(); }); }
     loadWallpapers();
@@ -4018,18 +4026,12 @@ class AppHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         if route_path == "/admin/workflow-analyzer":
-            if not is_authorized(self, parsed):
-                response(self, HTTPStatus.FORBIDDEN, {"ok": False, "error": "Token required"})
-                return
-            raw = workflow_analyzer_admin_page(f"{APP_BASE_PATH}/api/admin/workflow-analyzer").encode("utf-8")
-            self.send_response(HTTPStatus.OK)
-            self.send_header("content-type", "text/html; charset=utf-8")
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", f"{APP_BASE_PATH}/admin/sources")
             self.send_header("cache-control", "no-store")
-            self.send_header("content-length", str(len(raw)))
             self.end_headers()
-            self.wfile.write(raw)
             return
-        if route_path in {"/", "/library/movies", "/library/tv", "/library/missing", "/library/recent", "/admin"}:
+        if route_path in {"/", "/library/movies", "/library/tv", "/library/missing", "/library/recent", "/admin", "/admin/sources"}:
             if not is_authorized(self, parsed):
                 response(self, HTTPStatus.FORBIDDEN, {"ok": False, "error": "Token required"})
                 return
@@ -4043,6 +4045,12 @@ class AppHandler(BaseHTTPRequestHandler):
             return
         if route_path == "/health":
             response(self, HTTPStatus.OK, {"ok": True})
+            return
+        if route_path == "/api/admin/sources":
+            if not is_admin(self, parsed):
+                response(self, HTTPStatus.FORBIDDEN, {"ok": False, "error": "Admin authorization required"})
+            else:
+                response(self, HTTPStatus.OK, {"ok": True, "sources": combined_sources()})
             return
         if route_path == "/api/adapters":
             if not is_admin(self, parsed):
@@ -4224,6 +4232,47 @@ class AppHandler(BaseHTTPRequestHandler):
         if admin_setup_post(self, parsed, route_path, payload):
             return
         if library_admin_post(self, parsed, route_path, payload):
+            return
+        if route_path.startswith("/api/admin/sources/"):
+            if not is_admin(self, parsed):
+                response(self, HTTPStatus.FORBIDDEN, {"ok": False, "error": "Admin authorization required"}); return
+            action = route_path.rsplit("/", 1)[-1]
+            try:
+                if action == "wizard/search":
+                    site_url, query = str(payload.get("siteUrl") or "").strip(), str(payload.get("query") or "").strip()
+                    if not site_url or not query: raise ValueError("Website URL and example search title are required")
+                    candidates = search_movie_on_site(query, limit=8, timeout=15, max_html_bytes=1_000_000, site=site_url)
+                    response(self, HTTPStatus.OK, {"ok": True, "candidates": [{"title": item.title, "url": item.url} for item in candidates]})
+                elif action == "wizard/analyze":
+                    candidate = payload.get("candidate") or {}
+                    result = analyze_adapter({"siteName": urlparse(str(payload.get("siteUrl") or "")).hostname or "New Source", "mainSiteUrl": payload.get("siteUrl"), "examplePageUrl": candidate.get("url"), "searchQuery": payload.get("query") or "", "expectedQuality": ""})
+                    workflow = analyze_movie_workflow(str(payload.get("siteUrl") or ""), str(candidate.get("url") or ""))
+                    response(self, HTTPStatus.OK, {"ok": True, **result, "workflow": workflow})
+                else:
+                    source_id, kind = str(payload.get("id") or ""), str(payload.get("kind") or "")
+                    if not source_id or kind not in {"runtime", "adapter"}: raise ValueError("Invalid source")
+                    if kind == "runtime":
+                        source = next((item for item in (LIBRARY.list_sources() if LIBRARY else []) if item["id"] == source_id), None)
+                        if not source: raise ValueError("Source not found")
+                        if action == "toggle":
+                            source["enabled"] = bool(payload.get("enabled")); LIBRARY.save_source(source); apply_persisted_configuration()
+                        elif action == "delete": LIBRARY.delete_source(source_id)
+                        elif action == "test":
+                            try: search_movie_on_site("test", limit=1, timeout=10, max_html_bytes=1_000_000, site=source["base_url"]); LIBRARY.record_source_check(source_id, "Working")
+                            except Exception as exc: LIBRARY.record_source_check(source_id, "Failed", str(exc))
+                        else: raise ValueError("Unknown source action")
+                    else:
+                        adapter = next((item for item in ENABLED_ADAPTERS if item["id"] == source_id), None)
+                        if not adapter: raise ValueError("Adapter not found")
+                        if action == "toggle": adapter["enabled"] = bool(payload.get("enabled")); ADAPTERS.replace(adapter); ENABLED_ADAPTERS[:] = ADAPTERS.list()
+                        elif action == "delete": ADAPTERS.delete(source_id); ENABLED_ADAPTERS[:] = ADAPTERS.list()
+                        elif action == "test":
+                            result = analyze_adapter({"siteName": adapter["name"], "mainSiteUrl": "https://" + adapter["domains"][0], "examplePageUrl": adapter.get("maker", {}).get("example_page_url") or "https://" + adapter["domains"][0], "searchQuery": adapter.get("maker", {}).get("search_query") or "test", "expectedQuality": adapter.get("maker", {}).get("expected_quality") or ""})
+                            adapter["health"] = {"status": "Working" if result["report"]["ready_to_save"] else "Needs review", "last_test_status": "passed" if result["report"]["ready_to_save"] else "failed", "last_tested_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}; ADAPTERS.replace(adapter); ENABLED_ADAPTERS[:] = ADAPTERS.list()
+                        else: raise ValueError("Unknown source action")
+                    response(self, HTTPStatus.OK, {"ok": True, "sources": combined_sources()})
+            except (ValueError, RuntimeError) as exc:
+                response(self, HTTPStatus.BAD_REQUEST, {"ok": False, "error": str(exc)})
             return
         if route_path == "/api/admin/workflow-analyzer":
             if not is_admin(self, parsed):
