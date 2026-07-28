@@ -33,8 +33,57 @@ def _matching_search_results(html: str, page_url: str, query: str) -> list[Eleme
     return [
         item for item in doc.elements
         if item.href and item.tag == "a" and item.text
-        and (not terms or all(term in (item.text + " " + item.href).lower() for term in terms))
+        and "#" not in item.href
+        and "skip to content" not in item.text.lower()
+        and (not terms or all(term in item.text.lower() for term in terms))
     ]
+
+
+def discover_search_results(site_url: str, query: str) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    """Find real server-rendered search results for a new, unregistered site.
+
+    This is intentionally independent of saved adapters and does not require a
+    pre-existing source registry entry.  It reports a concise failure reason
+    for the onboarding wizard while retaining technical detail for server logs.
+    """
+    site = validate_public_url(site_url)
+    query = str(query or "").strip()
+    if not query:
+        raise ValueError("Search title is required")
+    session = SafeSession()
+    main_html, main_meta = session.fetch_html(site)
+    if main_meta.error or not main_html:
+        raise ValueError("Website unreachable")
+    doc = PageParser(site); doc.feed(main_html)
+    templates: list[str] = []
+    for form in doc.forms:
+        action = urljoin(site, form.get("action") or "/")
+        templates.append(action + ("&" if "?" in action else "?") + "s={query}")
+    templates += [urljoin(site, value) for value in ("?s={query}", "?q={query}", "/search/{query}", "/search?q={query}")]
+    seen: set[str] = set(); attempts: list[dict[str, str]] = []
+    for template in templates:
+        if template in seen: continue
+        seen.add(template)
+        url = template.replace("{query}", quote_plus(query))
+        html, meta = session.fetch_html(url, site)
+        attempts.append({"url": redact_url(url), "status": str(meta.status or ""), "error": meta.error or ""})
+        if meta.error or not html: continue
+        rows = _matching_search_results(html, url, query)
+        # New sites need not use the legacy "Download …" title convention.
+        if not rows:
+            parsed = PageParser(url); parsed.feed(html)
+            terms = [term for term in re.sub(r"[^a-z0-9]+", " ", query.lower()).split() if term]
+            rows = [item for item in parsed.elements if item.href and item.text and "#" not in item.href and "skip to content" not in item.text.lower() and (not terms or all(term in item.text.lower() for term in terms))]
+        results: list[dict[str, str]] = []
+        for row in rows:
+            if row.href not in {item["url"] for item in results}:
+                results.append({"title": row.text[:240], "url": row.href})
+            if len(results) >= 12: break
+        if results:
+            return results, {"search_url": redact_url(url), "attempts": attempts, "status": "search detected"}
+    if any(item["error"] for item in attempts):
+        raise ValueError("Website blocks automated analysis")
+    raise ValueError("Search returned no results")
 
 @dataclass
 class Element:

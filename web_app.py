@@ -37,7 +37,7 @@ from local_ai import LocalAIError, review_source_html
 from evidence_link_finder import LinkParser, fetch_html, final_or_next_url, follow_redirects
 from movie_report_finder import Candidate, build_evidence, find_listing_links, search_movie, search_movie_on_site
 from library_backend import LibraryService
-from adapter_analyzer import analyze as analyze_adapter
+from adapter_analyzer import analyze as analyze_adapter, discover_search_results
 from adapter_storage import AdapterStorage
 from adapter_models import adapter_id
 from adapter_runtime import SiteAdapter, normalized_title
@@ -4236,17 +4236,19 @@ class AppHandler(BaseHTTPRequestHandler):
         if route_path.startswith("/api/admin/sources/"):
             if not is_admin(self, parsed):
                 response(self, HTTPStatus.FORBIDDEN, {"ok": False, "error": "Admin authorization required"}); return
-            action = route_path.rsplit("/", 1)[-1]
+            action = route_path[len("/api/admin/sources/"):]
             try:
                 if action == "wizard/search":
                     site_url, query = str(payload.get("siteUrl") or "").strip(), str(payload.get("query") or "").strip()
                     if not site_url or not query: raise ValueError("Website URL and example search title are required")
-                    candidates = search_movie_on_site(query, limit=8, timeout=15, max_html_bytes=1_000_000, site=site_url)
-                    response(self, HTTPStatus.OK, {"ok": True, "candidates": [{"title": item.title, "url": item.url} for item in candidates]})
+                    candidates, detail = discover_search_results(site_url, query)
+                    print(f"Source onboarding search: site={urlparse(site_url).hostname} query={query!r} status={detail.get('status')} results={len(candidates)} attempts={detail.get('attempts')}")
+                    response(self, HTTPStatus.OK, {"ok": True, "candidates": candidates})
                 elif action == "wizard/analyze":
                     candidate = payload.get("candidate") or {}
                     result = analyze_adapter({"siteName": urlparse(str(payload.get("siteUrl") or "")).hostname or "New Source", "mainSiteUrl": payload.get("siteUrl"), "examplePageUrl": candidate.get("url"), "searchQuery": payload.get("query") or "", "expectedQuality": ""})
                     workflow = analyze_movie_workflow(str(payload.get("siteUrl") or ""), str(candidate.get("url") or ""))
+                    print(f"Source onboarding workflow: site={urlparse(str(payload.get('siteUrl') or '')).hostname} candidate={urlparse(str(candidate.get('url') or '')).path} status={workflow.get('status')} results={len(workflow.get('results', []))}")
                     response(self, HTTPStatus.OK, {"ok": True, **result, "workflow": workflow})
                 else:
                     source_id, kind = str(payload.get("id") or ""), str(payload.get("kind") or "")
@@ -4272,6 +4274,7 @@ class AppHandler(BaseHTTPRequestHandler):
                         else: raise ValueError("Unknown source action")
                     response(self, HTTPStatus.OK, {"ok": True, "sources": combined_sources()})
             except (ValueError, RuntimeError) as exc:
+                print(f"Source onboarding failed: action={action} error={exc}")
                 response(self, HTTPStatus.BAD_REQUEST, {"ok": False, "error": str(exc)})
             return
         if route_path == "/api/admin/workflow-analyzer":
