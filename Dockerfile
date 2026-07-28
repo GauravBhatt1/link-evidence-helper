@@ -4,8 +4,10 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 APP_DATA_DIR=/data LIBRARY_DB_PATH=/data/library.db
 
 COPY . /app
-RUN mkdir -p /app/default-data/adapters /data /home/ubuntu/Config/Jellyfin/data/data \
-    && cp -a /app/adapters/. /app/default-data/adapters/ 2>/dev/null || true
+# Adapter/source configuration is user-owned runtime data.  Do not bake it
+# into the image: otherwise a deleted source can be silently restored when a
+# fresh or empty data volume is started.
+RUN mkdir -p /data /home/ubuntu/Config/Jellyfin/data/data
 
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 RUN chmod 0755 /app/docker-entrypoint.sh
