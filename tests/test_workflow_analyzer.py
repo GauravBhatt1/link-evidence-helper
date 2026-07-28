@@ -24,6 +24,60 @@ class _FakeSession:
 
 
 class WorkflowAnalyzerTests(TestCase):
+    def test_quality_root_ignores_navigation_with_inherited_heading(self):
+        class Session:
+            def __init__(self, *args, **kwargs):
+                self.rows = {
+                    "https://site.example/": ("<html></html>", 200, None, "text/html"),
+                    "https://site.example/movie": ('<h3>1080p</h3><a href="https://site.example/tips">Download Tips</a><a href="https://cdn.example/movie.mkv">1080p Download</a>', 200, None, "text/html"),
+                    "https://cdn.example/movie.mkv": ("", 200, None, "video/x-matroska"),
+                }
+            def fetch_html_once(self, url, referer=""):
+                body, status, location, content_type = self.rows[url]
+                return body, SimpleNamespace(url=url, status=status, location=location, content_type=content_type, content_length="", headers={}), location
+        class Renderer:
+            def __enter__(self): return self
+            def close(self): pass
+            def render(self, url):
+                body, status, _, content_type = Session().rows[url]
+                return RenderedPage(url, body, status, content_type, "", url)
+
+        with patch.object(workflow_analyzer, "SafeSession", Session), patch.object(workflow_analyzer, "PlaywrightRenderer", Renderer), patch.object(workflow_analyzer, "validate_public_url", lambda url: url):
+            result = workflow_analyzer.analyze_movie_workflow("https://site.example/", "https://site.example/movie", "1080p")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["results"][0]["final_url"], "https://cdn.example/movie.mkv")
+
+    def test_graph_traversal_continues_through_rendered_intermediate_pages(self):
+        class Session:
+            def __init__(self, *args, **kwargs):
+                self.rows = {
+                    "https://site.example/": ("<html></html>", 200, None, "text/html"),
+                    "https://site.example/movie": ('<a href="https://filesdl.example/view/3903">1080p Download</a>', 200, None, "text/html"),
+                    "https://filesdl.example/view/3903": ('<button onclick="window.open(\'https://gdflix.example/file-page\')">GDFLIX DOWNLOAD</button>', 200, None, "text/html"),
+                    "https://gdflix.example/file-page": ('<a href="https://fast.example/file.mkv">FAST CLOUD / ZIPDISK</a><a href="https://resume.example/file">CLOUD RESUME DOWNLOAD</a>', 200, None, "text/html"),
+                    "https://fast.example/file.mkv": ("", 200, None, "video/x-matroska"),
+                    "https://resume.example/file": ("<html></html>", 200, None, "text/html"),
+                }
+            def fetch_html_once(self, url, referer=""):
+                body, status, location, content_type = self.rows[url]
+                return body, SimpleNamespace(url=url, status=status, location=location, content_type=content_type, content_length="", headers={}), location
+
+        class Renderer:
+            def __enter__(self): return self
+            def close(self): pass
+            def render(self, url):
+                body, status, _, content_type = Session().rows[url]
+                return RenderedPage(url, body, status, content_type, "", url)
+
+        with patch.object(workflow_analyzer, "SafeSession", Session), patch.object(workflow_analyzer, "PlaywrightRenderer", Renderer), patch.object(workflow_analyzer, "validate_public_url", lambda url: url):
+            result = workflow_analyzer.analyze_movie_workflow("https://site.example/", "https://site.example/movie", "1080p")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["results"][0]["final_url"], "https://fast.example/file.mkv")
+        labels = [row["link_button_label"] for row in result["execution_log"]]
+        self.assertIn("GDFLIX DOWNLOAD", labels)
+        self.assertIn("FAST CLOUD / ZIPDISK", labels)
+        self.assertTrue(any(row["next_step"] == "All branches queued" for row in result["execution_log"]))
+
     def test_javascript_rendering_fallback_reuses_one_context_for_workflow(self):
         class Session:
             def __init__(self, *args, **kwargs):

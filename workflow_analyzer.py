@@ -12,19 +12,20 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from types import SimpleNamespace
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from network_safety import REDIRECT_CODES, SafeSession, redact_url, validate_public_url
 from playwright_renderer import PlaywrightRenderer, RendererUnavailable
 
 QUALITY_RE = re.compile(r"\b(?:2160|1440|1080|720|480)p\b|\b4k\b", re.I)
-DOWNLOAD_RE = re.compile(r"\b(?:download|direct|instant|mirror|server|drive|get\s*(?:link|file)|continue)\b", re.I)
+DOWNLOAD_RE = re.compile(r"\b(?:download|direct|instant|mirror|server|drive|gdf[l]?ix|vcloud|fast\s*cloud|zipdisk|cloud\s*resume|quick\s*download|get\s*(?:link|file)|continue)\b", re.I)
+NAVIGATION_RE = re.compile(r"\b(?:home|menu|privacy|terms|contact|telegram|trailer|login|sign\s*in|download\s*tips|tips)\b", re.I)
 BLOCKER_RE = re.compile(r"cloudflare\s*turnstile|cf-turnstile|g-recaptcha|hcaptcha|captcha|verify\s+(?:that\s+)?you(?:'re| are)\s+human", re.I)
 LOGIN_RE = re.compile(r"\b(?:sign in|log in|login required|authentication required)\b", re.I)
 FILE_RE = re.compile(r"\.(?:mkv|mp4|webm|avi|zip)(?:$|[?#])", re.I)
 FINAL_TYPES = ("video/", "audio/", "application/octet-stream", "application/zip")
-MAX_QUALITY_LINKS, MAX_ACTIONS_PER_PAGE, MAX_DEPTH = 12, 18, 8
-STATIC_LOCATION_RE = re.compile(r"(?:window\.)?(?:location(?:\.href)?\s*=|location\.(?:assign|replace)\s*\()\s*['\"]([^'\"]+)['\"]", re.I)
+MAX_QUALITY_LINKS, MAX_ACTIONS_PER_PAGE, MAX_DEPTH, MAX_WORKFLOW_NODES = 12, 18, 8, 48
+STATIC_LOCATION_RE = re.compile(r"(?:window\.|document\.)?(?:location(?:\.href)?\s*=|location\.(?:assign|replace)\s*\(|open\s*\()\s*['\"]([^'\"]+)['\"]", re.I)
 META_REFRESH_RE = re.compile(r"\s*\d+(?:\.\d+)?\s*;\s*url\s*=\s*(.+)\s*", re.I)
 
 
@@ -118,16 +119,43 @@ def _is_download(action: Action) -> bool:
 
 
 def _pick(actions: list[Action], predicate: Any, maximum: int) -> list[Action]:
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, str, str]] = set()
     chosen: list[Action] = []
     for action in actions:
-        key = (action.url, action.method)
+        key = (action.url, action.method, action.quality)
         if key not in seen and predicate(action):
             seen.add(key)
             chosen.append(action)
             if len(chosen) >= maximum:
                 break
     return chosen
+
+
+def _merge_actions(*groups: list[Action]) -> list[Action]:
+    """Combine server and rendered DOM actions without re-visiting a target."""
+    merged: list[Action] = []
+    seen: set[tuple[str, str, str]] = set()
+    for group in groups:
+        for action in group:
+            key = (action.url, action.method, action.quality)
+            if key not in seen:
+                seen.add(key)
+                merged.append(action)
+    return merged
+
+
+def _branch_actions(actions: list[Action]) -> list[Action]:
+    """Prefer download actions, but do not discard an unlabeled real branch."""
+    direct = _pick(actions, lambda item: item.method != "GET" or _is_download(item) or bool(item.quality) or "static" in item.reason, MAX_ACTIONS_PER_PAGE)
+    if direct:
+        return direct
+    return _pick(actions, lambda item: item.method != "GET" or not NAVIGATION_RE.search(item.label), MAX_ACTIONS_PER_PAGE)
+
+
+def _same_resource(left: str, right: str) -> bool:
+    """Avoid rendered self-redirects (often http/https spelling changes)."""
+    a, b = urlparse(left), urlparse(right)
+    return (a.hostname or "").lower() == (b.hostname or "").lower() and a.path == b.path and a.query == b.query
 
 
 def _log(log: list[dict[str, Any]], response: Any, reason: str, action: Action | None, next_step: str, extracted: str = "") -> dict[str, Any]:
@@ -194,6 +222,8 @@ def analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str 
     def get_renderer() -> PlaywrightRenderer:
         nonlocal renderer
         if renderer is None:
+            # Graph traversal may inspect many landing pages. Keep each
+            # navigation bounded while retaining the same browser context.
             renderer = PlaywrightRenderer().__enter__()
         return renderer
     try:
@@ -217,7 +247,10 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
         return {"status": "blocked", "site": site_url, "movie_url": movie_url, "results": [{"quality": "", "source": "Movie page", "page_url": movie_url, "final_url": None, "is_final_file": False, "status": "blocked", "blocked_by": blocked[0], "message": blocked[1]}], "execution_log": log, "workflow_steps": _workflow_steps(True, [{"status": "blocked"}]), "message": blocked[1]}
 
     movie_actions = _parse(movie_url, movie_html)
-    if _needs_javascript_rendering(movie_html, movie_actions):
+    # The normal request establishes first-party behaviour and catches an
+    # immediate challenge.  Every ordinary HTML workflow page is then also
+    # rendered once so client-created buttons are part of the graph.
+    if movie_html:
         try:
             rendered = get_renderer().render(movie_url)
         except RendererUnavailable as exc:
@@ -226,86 +259,91 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
         if rendered and rendered.html:
             rendered_response = SimpleNamespace(url=rendered.url, status=rendered.status, location=None, content_type=rendered.content_type, headers={}, error=rendered.error)
             _log(log, rendered_response, "JavaScript rendering fallback", None, "Rendered movie page inspected", "Rendered page content used after normal HTTP had no usable actions")
+            rendered_actions = _parse(rendered.navigation_url or movie_url, rendered.html)
             movie_html = rendered.html
             movie_url = rendered.navigation_url or movie_url
             blocked = _blocked_html(movie_html)
             if blocked:
                 return {"status": "blocked", "site": site_url, "movie_url": movie_url, "results": [{"quality": "", "source": "Movie page", "page_url": movie_url, "final_url": None, "is_final_file": False, "status": "blocked", "blocked_by": blocked[0], "message": blocked[1]}], "execution_log": log, "workflow_steps": _workflow_steps(True, [{"status": "blocked"}]), "message": blocked[1]}
-            movie_actions = _parse(movie_url, movie_html)
-    quality_actions = _pick(movie_actions, lambda action: bool(action.quality) and (not selected_quality or selected_quality.lower() in {"all", "*"} or action.quality.lower() == selected_quality.lower()), MAX_QUALITY_LINKS)
+            movie_actions = _merge_actions(movie_actions, rendered_actions)
+    # Headings can make unrelated navigation links inherit a quality label.
+    # A root quality branch must be both quality-tagged and download-like.
+    quality_actions = _pick(movie_actions, lambda action: bool(action.quality) and not NAVIGATION_RE.search(action.label) and (not selected_quality or selected_quality.lower() in {"all", "*"} or action.quality.lower() == selected_quality.lower()), MAX_QUALITY_LINKS)
     if not quality_actions:
         quality_actions = _pick(movie_actions, _is_download, MAX_QUALITY_LINKS)
 
-    for quality_action in quality_actions:
-        quality = quality_action.quality or "Unknown quality"
-        queue: list[tuple[Action, int]] = [(quality_action, 0)]
-        visited: set[tuple[str, str]] = set()
-        terminal = False
-        while queue and len(visited) < MAX_ACTIONS_PER_PAGE and not terminal:
-            action, depth = queue.pop(0)
-            key = (action.url, action.method)
-            if key in visited:
-                continue
-            visited.add(key)
-            if action.method != "GET":
-                fake = type("FormResponse", (), {"url": redact_url(action.url), "status": None, "location": None, "content_type": "", "headers": {}})()
-                _log(log, fake, action.reason, action, "Stopped at form", "POST form detected; not submitted")
-                results.append({"quality": quality, "source": action.label, "page_url": action.url, "final_url": None, "is_final_file": False, "status": "partial", "blocked_by": "", "message": "POST form detected; it was not submitted automatically."})
-                continue
-            html, response, next_url = session.fetch_html_once(action.url, referer=action.source_page)
-            row = _log(log, response, action.reason, action, "Page inspected")
-            base = {"quality": quality, "source": action.label, "page_url": action.url, "final_url": None, "is_final_file": False, "status": "partial", "blocked_by": "", "message": "No verified final file response."}
-            if _final_file(response, action.url):
-                row["extracted_action"], row["next_step"] = "Actual downloadable response reached", "Final file URL reached"
-                base.update({"final_url": action.url, "is_final_file": True, "status": "success", "message": "Verified final file response."})
-                results.append(base); terminal = True; continue
-            if response.status in REDIRECT_CODES and next_url:
-                row["extracted_action"], row["next_step"] = f"HTTP redirect to {redact_url(next_url)}", "Redirect destination requested"
-                queue.append((Action(next_url, "HTTP redirect", action.url, "HTTP Location header", quality), depth + 1))
-                continue
-            blocker = _blocked_html(html) if html else None
-            if blocker:
-                row["extracted_action"], row["next_step"] = "Interactive verification detected", "BLOCKED — Final file URL not reached"
-                base.update({"status": "blocked", "blocked_by": blocker[0], "message": blocker[1]})
-                results.append(base); continue
-            parsed_actions = _parse(action.url, html) if html else []
-            if (not html or _needs_javascript_rendering(html, parsed_actions)):
-                try:
-                    rendered = get_renderer().render(action.url)
-                except RendererUnavailable as exc:
-                    row["extracted_action"], row["next_step"] = "JavaScript renderer unavailable", "Stopped at response"
-                    base["message"] = f"Workflow stopped before a final file response: {exc}"
-                    results.append(base); continue
-                rendered_response = SimpleNamespace(url=rendered.url, status=rendered.status, location=None, content_type=rendered.content_type, headers={}, error=rendered.error)
-                rendered_row = _log(log, rendered_response, "JavaScript rendering fallback", action, "Rendered page inspected", "Rendered page content used after normal HTTP had no usable action")
-                if rendered.error or not rendered.html:
-                    rendered_row["next_step"] = "Stopped at renderer response"
-                    base["message"] = "Workflow stopped before a final file response."
-                    results.append(base); continue
-                html = rendered.html
-                page_base_url = rendered.navigation_url or action.url
-                blocker = _blocked_html(html)
+    # A global queue makes this a bounded graph traversal: each download
+    # branch is inspected once, rather than stopping after the first landing
+    # page or the first quality that happens to be encountered.
+    queue: list[tuple[Action, int, str]] = [(action, 0, action.quality or "Unknown quality") for action in quality_actions]
+    visited: set[tuple[str, str]] = set()
+    while queue and len(visited) < MAX_WORKFLOW_NODES:
+        action, depth, quality = queue.pop(0)
+        key = (action.url, action.method)
+        if key in visited:
+            continue
+        visited.add(key)
+        if action.method != "GET":
+            fake = type("FormResponse", (), {"url": redact_url(action.url), "status": None, "location": None, "content_type": "", "headers": {}})()
+            _log(log, fake, action.reason, action, "Stopped at form", "Form detected; it was not submitted")
+            results.append({"quality": quality, "source": action.label, "page_url": action.url, "final_url": None, "is_final_file": False, "status": "partial", "blocked_by": "", "message": "Form detected; it was not submitted automatically."})
+            continue
+        html, response, next_url = session.fetch_html_once(action.url, referer=action.source_page)
+        row = _log(log, response, action.reason, action, "Page inspected")
+        base = {"quality": quality, "source": action.label, "page_url": action.url, "final_url": None, "is_final_file": False, "status": "partial", "blocked_by": "", "message": "No verified final file response."}
+        if _final_file(response, action.url):
+            row["extracted_action"], row["next_step"] = "Actual downloadable response reached", "Final file URL reached"
+            base.update({"final_url": action.url, "is_final_file": True, "status": "success", "message": "Verified final file response."})
+            results.append(base); continue
+        if response.status in REDIRECT_CODES and next_url:
+            row["extracted_action"], row["next_step"] = f"HTTP redirect to {redact_url(next_url)}", "Redirect destination requested"
+            queue.append((Action(next_url, "HTTP redirect", action.url, "HTTP Location header", quality), depth + 1, quality))
+            continue
+        blocker = _blocked_html(html) if html else None
+        if blocker:
+            row["extracted_action"], row["next_step"] = "Interactive verification detected", "BLOCKED — Final file URL not reached"
+            base.update({"status": "blocked", "blocked_by": blocker[0], "message": blocker[1]})
+            results.append(base); continue
+        server_actions = _parse(action.url, html) if html else []
+        try:
+            rendered = get_renderer().render(action.url)
+        except RendererUnavailable as exc:
+            rendered = None
+            row["extracted_action"], row["next_step"] = "JavaScript renderer unavailable", "Server-rendered actions inspected"
+            base["message"] = f"Browser rendering unavailable: {exc}"
+        if rendered:
+            rendered_response = SimpleNamespace(url=rendered.url, status=rendered.status, location=None, content_type=rendered.content_type, headers={}, error=rendered.error)
+            rendered_row = _log(log, rendered_response, "JavaScript-rendered page inspection", action, "Rendered page inspected", "Rendered DOM actions extracted")
+            if rendered.error or not rendered.html:
+                rendered_row["next_step"] = "Server-rendered actions inspected"
+            else:
+                blocker = _blocked_html(rendered.html)
                 if blocker:
                     rendered_row["extracted_action"], rendered_row["next_step"] = "Interactive verification detected", "BLOCKED — Final file URL not reached"
                     base.update({"status": "blocked", "blocked_by": blocker[0], "message": blocker[1]})
                     results.append(base); continue
-                parsed_actions = _parse(page_base_url, html)
-            if getattr(response, "error", "") or not html:
-                row["extracted_action"], row["next_step"] = "No readable HTML response", "Stopped at response"
-                base["message"] = "Workflow stopped before a final file response."
-                results.append(base); continue
-            if depth >= MAX_DEPTH:
-                row["extracted_action"], row["next_step"] = "Traversal limit reached", "Stopped at bounded depth"
-                base["message"] = "Workflow depth limit reached before a final file response."
-                results.append(base); continue
-            next_actions = _pick(parsed_actions, lambda item: item.method != "GET" or _is_download(item) or bool(item.quality) or "static" in item.reason, MAX_ACTIONS_PER_PAGE)
-            if not next_actions:
-                row["extracted_action"], row["next_step"] = "No verified next download action", "Stopped at HTML landing page"
-                results.append(base); continue
-            row["extracted_action"], row["next_step"] = f"{len(next_actions)} verified navigation action(s) extracted", "Next action requested"
-            queue.extend((next_action, depth + 1) for next_action in next_actions)
-        if not terminal and not any(item["quality"] == quality for item in results):
-            results.append({"quality": quality, "source": quality_action.label, "page_url": quality_action.url, "final_url": None, "is_final_file": False, "status": "partial", "blocked_by": "", "message": "No verified final file response."})
+                page_base_url = rendered.navigation_url or action.url
+                server_actions = _merge_actions(server_actions, _parse(page_base_url, rendered.html))
+        if getattr(response, "error", "") and not server_actions:
+            row["extracted_action"], row["next_step"] = "No readable page or rendered action", "Stopped at response"
+            results.append(base); continue
+        if depth >= MAX_DEPTH:
+            row["extracted_action"], row["next_step"] = "Traversal limit reached", "Stopped at bounded depth"
+            base["message"] = "Workflow depth limit reached before a final file response."
+            results.append(base); continue
+        next_actions = _branch_actions(server_actions)
+        next_actions = [item for item in next_actions if not _same_resource(item.url, action.url)]
+        if selected_quality and selected_quality.lower() not in {"all", "*"}:
+            wanted = selected_quality.lower()
+            next_actions = [item for item in next_actions if not item.quality or item.quality.lower() == wanted]
+        if not next_actions:
+            row["extracted_action"], row["next_step"] = "No actionable download elements", "Stopped at HTML landing page"
+            results.append(base); continue
+        row["extracted_action"], row["next_step"] = f"{len(next_actions)} actionable branch(es) extracted", "All branches queued"
+        queue.extend((next_action, depth + 1, next_action.quality or quality) for next_action in next_actions)
+
+    if queue:
+        results.append({"quality": "Multiple qualities", "source": "Workflow graph", "page_url": movie_url, "final_url": None, "is_final_file": False, "status": "partial", "blocked_by": "", "message": "Workflow node limit reached before all branches could be inspected."})
 
     if not results:
         message, status = "No quality-specific or download action was verified.", "partial"

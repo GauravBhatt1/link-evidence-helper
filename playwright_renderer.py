@@ -38,7 +38,7 @@ class RenderedPage:
 class PlaywrightRenderer:
     """One ephemeral Chromium context, with public-network routing only."""
 
-    def __init__(self, timeout_ms: int = 15_000) -> None:
+    def __init__(self, timeout_ms: int = 8_000) -> None:
         self.timeout_ms = min(max(timeout_ms, 1_000), 30_000)
         self._playwright: Any = None
         self._browser: Any = None
@@ -98,10 +98,10 @@ class PlaywrightRenderer:
             raise RendererUnavailable("Playwright renderer is not active")
         try:
             response = self._page.goto(safe, wait_until="domcontentloaded")
-            # A short idle wait lets ordinary client-side result lists render,
-            # without waiting indefinitely for ads/analytics.
+            # A very short idle wait lets ordinary client-side result lists
+            # render without multiplying ad/analytics waits across a graph.
             try:
-                self._page.wait_for_load_state("networkidle", timeout=min(self.timeout_ms, 4_000))
+                self._page.wait_for_load_state("networkidle", timeout=min(self.timeout_ms, 1_000))
             except Exception:
                 pass
             rendered_url = validate_public_url(self._page.url)
