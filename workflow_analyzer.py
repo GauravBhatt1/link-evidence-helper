@@ -149,8 +149,11 @@ def _final_file(response: Any, source_url: str) -> bool:
 
 
 def _blocked_html(body: str) -> tuple[str, str] | None:
-    if BLOCKER_RE.search(body):
+    lowered = body.lower()
+    if "turnstile" in lowered or "cf-turnstile" in lowered:
         return "cloudflare_turnstile", "Workflow stopped at Cloudflare Turnstile verification."
+    if BLOCKER_RE.search(body):
+        return "captcha_required", "Workflow stopped at CAPTCHA verification."
     if LOGIN_RE.search(body):
         return "login_required", "Workflow stopped at login verification."
     return None
@@ -246,7 +249,8 @@ def analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str 
     elif any(item["status"] == "success" for item in results):
         message, status = "Verified final file response found.", "success"
     elif any(item["status"] == "blocked" for item in results):
-        message, status = "Workflow stopped at Cloudflare Turnstile verification.", "blocked"
+        blocked = next(item for item in results if item["status"] == "blocked")
+        message, status = blocked["message"], "blocked"
     else:
         message, status = "Final file URL not reached.", "partial"
     return {"status": status, "site": site_url, "movie_url": movie_url, "results": results, "execution_log": log, "workflow_steps": _workflow_steps(True, results), "message": message}
