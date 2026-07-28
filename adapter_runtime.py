@@ -5,6 +5,7 @@ from typing import Any
 from urllib.parse import quote_plus
 from adapter_analyzer import PageParser, _score
 from network_safety import SafeSession
+from playwright_renderer import PlaywrightRenderer, RendererUnavailable, interactive_verification_present
 
 
 class AdapterSearchUnsupported(RuntimeError):
@@ -30,13 +31,27 @@ class SiteAdapter:
         search = self.config.get("search", {})
         if search.get("mode") == "json_api":
             return self._search_json_api(query, search)
-        if self.config.get("session", {}).get("javascript_required"):
-            raise AdapterSearchUnsupported("Search results are loaded by the website's JavaScript and are not available to the safe server-side search.")
         template=search.get("url_template","")
         if not template: return []
         search_url=template.replace("{query}",quote_plus(query))
         html,meta=SafeSession().fetch_html(search_url)
-        if meta.error:return []
+        if meta.error:
+            if meta.status not in {403, 429, 503}:
+                return []
+            html = ""
+        if _looks_like_javascript_search(html) or not html:
+            if interactive_verification_present(html):
+                raise AdapterSearchUnsupported("Manual verification required")
+            try:
+                with PlaywrightRenderer() as renderer:
+                    rendered = renderer.render(search_url)
+            except RendererUnavailable as exc:
+                raise AdapterSearchUnsupported(f"JavaScript rendering unavailable: {exc}") from exc
+            if rendered.error or not rendered.html:
+                return []
+            if interactive_verification_present(rendered.html):
+                raise AdapterSearchUnsupported("Manual verification required")
+            html = rendered.html
         terms=[part for part in re.sub(r"[^a-z0-9]+"," ",query.lower()).split() if part]
         rows=self.extract_candidates(html,search_url)
         matches=[row for row in rows if not terms or all(term in (row["title"]+" "+row["url"]).lower() for term in terms)]
@@ -110,7 +125,24 @@ class SiteAdapter:
     def find_links(self, page_url: str, quality: str) -> list[dict[str, str]]:
         """Generate links only at click time; no temporary final URL is persisted."""
         html, meta = SafeSession().fetch_html(page_url)
-        if meta.error: raise RuntimeError(meta.error)
+        if meta.error and meta.status not in {403, 429, 503}:
+            raise RuntimeError(meta.error)
+        # This is a renderer fallback for ordinary client-side pages, not a
+        # challenge solver. Final verification remains header-based below.
+        if _looks_like_javascript_search(html) or not html:
+            if interactive_verification_present(html):
+                self.last_find_reason = "Manual verification required"
+                return []
+            try:
+                with PlaywrightRenderer() as renderer:
+                    rendered = renderer.render(page_url)
+            except RendererUnavailable:
+                rendered = None
+            if rendered and not rendered.error:
+                if interactive_verification_present(rendered.html):
+                    self.last_find_reason = "Manual verification required"
+                    return []
+                html = rendered.html
         rows=[]
         inspected = 0
         for row in self.extract_quality_links(html,page_url,quality):

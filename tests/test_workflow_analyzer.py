@@ -6,6 +6,7 @@ from unittest import TestCase
 from unittest.mock import patch
 
 import workflow_analyzer
+from playwright_renderer import RenderedPage
 
 
 class _FakeSession:
@@ -23,6 +24,49 @@ class _FakeSession:
 
 
 class WorkflowAnalyzerTests(TestCase):
+    def test_javascript_rendering_fallback_reuses_one_context_for_workflow(self):
+        class Session:
+            def __init__(self, *args, **kwargs):
+                self.rows = {
+                    "https://site.example/": ("<html></html>", 200, None, "text/html"),
+                    "https://site.example/movie": ('<div id="root"></div><script>fetch("/api")</script>', 200, None, "text/html"),
+                    "https://cdn.example/movie.mkv": ("", 200, None, "video/x-matroska"),
+                }
+            def fetch_html_once(self, url, referer=""):
+                body, status, location, content_type = self.rows[url]
+                return body, SimpleNamespace(url=url, status=status, location=location, content_type=content_type, content_length="", headers={}), location
+
+        calls = []
+        class Renderer:
+            def __enter__(self): calls.append("open"); return self
+            def close(self): calls.append("close")
+            def render(self, url):
+                calls.append(url)
+                return RenderedPage(url, '<a href="https://cdn.example/movie.mkv">720p Download</a>', 200, "text/html", "", url)
+
+        with patch.object(workflow_analyzer, "SafeSession", Session), patch.object(workflow_analyzer, "PlaywrightRenderer", Renderer), patch.object(workflow_analyzer, "validate_public_url", lambda url: url):
+            result = workflow_analyzer.analyze_movie_workflow("https://site.example/", "https://site.example/movie")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(calls, ["open", "https://site.example/movie", "close"])
+        self.assertTrue(any(row["reason_followed"] == "JavaScript rendering fallback" for row in result["execution_log"]))
+
+    def test_renderer_stops_at_interactive_verification(self):
+        class Session:
+            def __init__(self, *args, **kwargs): pass
+            def fetch_html_once(self, url, referer=""):
+                body = "<div id='root'></div><script>fetch('/api')</script>" if url.endswith("movie") else "<html></html>"
+                return body, SimpleNamespace(url=url, status=200, location=None, content_type="text/html", content_length="", headers={}), None
+        class Renderer:
+            def __enter__(self): return self
+            def close(self): pass
+            def render(self, url): return RenderedPage(url, '<div class="cf-turnstile"></div>', 200, "text/html", "", url)
+
+        with patch.object(workflow_analyzer, "SafeSession", Session), patch.object(workflow_analyzer, "PlaywrightRenderer", Renderer), patch.object(workflow_analyzer, "validate_public_url", lambda url: url):
+            result = workflow_analyzer.analyze_movie_workflow("https://site.example/", "https://site.example/movie")
+        self.assertEqual(result["status"], "blocked")
+        self.assertEqual(result["message"], "Manual verification required")
+        self.assertFalse(any(item["is_final_file"] for item in result["results"]))
+
     def test_turnstile_is_blocked_and_never_becomes_a_final_link(self):
         with patch.object(workflow_analyzer, "SafeSession", _FakeSession), patch.object(workflow_analyzer, "validate_public_url", lambda url: url):
             result = workflow_analyzer.analyze_movie_workflow("https://site.example/", "https://site.example/movie", "720p")

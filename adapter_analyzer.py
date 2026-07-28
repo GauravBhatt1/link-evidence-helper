@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import quote_plus, urljoin, urlparse
 from adapter_models import blank_adapter
 from network_safety import SafeSession, redact_url, validate_public_url
+from playwright_renderer import PlaywrightRenderer, RendererUnavailable, interactive_verification_present
 
 DOWNLOAD = ("download", "direct", "instant", "drive", "server", "mirror", "file")
 IGNORE = ("trailer", "sample", "telegram", "advertisement", "privacy", "contact", "login")
@@ -23,6 +24,24 @@ def _looks_like_javascript_search(html: str) -> bool:
     return ("fetch(" in lowered or "xmlhttprequest" in lowered or "axios." in lowered) and any(
         marker in lowered for marker in ("results-grid", "search results", "documents/search", "graphql")
     )
+
+
+def _render_search_fallback(url: str, html: str) -> str:
+    """Render only an identified client-side search shell; never solve a challenge."""
+    if not _looks_like_javascript_search(html):
+        return html
+    if interactive_verification_present(html):
+        raise ValueError("Manual verification required")
+    try:
+        with PlaywrightRenderer() as renderer:
+            rendered = renderer.render(url)
+    except RendererUnavailable as exc:
+        raise ValueError(f"JavaScript rendering unavailable: {exc}") from exc
+    if rendered.error:
+        raise ValueError("Website blocks automated analysis")
+    if interactive_verification_present(rendered.html):
+        raise ValueError("Manual verification required")
+    return rendered.html or html
 
 
 def _matching_search_results(html: str, page_url: str, query: str) -> list[Element]:
@@ -54,6 +73,8 @@ def discover_search_results(site_url: str, query: str) -> tuple[list[dict[str, s
     main_html, main_meta = session.fetch_html(site)
     if main_meta.error or not main_html:
         raise ValueError("Website unreachable")
+    if interactive_verification_present(main_html):
+        raise ValueError("Manual verification required")
     doc = PageParser(site); doc.feed(main_html)
     templates: list[str] = []
     for form in doc.forms:
@@ -68,7 +89,12 @@ def discover_search_results(site_url: str, query: str) -> tuple[list[dict[str, s
         html, meta = session.fetch_html(url, site)
         attempts.append({"url": redact_url(url), "status": str(meta.status or ""), "error": meta.error or ""})
         if meta.error or not html: continue
+        if interactive_verification_present(html):
+            raise ValueError("Manual verification required")
         rows = _matching_search_results(html, url, query)
+        if not rows:
+            html = _render_search_fallback(url, html)
+            rows = _matching_search_results(html, url, query)
         # New sites need not use the legacy "Download …" title convention.
         if not rows:
             parsed = PageParser(url); parsed.feed(html)
@@ -142,6 +168,13 @@ def analyze(payload: dict[str,Any]) -> dict[str,Any]:
     session=SafeSession(); main_html, main_meta=session.fetch_html(main); example_html, example_meta=session.fetch_html(example,main)
     if main_meta.error: raise ValueError(f"Main page fetch failed: {main_meta.error}")
     if example_meta.error: raise ValueError(f"Example page fetch failed: {example_meta.error}")
+    if interactive_verification_present(main_html) or interactive_verification_present(example_html):
+        raise ValueError("Manual verification required")
+    # Adapter generation receives rendered DOM only when a normal fetch shows
+    # an explicit client-side search shell. Challenge pages stay blocked.
+    main_html = _render_search_fallback(main, main_html)
+    if _looks_like_javascript_search(example_html):
+        example_html = _render_search_fallback(example, example_html)
     main_doc, page_doc=PageParser(main),PageParser(example); main_doc.feed(main_html); page_doc.feed(example_html)
     adapter=blank_adapter(name,main); adapter["session"]["cookies_required"]=bool(session.cookies)
     # Keep enough non-secret context for a later retest and for the Saved
@@ -158,6 +191,10 @@ def analyze(payload: dict[str,Any]) -> dict[str,Any]:
             if not meta.error and len(html)>100: search=urljoin(main,template); adapter["search"]["mode"]="query_url"; adapter["search"]["url_template"]=search; break
         if search:
             search_url=search.replace("{query}", quote_plus(query)); search_html, search_meta=session.fetch_html(search_url, main)
+    if search_html:
+        if interactive_verification_present(search_html):
+            raise ValueError("Manual verification required")
+        search_html = _render_search_fallback(search_url, search_html)
     links=[item for item in page_doc.elements if item.href]
     selector_scores=[]
     for selector in sorted({candidate for item in links for candidate in _selector(item)}):
