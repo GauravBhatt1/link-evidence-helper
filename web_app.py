@@ -2910,6 +2910,25 @@ def saved_adapter_search(query: str, selected_source: str) -> tuple[list[dict[st
     return rows, failures
 
 
+def search_all_configured_sources(query: str, selected_source: str) -> tuple[list[Any], dict[str, dict[str, Any]], list[dict[str, str]]]:
+    """Search independent source types concurrently without changing result order.
+
+    A slow compatible source must not postpone starting a saved adapter search.
+    We still merge in the established source order, so an adapter completing
+    first never changes which source is shown first in the UI.
+    """
+    include_existing = selected_source in {"all", "existing"}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        legacy_future = executor.submit(search_movie, query, 10, 20, 2_000_000) if include_existing else None
+        custom_future = executor.submit(custom_authorized_search, query) if include_existing else None
+        adapter_future = executor.submit(saved_adapter_search, query, selected_source)
+
+        legacy_candidates = legacy_future.result() if legacy_future else []
+        custom_candidates, custom_diagnostics = custom_future.result() if custom_future else ([], {})
+        adapter_candidates, adapter_failures = adapter_future.result()
+    return [*legacy_candidates, *custom_candidates, *adapter_candidates], custom_diagnostics, adapter_failures
+
+
 def merge_search_candidates(rows: list[Any]) -> list[Any]:
     """Keep same title/source variants while removing duplicate URL/title rows."""
     seen: set[tuple[str, str, str]] = set(); merged=[]
@@ -4226,21 +4245,16 @@ class AppHandler(BaseHTTPRequestHandler):
             search_query = episode_search_fallback(query) if episode_target else query
             try:
                 candidates: list[Any] = []; custom_diagnostics: dict[str, dict[str, Any]] = {}; adapter_failures: list[dict[str, str]] = []
-                if selected_source in {"all", "existing"}:
-                    candidates = search_movie(search_query, limit=10, timeout=20, max_html_bytes=2_000_000)
-                    custom_candidates, custom_diagnostics = custom_authorized_search(search_query)
-                    candidates = [*candidates, *custom_candidates]
-                adapter_candidates, adapter_failures = saved_adapter_search(search_query, selected_source)
-                candidates = merge_search_candidates([*candidates, *adapter_candidates])
+                candidates, custom_diagnostics, adapter_failures = search_all_configured_sources(search_query, selected_source)
+                candidates = merge_search_candidates(candidates)
                 # Most index sites have one show page, not a page per episode. Retry
                 # the title alone if its year was not indexed by the source.
                 if not candidates and episode_target:
                     title_only = re.sub(r"\b(?:19|20)\d{2}\b", " ", search_query)
                     title_only = re.sub(r"\s+", " ", title_only).strip()
                     if title_only and title_only != search_query:
-                        candidates = search_movie(title_only, limit=10, timeout=20, max_html_bytes=2_000_000) if selected_source in {"all", "existing"} else []
-                        retry_custom, custom_diagnostics = custom_authorized_search(title_only)
-                        candidates = [*candidates, *retry_custom]
+                        candidates, custom_diagnostics, adapter_failures = search_all_configured_sources(title_only, selected_source)
+                        candidates = merge_search_candidates(candidates)
                         if candidates:
                             search_query = title_only
             except Exception as exc:
