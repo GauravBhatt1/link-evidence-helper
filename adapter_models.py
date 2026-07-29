@@ -36,3 +36,22 @@ def validate_adapter(data: dict[str, Any]) -> dict[str, Any]:
 def blank_adapter(name: str, main_url: str) -> dict[str, Any]:
     host = urlparse(main_url).hostname or ""
     return {"id":adapter_id(name),"name":name,"enabled":True,"domains":[host],"search":{"mode":"unknown","url_template":"","result_container_selectors":[],"title_selectors":[],"link_selectors":["a[href]"]},"content_page":{"quality_patterns":QUALITY_PATTERNS,"download_terms":["download","direct","instant","drive","server","mirror"],"ignore_terms":["trailer","sample","telegram","advertisement","privacy","contact"],"link_selectors":["a[href]"]},"redirects":{"max_hops":8,"use_head_first":True,"allow_get_html_fallback":True},"final_link_detection":{"host_markers":[],"content_type_prefixes":["video/","application/octet-stream"],"file_extensions":[".mp4",".mkv",".zip"]},"session":{"cookies_required":False,"referer_required":False,"csrf_token_required":False,"javascript_required":False}}
+
+
+def enable_workflow_fallback_for_verified_onboarding(adapter: dict[str, Any]) -> bool:
+    """Opt a verified Sources-wizard adapter into internal traversal.
+
+    This is deliberately restricted to adapters that the guided onboarding
+    flow already proved against a real downloadable response.  Manually
+    created or legacy adapters retain their existing behaviour unless they
+    explicitly opt in.
+    """
+    if adapter.get("maker", {}).get("workflow_verified") is not True:
+        return False
+    workflow = adapter.get("workflow_analyzer")
+    if not isinstance(workflow, dict):
+        workflow = {}
+        adapter["workflow_analyzer"] = workflow
+    changed = workflow.get("enabled") is not True
+    workflow["enabled"] = True
+    return changed

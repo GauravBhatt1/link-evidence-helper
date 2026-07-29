@@ -39,7 +39,7 @@ from movie_report_finder import Candidate, build_evidence, find_listing_links, s
 from library_backend import LibraryService
 from adapter_analyzer import analyze as analyze_adapter, discover_search_results
 from adapter_storage import AdapterStorage
-from adapter_models import adapter_id
+from adapter_models import adapter_id, enable_workflow_fallback_for_verified_onboarding
 from adapter_runtime import SiteAdapter, normalized_title
 from workflow_analyzer import analyze_movie_workflow
 
@@ -2438,6 +2438,19 @@ def apply_persisted_configuration() -> None:
         os.environ["BOLLYFLIX_SITES"] = ",".join(sources)
 
 
+def migrate_verified_onboarding_adapters() -> int:
+    """Enable internal workflow fallback for already verified Sources entries."""
+    migrated = 0
+    for adapter in ADAPTERS.list():
+        if enable_workflow_fallback_for_verified_onboarding(adapter):
+            ADAPTERS.replace(adapter)
+            migrated += 1
+    if migrated:
+        print(f"Enabled workflow fallback for {migrated} verified onboarding adapter(s)")
+    ENABLED_ADAPTERS[:] = ADAPTERS.list()
+    return migrated
+
+
 def public_setup_configuration() -> dict[str, Any]:
     if LIBRARY is None:
         return {}
@@ -4270,6 +4283,11 @@ class AppHandler(BaseHTTPRequestHandler):
                     result["adapter"].setdefault("maker", {})["ready_to_save"] = result["report"]["ready_to_save"]
                     result["adapter"]["maker"]["workflow_verified"] = verified_workflow
                     result["adapter"]["maker"]["workflow_status"] = workflow.get("status")
+                    # Sources onboarding has already run the workflow engine;
+                    # save this explicit opt-in so Find Links can use the same
+                    # engine if the normal adapter later finds no final file.
+                    if verified_workflow:
+                        enable_workflow_fallback_for_verified_onboarding(result["adapter"])
                     print(f"Source onboarding workflow: site={urlparse(str(payload.get('siteUrl') or '')).hostname} candidate={urlparse(str(candidate.get('url') or '')).path} status={workflow.get('status')} results={len(workflow.get('results', []))}")
                     response(self, HTTPStatus.OK, {"ok": True, **result, "workflow": workflow})
                 else:
@@ -4754,7 +4772,7 @@ def main() -> int:
         help="Jellyfin API key. If omitted, the app tries the local Jellyfin ApiKeys database.",
     )
     args = parser.parse_args()
-    ENABLED_ADAPTERS[:] = ADAPTERS.list()
+    migrate_verified_onboarding_adapters()
     ACCESS_TOKEN = args.token.strip()
     ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "").strip()
     configure_analyzer_domains(os.environ.get("WORKFLOW_ANALYZER_DOMAINS", ""))

@@ -2,7 +2,7 @@
 from __future__ import annotations
 import re
 from typing import Any
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 from adapter_analyzer import PageParser, _score
 from network_safety import SafeSession
 from playwright_renderer import PlaywrightRenderer, RendererUnavailable, interactive_verification_present
@@ -91,10 +91,29 @@ class SiteAdapter:
             if isinstance(title, str) and isinstance(url, str) and title.strip() and url.startswith(("http://", "https://")):
                 rows.append({"title": title.strip(), "url": url})
         return rows[:12]
+    @staticmethod
+    def _public_http_action(url: str) -> bool:
+        """Reject share/application actions before any network inspection.
+
+        The parser can legitimately see ``whatsapp:``, ``mailto:``,
+        ``tel:``, and ``javascript:`` anchors on a movie page.  They are UI
+        actions, never download candidates, and must not reach SafeSession.
+        """
+        parsed = urlparse(str(url or ""))
+        return parsed.scheme.lower() in {"http", "https"} and bool(parsed.hostname)
+
     def extract_candidates(self,html:str,page_url:str)->list[dict[str,str]]:
-        doc=PageParser(page_url);doc.feed(html); return [{"title":x.text,"url":x.href} for x in doc.elements if x.href and x.text]
+        doc=PageParser(page_url)
+        doc.feed(html)
+        return [{"title": x.text, "url": x.href} for x in doc.elements if x.text and self._public_http_action(x.href)]
     def extract_quality_links(self,html:str,page_url:str,quality:str)->list[dict[str,str]]:
-        doc=PageParser(page_url);doc.feed(html);return [{"text":x.text,"url":x.href,"score":str(_score(x,quality)[0])} for x in doc.elements if x.href and _score(x,quality)[0]>=3]
+        doc=PageParser(page_url)
+        doc.feed(html)
+        return [
+            {"text": x.text, "url": x.href, "score": str(_score(x, quality)[0])}
+            for x in doc.elements
+            if self._public_http_action(x.href) and _score(x, quality)[0] >= 3
+        ]
     def inspect_redirect_chain(self,url:str): return SafeSession().redirect_chain(url,self.config.get("redirects",{}).get("max_hops",8))
     def identify_final_link(self,chain): return chain[-1].url if chain else ""
 

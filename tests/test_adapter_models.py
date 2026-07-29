@@ -1,7 +1,7 @@
 import unittest
-from adapter_models import blank_adapter, validate_adapter
+from adapter_models import blank_adapter, enable_workflow_fallback_for_verified_onboarding, validate_adapter
 from adapter_analyzer import PageParser, _score
-from adapter_runtime import normalized_title
+from adapter_runtime import SiteAdapter, normalized_title
 from adapter_analyzer import _looks_like_javascript_search
 
 class AdapterModelTests(unittest.TestCase):
@@ -22,5 +22,25 @@ class AdapterModelTests(unittest.TestCase):
     def test_dynamic_search_shell_is_not_treated_as_working_results(self):
         html = '<div id="results-grid"></div><script>fetch("/documents/search")</script>'
         self.assertTrue(_looks_like_javascript_search(html))
+
+    def test_runtime_ignores_share_and_non_http_actions(self):
+        adapter = SiteAdapter(blank_adapter("Example Site", "https://example.com"))
+        html = '''
+            <a href="whatsapp://send?text=share">Share on WhatsApp</a>
+            <a href="javascript:void(0)">JavaScript action</a>
+            <a href="mailto:help@example.com">Contact</a>
+            <a href="https://files.example/movie.mkv">1080p Download</a>
+        '''
+        self.assertEqual(adapter.extract_candidates(html, "https://example.com/movie"), [{"title": "1080p Download", "url": "https://files.example/movie.mkv"}])
+        self.assertEqual([row["url"] for row in adapter.extract_quality_links(html, "https://example.com/movie", "1080p")], ["https://files.example/movie.mkv"])
+
+    def test_verified_onboarding_enables_workflow_fallback_only(self):
+        verified = blank_adapter("Verified Site", "https://example.com")
+        verified["maker"] = {"workflow_verified": True}
+        self.assertTrue(enable_workflow_fallback_for_verified_onboarding(verified))
+        self.assertTrue(verified["workflow_analyzer"]["enabled"])
+        unverified = blank_adapter("Unverified Site", "https://example.net")
+        self.assertFalse(enable_workflow_fallback_for_verified_onboarding(unverified))
+        self.assertNotIn("workflow_analyzer", unverified)
 
 if __name__ == "__main__": unittest.main()
