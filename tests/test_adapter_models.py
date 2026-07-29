@@ -34,6 +34,17 @@ class AdapterModelTests(unittest.TestCase):
         self.assertEqual(adapter.extract_candidates(html, "https://example.com/movie"), [{"title": "1080p Download", "url": "https://files.example/movie.mkv"}])
         self.assertEqual([row["url"] for row in adapter.extract_quality_links(html, "https://example.com/movie", "1080p")], ["https://files.example/movie.mkv"])
 
+    def test_search_rejects_current_page_navigation_even_when_query_is_in_url(self):
+        adapter = SiteAdapter(blank_adapter("Example Site", "https://example.com"))
+        search_url = "https://example.com/?s=Ikka"
+        navigation = {"title": "Skip to content", "url": "https://example.com/?s=Ikka#main"}
+        movie = {"title": "Ikka 2026 Hindi Full Movie", "url": "https://example.com/ikka-2026/"}
+        unrelated = {"title": "Another Movie", "url": "https://example.com/another-movie/"}
+        terms = ["ikka"]
+        self.assertFalse(adapter._is_matching_search_result(navigation, search_url, terms))
+        self.assertTrue(adapter._is_matching_search_result(movie, search_url, terms))
+        self.assertFalse(adapter._is_matching_search_result(unrelated, search_url, terms))
+
     def test_verified_onboarding_enables_workflow_fallback_only(self):
         verified = blank_adapter("Verified Site", "https://example.com")
         verified["maker"] = {"workflow_verified": True}

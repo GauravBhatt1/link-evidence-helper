@@ -2,7 +2,7 @@
 from __future__ import annotations
 import re
 from typing import Any
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import quote_plus, unquote, urlparse, urlunparse
 from adapter_analyzer import PageParser, _score
 from network_safety import SafeSession
 from playwright_renderer import PlaywrightRenderer, RendererUnavailable, interactive_verification_present
@@ -54,7 +54,10 @@ class SiteAdapter:
             html = rendered.html
         terms=[part for part in re.sub(r"[^a-z0-9]+"," ",query.lower()).split() if part]
         rows=self.extract_candidates(html,search_url)
-        matches=[row for row in rows if not terms or all(term in (row["title"]+" "+row["url"]).lower() for term in terms)]
+        # Do not search the query string itself.  Every navigation anchor on a
+        # WordPress-style search page inherits ``?s=<query>``, which otherwise
+        # makes "Skip to content" and footer links look like movie results.
+        matches=[row for row in rows if self._is_matching_search_result(row, search_url, terms)]
         if not matches and _looks_like_javascript_search(html):
             raise AdapterSearchUnsupported("Search results are loaded by the website's JavaScript and are not available to the safe server-side search.")
         return matches[:12]
@@ -101,6 +104,40 @@ class SiteAdapter:
         """
         parsed = urlparse(str(url or ""))
         return parsed.scheme.lower() in {"http", "https"} and bool(parsed.hostname)
+
+    @staticmethod
+    def _is_matching_search_result(row: dict[str, str], search_url: str, terms: list[str]) -> bool:
+        """Reject navigation links and require a real result-title/path match.
+
+        Search query parameters are deliberately excluded from matching: a
+        URL such as ``/?s=Ikka#main`` is the current search page, not a movie
+        page, even though it contains the submitted title in its query.
+        """
+        title = str(row.get("title") or "").strip()
+        candidate = urlparse(str(row.get("url") or ""))
+        current = urlparse(search_url)
+        if candidate.scheme.lower() not in {"http", "https"} or not candidate.hostname:
+            return False
+        label = title.lower()
+        navigation_labels = {
+            "skip to content", "home", "menu", "search", "close", "next",
+            "previous", "privacy policy", "terms and conditions", "contact us",
+        }
+        if not title or label in navigation_labels or label.startswith("skip to "):
+            return False
+        # Fragment-only and same-document links are page controls, never
+        # searchable content results.
+        candidate_without_fragment = urlunparse(candidate._replace(fragment=""))
+        current_without_fragment = urlunparse(current._replace(fragment=""))
+        if candidate.fragment or candidate_without_fragment == current_without_fragment:
+            return False
+        if not terms:
+            return True
+        # A result must match in visible title or canonical path.  The path
+        # fallback supports sparse cards whose visible title is split across
+        # nested elements, without trusting the search query string.
+        searchable = f"{label} {unquote(candidate.path).lower()}"
+        return all(term in searchable for term in terms)
 
     def extract_candidates(self,html:str,page_url:str)->list[dict[str,str]]:
         doc=PageParser(page_url)
