@@ -24,6 +24,13 @@ class _FakeSession:
 
 
 class WorkflowAnalyzerTests(TestCase):
+    def test_published_file_size_list_maps_to_common_qualities(self):
+        html = "<li><strong>File Size:</strong> 450mb 750mb 1.2Gb 2.8Gb 6Gb</li>"
+        self.assertEqual(
+            workflow_analyzer._quality_sizes_from_movie_page(html),
+            {"480P": "450 MB", "720P": "750 MB", "1080P": "1.2 GB", "2160P": "2.8 GB"},
+        )
+
     def test_time_budget_returns_partial_result_without_claiming_a_file(self):
         class Session:
             def __init__(self, *args, **kwargs):

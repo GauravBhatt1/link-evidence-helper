@@ -125,7 +125,7 @@ def normalize_workflow_result(workflow: dict[str, Any], source_url: str, source_
     links = [
         {
             "quality": item.get("quality") or "Unknown", "quality_label": item.get("quality") or "Unknown",
-            "size": "verified", "url": item["final_url"], "source": source_url,
+            "size": item.get("size") or "verified", "url": item["final_url"], "source": source_url,
             "source_name": source_name, "variant": item.get("source") or "Verified file",
             "temporary": True,
         }

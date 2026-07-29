@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from html import unescape
 from html.parser import HTMLParser
 from types import SimpleNamespace
 import time
@@ -33,6 +34,7 @@ MAX_QUALITY_LINKS, MAX_ACTIONS_PER_PAGE, MAX_DEPTH, MAX_WORKFLOW_NODES = 12, 18,
 MAX_WORKFLOW_SECONDS = 42
 STATIC_LOCATION_RE = re.compile(r"(?:window\.|document\.)?(?:location(?:\.href)?\s*=|location\.(?:assign|replace)\s*\(|open\s*\()\s*['\"]([^'\"]+)['\"]", re.I)
 META_REFRESH_RE = re.compile(r"\s*\d+(?:\.\d+)?\s*;\s*url\s*=\s*(.+)\s*", re.I)
+SIZE_RE = re.compile(r"\b(\d+(?:\.\d+)?)\s*(kb|mb|gb|tb)\b", re.I)
 
 
 @dataclass(frozen=True)
@@ -207,6 +209,24 @@ def _needs_javascript_rendering(html: str, actions: list[Action] | None = None) 
     return bool(any(signal in lowered for signal in js_signals) and (actions is None or not actions))
 
 
+def _quality_sizes_from_movie_page(html: str) -> dict[str, str]:
+    """Read an explicitly published File Size list without inspecting media bodies.
+
+    Some sources publish one ordered size per common quality in the movie-page
+    metadata.  Keeping this page-declared value with the workflow branch
+    lets the second source show the same useful size label as the first.
+    """
+    text = re.sub(r"<[^>]+>", " ", unescape(html or ""))
+    match = re.search(r"\bfile\s*size\s*:\s*(.{0,220})", text, re.I | re.S)
+    if not match:
+        return {}
+    sizes = [f"{number} {unit.upper()}" for number, unit in SIZE_RE.findall(match.group(1))]
+    qualities = ("480P", "720P", "1080P", "2160P")
+    if len(sizes) < len(qualities):
+        return {}
+    return dict(zip(qualities, sizes))
+
+
 def _workflow_steps(movie_ok: bool, results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     steps = [{"label": "Movie page", "state": "passed" if movie_ok else "failed"}]
     if not movie_ok:
@@ -256,6 +276,7 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
         return {"status": "blocked", "site": site_url, "movie_url": movie_url, "results": [{"quality": "", "source": "Movie page", "page_url": movie_url, "final_url": None, "is_final_file": False, "status": "blocked", "blocked_by": blocked[0], "message": blocked[1]}], "execution_log": log, "workflow_steps": _workflow_steps(True, [{"status": "blocked"}]), "message": blocked[1]}
 
     movie_actions = _parse(movie_url, movie_html)
+    quality_sizes = _quality_sizes_from_movie_page(movie_html)
     # The normal request establishes first-party behaviour and catches an
     # immediate challenge.  Every ordinary HTML workflow page is then also
     # rendered once so client-created buttons are part of the graph.
@@ -303,7 +324,7 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
             continue
         html, response, next_url = session.fetch_html_once(action.url, referer=action.source_page)
         row = _log(log, response, action.reason, action, "Page inspected")
-        base = {"quality": quality, "source": action.label, "page_url": action.url, "final_url": None, "is_final_file": False, "status": "partial", "blocked_by": "", "message": "No verified final file response."}
+        base = {"quality": quality, "size": quality_sizes.get(quality.upper(), ""), "source": action.label, "page_url": action.url, "final_url": None, "is_final_file": False, "status": "partial", "blocked_by": "", "message": "No verified final file response."}
         if time.monotonic() >= deadline:
             timed_out = True
             row["extracted_action"], row["next_step"] = "Workflow time limit reached", "Remaining branches not requested"
