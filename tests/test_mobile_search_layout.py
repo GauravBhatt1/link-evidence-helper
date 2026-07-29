@@ -9,6 +9,12 @@ class MobileSearchLayoutTests(unittest.TestCase):
         self.assertIn('Find the right release, quickly.', web_app.HTML)
         self.assertIn('welcomePanelEl.classList.add("is-hidden")', web_app.HTML)
 
+    def test_library_filters_and_source_actions_have_accessible_labels(self):
+        self.assertIn('aria-label="Filter by availability"', web_app.HTML)
+        self.assertIn('aria-label="Sort library"', web_app.HTML)
+        self.assertIn('class="source-card"', web_app.HTML)
+        self.assertIn('aria-label="Test ${escapeHtml(row.name)}"', web_app.HTML)
+
     def test_mobile_search_button_spans_the_search_panel_width(self):
         page = web_app.HTML
         mobile_rules = page[page.index("@media (max-width: 650px)"):]
