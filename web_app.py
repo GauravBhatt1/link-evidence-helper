@@ -1016,6 +1016,7 @@ HTML = """<!doctype html>
       .status { padding: 4px 7px; }
       .search-panel .panel-body { grid-template-columns: 1fr auto; }
       .search-panel .field:has(.quality-grid) { grid-column: 1 / -1; width: auto; }
+      .search-panel #searchBtn { grid-column: 1 / -1; width: 100%; }
       .search-panel .actions { display: none; }
       .search-panel #searchBtn { min-width: 78px; }
       .results { display: flex; overflow-x: auto; overflow-y: hidden; padding: 0 0 3px; scroll-snap-type: x mandatory; }
