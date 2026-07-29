@@ -13,7 +13,8 @@ services:
       - "8765:8765"
     volumes:
       - report_link_data:/data
-      - /home/ubuntu/Cloud:/home/ubuntu/Cloud:ro
+      # Renames are always previewed and require an explicit confirmation in the UI.
+      - /home/ubuntu/Cloud:/home/ubuntu/Cloud
       - /home/ubuntu/Config/Jellyfin/data/data/jellyfin.db:/home/ubuntu/Config/Jellyfin/data/data/jellyfin.db:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"

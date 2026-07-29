@@ -12,6 +12,12 @@ class MobileSearchLayoutTests(unittest.TestCase):
     def test_library_filters_and_source_actions_have_accessible_labels(self):
         self.assertIn('aria-label="Filter by availability"', web_app.HTML)
         self.assertIn('aria-label="Sort library"', web_app.HTML)
+
+    def test_library_import_exposes_tmdb_match_and_safe_rename_controls(self):
+        self.assertIn('id="tmdbSearch"', web_app.HTML)
+        self.assertIn('id="renamePreview"', web_app.HTML)
+        self.assertIn('id="renameConfirm"', web_app.HTML)
+        self.assertIn('/api/admin/library/rename-preview', web_app.HTML)
         self.assertIn('class="source-card"', web_app.HTML)
         self.assertIn('aria-label="Test ${escapeHtml(row.name)}"', web_app.HTML)
 

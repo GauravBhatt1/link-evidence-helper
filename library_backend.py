@@ -651,12 +651,101 @@ class LibraryService:
         detail = self._tmdb(f"{endpoint}/{tmdb_id}")
         if not detail: raise ValueError("Metadata is temporarily unavailable.")
         detail["_confidence"] = 1
-        self._refresh_item_metadata({**dict(item), "tmdb_id": None}, force=True) if False else None
+        title = str(detail.get("title") or detail.get("name") or item["title"]).strip()
+        release_date = str(detail.get("release_date") or detail.get("first_air_date") or "")
+        year = _safe_int(release_date[:4]) or item["year"]
         with self._connection() as db:
             db.execute("INSERT OR REPLACE INTO manual_matches(media_item_id,tmdb_id,selected_at) VALUES(?,?,?)", (item_id, tmdb_id, _now()))
-            db.execute("UPDATE media_items SET tmdb_id=?,match_confidence=1,poster_path=?,backdrop_path=?,overview=?,genres=?,original_language=?,needs_match=0,metadata_json=? WHERE id=?", (tmdb_id, detail.get("poster_path") or "", detail.get("backdrop_path") or "", detail.get("overview") or "", _json([g.get("name") for g in detail.get("genres", [])]), detail.get("original_language") or "", _json(detail), item_id))
+            db.execute("UPDATE media_items SET title=?,normalized_title=?,year=?,tmdb_id=?,match_confidence=1,poster_path=?,backdrop_path=?,overview=?,genres=?,original_language=?,needs_match=0,metadata_json=? WHERE id=?", (title, normalized_title(title), year, tmdb_id, detail.get("poster_path") or "", detail.get("backdrop_path") or "", detail.get("overview") or "", _json([g.get("name") for g in detail.get("genres", [])]), detail.get("original_language") or "", _json(detail), item_id))
 
     def search_tmdb(self, media_type: str, query: str) -> list[dict[str, Any]]:
         endpoint = "movie" if media_type == "movie" else "tv"
         result = self._tmdb(f"search/{endpoint}?query={quote_plus(query)}&include_adult=false") or {}
         return [{"id": r.get("id"), "title": r.get("title") or r.get("name"), "year": (r.get("release_date") or r.get("first_air_date") or "")[:4], "posterPath": r.get("poster_path") or ""} for r in (result.get("results") or [])[:10]]
+
+    @staticmethod
+    def _safe_media_name(value: str) -> str:
+        """Return a portable filename component, never a path supplied by TMDB."""
+        cleaned = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', " ", str(value or ""))
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" .")
+        return cleaned[:180] or "Untitled"
+
+    def _item_root(self, item: sqlite3.Row) -> Path:
+        roots = [root for root in self.roots_for(item["type"])
+                 if hashlib.sha1(str(root).encode()).hexdigest()[:16] == item["root_key"]]
+        if not roots:
+            raise ValueError("Configured media folder for this item was not found")
+        return roots[0]
+
+    def _rename_plan(self, item_id: str) -> tuple[dict[str, Any], sqlite3.Row, Path, list[sqlite3.Row], Path, Path]:
+        with self._connection() as db:
+            item = db.execute("SELECT * FROM media_items WHERE id=? AND ignored=0", (item_id,)).fetchone()
+            files = db.execute("SELECT * FROM media_files WHERE media_item_id=? AND active=1 ORDER BY filename", (item_id,)).fetchall()
+        if not item:
+            raise ValueError("Library item not found")
+        if not item["tmdb_id"]:
+            raise ValueError("Choose a TMDB match before renaming files")
+        if not files:
+            raise ValueError("No local files are available to rename")
+        root = self._item_root(item)
+        relative_dir = Path(str(item["relative_path"] or "."))
+        source_dir = (root / relative_dir).resolve()
+        if source_dir != root and root not in source_dir.parents:
+            raise ValueError("Invalid library item path")
+        if not source_dir.is_dir():
+            raise ValueError("The local media folder is no longer available")
+        title = self._safe_media_name(item["title"])
+        year = item["year"] or "Unknown year"
+        target_dir = root / self._safe_media_name(f"{title} ({year})")
+        moves: list[dict[str, str]] = []
+        if source_dir != target_dir:
+            moves.append({"kind": "folder", "from": str(source_dir.relative_to(root)), "to": str(target_dir.relative_to(root))})
+        used: set[Path] = set()
+        for index, file_row in enumerate(files, start=1):
+            source = (root / str(file_row["relative_path"])).resolve()
+            if root not in source.parents or not source.is_file():
+                raise ValueError("A local file changed since the library scan; refresh the item and try again")
+            extension = source.suffix.lower()
+            if item["type"] == "tv" and file_row["season_number"] and file_row["episode_number"] is not None:
+                suffix = f" - S{int(file_row['season_number']):02d}E{int(file_row['episode_number']):02d}"
+            else:
+                suffix = ""
+            if file_row["resolution"] and file_row["resolution"] != "Unknown":
+                suffix += f" - {file_row['resolution']}"
+            filename = self._safe_media_name(f"{title} ({year}){suffix}") + extension
+            destination = target_dir / filename
+            duplicate = 2
+            while destination in used or (destination.exists() and destination.resolve() != source):
+                destination = target_dir / (self._safe_media_name(f"{title} ({year}){suffix}") + f" - {duplicate}" + extension)
+                duplicate += 1
+            used.add(destination)
+            moves.append({"kind": "file", "from": str(source.relative_to(root)), "to": str(destination.relative_to(root)), "fileId": file_row["id"]})
+        return {"itemId": item_id, "title": title, "year": year, "writable": os.access(source_dir, os.W_OK), "moves": moves}, item, root, files, source_dir, target_dir
+
+    def rename_preview(self, item_id: str) -> dict[str, Any]:
+        plan, *_ = self._rename_plan(item_id)
+        return plan
+
+    def rename_matched_files(self, item_id: str) -> dict[str, Any]:
+        plan, item, root, files, source_dir, target_dir = self._rename_plan(item_id)
+        if not plan["writable"]:
+            raise ValueError("The media folder is read-only. Enable write access before renaming.")
+        folder_move = next((move for move in plan["moves"] if move["kind"] == "folder"), None)
+        if folder_move:
+            if target_dir.exists():
+                raise ValueError("The destination folder already exists; no files were changed")
+            source_dir.rename(target_dir)
+        for move in (move for move in plan["moves"] if move["kind"] == "file"):
+            source = root / move["from"]
+            if folder_move:
+                source = target_dir / Path(move["from"]).relative_to(Path(folder_move["from"]))
+            destination = root / move["to"]
+            if source != destination:
+                source.rename(destination)
+            stat = destination.stat()
+            fingerprint = hashlib.sha1(f"{destination.relative_to(root)}|{stat.st_size}|{stat.st_mtime_ns}".encode()).hexdigest()
+            with self._connection() as db:
+                db.execute("UPDATE media_files SET relative_path=?,filename=?,size=?,modified_at=?,fingerprint=? WHERE id=?", (str(destination.relative_to(root)), destination.name, stat.st_size, datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(), fingerprint, move["fileId"]))
+        with self._connection() as db:
+            db.execute("UPDATE media_items SET relative_path=?,last_scanned_at=? WHERE id=?", (str(target_dir.relative_to(root)), _now(), item["id"]))
+        return {"renamed": len([move for move in plan["moves"] if move["kind"] == "file"]), "plan": plan}
