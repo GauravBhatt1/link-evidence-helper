@@ -3600,11 +3600,17 @@ def response(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload: Any) 
     if isinstance(payload, dict) and "success" not in payload:
         payload = {**payload, "success": bool(200 <= int(status) < 300 and payload.get("ok", True) is not False)}
     raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    handler.send_response(status)
-    handler.send_header("content-type", "application/json; charset=utf-8")
-    handler.send_header("content-length", str(len(raw)))
-    handler.end_headers()
-    handler.wfile.write(raw)
+    try:
+        handler.send_response(status)
+        handler.send_header("content-type", "application/json; charset=utf-8")
+        handler.send_header("content-length", str(len(raw)))
+        handler.end_headers()
+        handler.wfile.write(raw)
+    except (BrokenPipeError, ConnectionResetError):
+        # A browser/proxy may abandon a long-running request. The handler must
+        # not try to send a second error response, which only creates a noisy
+        # traceback and obscures the actual analyzer outcome.
+        return
 
 
 def normalized_app_path(path: str) -> str:

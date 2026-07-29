@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from types import SimpleNamespace
+import time
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
@@ -25,7 +26,11 @@ BLOCKER_RE = re.compile(r"cloudflare\s*turnstile|cf-turnstile|g-recaptcha|hcaptc
 LOGIN_RE = re.compile(r"\b(?:sign in|log in|login required|authentication required)\b", re.I)
 FILE_RE = re.compile(r"\.(?:mkv|mp4|webm|avi|zip)(?:$|[?#])", re.I)
 FINAL_TYPES = ("video/", "audio/", "application/octet-stream", "application/zip")
-MAX_QUALITY_LINKS, MAX_ACTIONS_PER_PAGE, MAX_DEPTH, MAX_WORKFLOW_NODES = 12, 18, 8, 48
+# Find Links is a synchronous user request. Keep the graph useful but bounded
+# well below common proxy/browser request limits; unfinished queued mirrors are
+# reported as partial rather than causing the client connection to time out.
+MAX_QUALITY_LINKS, MAX_ACTIONS_PER_PAGE, MAX_DEPTH, MAX_WORKFLOW_NODES = 12, 18, 8, 24
+MAX_WORKFLOW_SECONDS = 42
 STATIC_LOCATION_RE = re.compile(r"(?:window\.|document\.)?(?:location(?:\.href)?\s*=|location\.(?:assign|replace)\s*\(|open\s*\()\s*['\"]([^'\"]+)['\"]", re.I)
 META_REFRESH_RE = re.compile(r"\s*\d+(?:\.\d+)?\s*;\s*url\s*=\s*(.+)\s*", re.I)
 
@@ -238,7 +243,8 @@ def analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str 
 
 def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str | None, get_renderer: Any) -> dict[str, Any]:
     site_url, movie_url = validate_public_url(site_url), validate_public_url(movie_url)
-    session, log, results = SafeSession(timeout=15), [], []
+    deadline = time.monotonic() + MAX_WORKFLOW_SECONDS
+    session, log, results = SafeSession(timeout=8), [], []
     _, site, _ = session.fetch_html_once(site_url)
     _log(log, site, "configured source website", None, "Movie page requested")
     movie_html, movie, _ = session.fetch_html_once(movie_url, referer=site_url)
@@ -280,7 +286,11 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
     # page or the first quality that happens to be encountered.
     queue: list[tuple[Action, int, str]] = [(action, 0, action.quality or "Unknown quality") for action in quality_actions]
     visited: set[tuple[str, str]] = set()
+    timed_out = False
     while queue and len(visited) < MAX_WORKFLOW_NODES:
+        if time.monotonic() >= deadline:
+            timed_out = True
+            break
         action, depth, quality = queue.pop(0)
         key = (action.url, action.method)
         if key in visited:
@@ -294,6 +304,12 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
         html, response, next_url = session.fetch_html_once(action.url, referer=action.source_page)
         row = _log(log, response, action.reason, action, "Page inspected")
         base = {"quality": quality, "source": action.label, "page_url": action.url, "final_url": None, "is_final_file": False, "status": "partial", "blocked_by": "", "message": "No verified final file response."}
+        if time.monotonic() >= deadline:
+            timed_out = True
+            row["extracted_action"], row["next_step"] = "Workflow time limit reached", "Remaining branches not requested"
+            base["message"] = "Workflow time limit reached before this branch could be rendered."
+            results.append(base)
+            break
         if _final_file(response, action.url):
             row["extracted_action"], row["next_step"] = "Actual downloadable response reached", "Final file URL reached"
             base.update({"final_url": action.url, "is_final_file": True, "status": "success", "message": "Verified final file response."})
@@ -346,7 +362,12 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
         queue.extend((next_action, depth + 1, next_action.quality or quality) for next_action in next_actions)
 
     if queue:
-        results.append({"quality": "Multiple qualities", "source": "Workflow graph", "page_url": movie_url, "final_url": None, "is_final_file": False, "status": "partial", "blocked_by": "", "message": "Workflow node limit reached before all branches could be inspected."})
+        limit_message = (
+            "Workflow time limit reached before all branches could be inspected."
+            if timed_out else
+            "Workflow node limit reached before all branches could be inspected."
+        )
+        results.append({"quality": "Multiple qualities", "source": "Workflow graph", "page_url": movie_url, "final_url": None, "is_final_file": False, "status": "partial", "blocked_by": "", "message": limit_message})
 
     if not results:
         message, status = "No quality-specific or download action was verified.", "partial"

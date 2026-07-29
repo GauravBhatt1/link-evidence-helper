@@ -24,6 +24,34 @@ class _FakeSession:
 
 
 class WorkflowAnalyzerTests(TestCase):
+    def test_time_budget_returns_partial_result_without_claiming_a_file(self):
+        class Session:
+            def __init__(self, *args, **kwargs):
+                self.rows = {
+                    "https://site.example/": ("<html></html>", 200, None, "text/html"),
+                    "https://site.example/movie": ('<a href="https://landing.example/720">720p Download</a>', 200, None, "text/html"),
+                    "https://landing.example/720": ("<html></html>", 200, None, "text/html"),
+                }
+            def fetch_html_once(self, url, referer=""):
+                body, status, location, content_type = self.rows[url]
+                return body, SimpleNamespace(url=url, status=status, location=location, content_type=content_type, content_length="", headers={}), location
+
+        class Renderer:
+            def __init__(self, *args, **kwargs): pass
+            def __enter__(self): return self
+            def close(self): pass
+            def render(self, url):
+                body, status, _, content_type = Session().rows[url]
+                return RenderedPage(url, body, status, content_type, "", url)
+
+        # The first value establishes the deadline; the third expires just
+        # after the queued landing page HTTP response.
+        with patch.object(workflow_analyzer, "SafeSession", Session), patch.object(workflow_analyzer, "PlaywrightRenderer", Renderer), patch.object(workflow_analyzer, "validate_public_url", lambda url: url), patch.object(workflow_analyzer.time, "monotonic", side_effect=[0, 0, 100]):
+            result = workflow_analyzer.analyze_movie_workflow("https://site.example/", "https://site.example/movie", "720p")
+        self.assertEqual(result["status"], "partial")
+        self.assertFalse(any(item["is_final_file"] for item in result["results"]))
+        self.assertTrue(any("time limit" in item["message"].lower() for item in result["results"]))
+
     def test_blocked_host_does_not_cancel_later_queued_mirror(self):
         class Session:
             def __init__(self, *args, **kwargs):

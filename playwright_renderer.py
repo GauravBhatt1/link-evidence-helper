@@ -38,7 +38,7 @@ class RenderedPage:
 class PlaywrightRenderer:
     """One ephemeral Chromium context, with public-network routing only."""
 
-    def __init__(self, timeout_ms: int = 8_000) -> None:
+    def __init__(self, timeout_ms: int = 5_000) -> None:
         self.timeout_ms = min(max(timeout_ms, 1_000), 30_000)
         self._playwright: Any = None
         self._browser: Any = None
