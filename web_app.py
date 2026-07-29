@@ -1071,6 +1071,66 @@ HTML = """<!doctype html>
     .back-to-top { position:fixed; right:16px; bottom:72px; z-index:35; display:none; border:0; border-radius:50%; width:42px; height:42px; color:#fff; background:#6d3bc4; box-shadow:0 6px 16px #000; }.back-to-top.visible { display:block; }
     .bottom-nav { display:none; }
     @media (max-width:650px) { .app-nav { display:none; }.bottom-nav { position:fixed; display:grid; grid-template-columns:repeat(4,1fr); gap:1px; left:0; right:0; bottom:0; z-index:40; padding:5px; background:#121923; border-top:1px solid var(--line); }.bottom-nav button { border:0; background:transparent; color:var(--muted); padding:7px 2px; font-size:11px; }.bottom-nav button.active { color:#c6a6ff; }.shell { padding-bottom:65px; }.library-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }.library-toolbar h2 { flex-basis:100%; }.library-filters { margin-left:-2px; margin-right:-2px; }.detail-hero { grid-template-columns:92px 1fr; min-height:220px; padding:12px; gap:11px; }.detail-poster { width:92px; }.detail-title { font-size:21px; }.detail-overview { font-size:13px; }.library-detail { padding:0; }.detail-sheet { min-height:100%; border-radius:0; }.file-row,.episode-row { align-items:flex-start; flex-direction:column; }.episode-row-actions { width:100%; }.episode-row-actions .btn { flex:1; }.back-to-top { bottom:68px; }.admin-grid { grid-template-columns:1fr; }.admin-kpi { grid-template-columns:repeat(2,1fr); } }
+
+    /* Product refresh: a quieter, task-first workspace rather than a media wallpaper. */
+    :root { --bg: #0b1018; --panel: #111923; --panel-2: #192434; --line: #27364a; --text: #edf3fb; --muted: #9babc0; --accent: #3b82f6; --accent-2: #60a5fa; }
+    body { background: var(--bg); }
+    .wallpaper-bg { display: none; }
+    .shell { width: min(1360px, calc(100% - 48px)); padding: 0 0 40px; }
+    .topbar { min-height: 64px; margin: 0 -24px 16px; padding: 0 24px; background: rgba(11,16,24,.92); border-bottom-color: rgba(155,171,192,.18); }
+    .mark { width: 32px; height: 32px; border-radius: 8px; border-color: #315a92; box-shadow: none; }
+    .brand h1 { font-size: 15px; letter-spacing: .06em; }
+    .status { border-color: #294461; background: #101c2a; color: #b9c9dd; }
+    .app-nav { gap: 4px; margin-bottom: 16px; padding: 4px; width: max-content; max-width: 100%; border: 1px solid var(--line); border-radius: 9px; background: #101721; }
+    .app-nav button { border: 0; border-radius: 6px; background: transparent; padding: 7px 10px; color: #a8b8cb; }
+    .app-nav button:hover { background: #1a2737; color: #fff; }
+    .app-nav button.active { border: 0; background: #243b5a; color: #f5f9ff; }
+    .layout { gap: 16px; }
+    .panel { border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+    .search-panel .panel-body { grid-template-columns: minmax(300px, 1fr) 210px 112px 230px 40px; gap: 10px; padding: 12px; border-radius: 10px; }
+    .search-panel .field:has(.quality-grid) { width: 230px; }
+    .search-panel #searchBtn { min-width: 112px; }
+    .search-panel .actions { display: block; width: 40px; }
+    .search-panel .actions .btn { width: 40px; min-width: 40px; background: transparent; border-color: transparent; color: #9babc0; box-shadow: none; }
+    .search-panel .actions .btn:hover { background: #1a2737; color: #fff; }
+    input, select { border-radius: 6px; border-color: #314156; background: #0c141e; }
+    .quality-grid { gap: 4px; padding: 3px; border: 1px solid #314156; border-radius: 7px; background: #0c141e; }
+    .quality { min-height: 34px; border: 0; border-radius: 4px; background: transparent; color: #aab9ca; }
+    .quality:hover { background: #1a2737; color: #fff; }
+    .quality.active { background: #294a72; color: #fff; }
+    .btn { border-radius: 6px; background: #3182ce; box-shadow: none; }
+    .btn:hover { background: #4295e1; }
+    .btn.secondary { background: #172434; }
+    .welcome-panel { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(260px, .75fr); gap: 24px; align-items: center; min-height: 280px; padding: 34px; border: 1px solid var(--line); border-radius: 10px; background: linear-gradient(135deg, #111c29, #0d141e); }
+    .welcome-panel.is-hidden { display: none; }
+    .welcome-copy h2 { margin: 0 0 8px; font-size: 24px; letter-spacing: -.025em; }
+    .welcome-copy p { max-width: 540px; margin: 0; color: var(--muted); }
+    .workflow-steps { display: grid; gap: 10px; }
+    .workflow-step { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: center; padding: 10px; border: 1px solid #2a3a4e; border-radius: 7px; background: rgba(13,20,30,.72); color: #c5d2e1; font-size: 13px; }
+    .workflow-step b { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 6px; background: #243b5a; color: #93c5fd; }
+    .poster-panel .panel-head, .links-panel .panel-head { background: #111923; }
+    .poster-panel .panel-body { padding: 16px; }
+    .media-hero { border-color: #31465e; }
+    .link-card:hover { background: #152130; }
+    .library-toolbar { padding: 2px 0; }
+    .library-filters { padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #111923; }
+    .library-card { border-radius: 8px; }
+    @media (max-width: 760px) {
+      .shell { width: min(100% - 24px, 1360px); padding-bottom: 76px; }
+      .topbar { min-height: 56px; margin: 0 -12px 12px; padding: 0 12px; flex-direction: row; align-items: center; }
+      .status { font-size: 11px; }
+      .app-nav { display: none; }
+      .search-panel .panel-body { grid-template-columns: 1fr auto; padding: 10px; }
+      .search-panel .field:has(.quality-grid), .search-panel #searchBtn { grid-column: 1 / -1; width: 100%; }
+      .search-panel #searchBtn { min-height: 44px; }
+      .search-panel .actions { display: none; }
+      .quality-grid { grid-template-columns: repeat(5, 1fr); }
+      .welcome-panel { grid-template-columns: 1fr; min-height: 0; padding: 22px 18px; gap: 18px; }
+      .welcome-copy h2 { font-size: 21px; }
+      .bottom-nav { padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); background: rgba(13,20,30,.97); }
+      .bottom-nav button { min-height: 40px; border-radius: 6px; }
+      .bottom-nav button.active { background: #1b3657; color: #dbeafe; }
+    }
   </style>
 </head>
 <body>
@@ -1173,6 +1233,18 @@ HTML = """<!doctype html>
         </div>
       </div>
 
+      <section class="welcome-panel" id="welcomePanel" aria-labelledby="welcomeTitle">
+        <div class="welcome-copy">
+          <h2 id="welcomeTitle">Find the right release, quickly.</h2>
+          <p>Search across your configured sources, choose the exact title, then retrieve available links. Your preferred quality is already selected.</p>
+        </div>
+        <div class="workflow-steps" aria-label="How search works">
+          <div class="workflow-step"><b>1</b><span><strong>Search</strong><br>Start with a movie or series title.</span></div>
+          <div class="workflow-step"><b>2</b><span><strong>Choose</strong><br>Confirm the language and release.</span></div>
+          <div class="workflow-step"><b>3</b><span><strong>Retrieve</strong><br>Get the verified links that are available.</span></div>
+        </div>
+      </section>
+
     </section>
     <section class="library-view" id="libraryView" aria-live="polite"></section>
   </main>
@@ -1198,6 +1270,7 @@ HTML = """<!doctype html>
       libraryDetailId: "",
       episodeTarget: null,
       episodeFallback: false,
+      hasSearched: false,
     };
 
     const $ = (id) => document.getElementById(id);
@@ -1215,6 +1288,7 @@ HTML = """<!doctype html>
     const searchBtn = $("searchBtn");
     const sourceSelector = $("sourceSelector");
     const posterPanelEl = $("posterPanel");
+    const welcomePanelEl = $("welcomePanel");
     const linksPanelEl = $("linksPanel");
     const selectedActionsEl = findBtn.closest(".selected-actions");
     const wallpaperEl = $("wallpaperBg");
@@ -1507,9 +1581,13 @@ HTML = """<!doctype html>
       renderSelectedCandidate();
       if (!state.candidates.length) {
         posterPanelEl.classList.add("is-hidden");
-        candidatesEl.innerHTML = '<div class="empty">No search results.</div>';
+        welcomePanelEl.classList.remove("is-hidden");
+        if (state.hasSearched) {
+          welcomePanelEl.innerHTML = `<div class="welcome-copy"><h2>No matching releases.</h2><p>Try a shorter title, a different spelling, or choose another source.</p></div><div class="workflow-steps"><div class="workflow-step"><b>↗</b><span><strong>Try another query</strong><br>Remove year, language, or extra words.</span></div><div class="workflow-step"><b>⌘</b><span><strong>Change source</strong><br>Some titles are only available on one source.</span></div></div>`;
+        }
         return;
       }
+      welcomePanelEl.classList.add("is-hidden");
       posterPanelEl.classList.remove("is-hidden");
       candidatesEl.innerHTML = state.candidates.map((candidate, index) => `
         <button class="candidate poster-card ${index === state.selected ? "active" : ""}" data-index="${index}" title="${escapeHtml(candidate.title)}">
@@ -1866,6 +1944,7 @@ HTML = """<!doctype html>
       try {
         const body = await api(`/api/search?q=${encodeURIComponent(query)}&source=${encodeURIComponent(sourceSelector.value)}`);
         state.candidates = body.candidates || [];
+        state.hasSearched = true;
         state.episodeTarget = body.episodeTarget || episodeTargetFromQuery(query);
         state.episodeFallback = false;
         state.selected = -1;
@@ -1880,6 +1959,7 @@ HTML = """<!doctype html>
         stopProgress(true, "Search complete");
       } catch (error) {
         state.candidates = [];
+        state.hasSearched = true;
         state.selected = -1;
         renderCandidates();
         setStatus(error.message, true);
@@ -1947,6 +2027,7 @@ HTML = """<!doctype html>
     $("clearBtn").addEventListener("click", () => {
       queryEl.value = "";
       state.candidates = [];
+      state.hasSearched = false;
       state.links = [];
       state.showLinks = false;
       state.selected = -1;
