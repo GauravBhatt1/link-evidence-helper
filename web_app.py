@@ -2188,7 +2188,7 @@ def clean_movie_title_for_tmdb(title: str) -> tuple[str, str, bool]:
     )[0]
     cleaned = re.sub(r"\b(19\d{2}|20\d{2})\b", " ", cleaned)
     cleaned = re.sub(
-        r"\b(480p|720p|1080p|2160p|4k|uhd|hd|imax|extended|directors?|theatrical|uncut|cut|hdrip|webrip|web-dl|bluray|brrip|dvdrip|x264|x265|hevc|10bit|esub|msubs|subtitles|hindi|english|dual|audio|org|multi|season|series|amazon|prime|netflix|hotstar|disney|zee5|sonyliv|jio|cinema|mx|player)\b",
+        r"\b(480p|720p|1080p|2160p|4k|uhd|hd|imax|extended|directors?|theatrical|uncut|cut|hdrip|webrip|web-dl|bluray|brrip|dvdrip|x264|x265|hevc|10bit|esub|msubs|subtitles|hindi|english|dual|audio|org|multi|season|series|amazon|prime|netflix|hotstar|disney|zee5|sonyliv|jio|cinema|mx|player|bollywood|tollywood|kollywood|south)\b",
         " ",
         cleaned,
         flags=re.IGNORECASE,
@@ -2295,6 +2295,32 @@ def tmdb_poster_url(title: str, timeout: float = 4.0) -> str:
         print(f"TMDB poster lookup failed for {title!r}: {exc}")
     TMDB_POSTER_CACHE[cache_key] = (now, poster)
     return poster
+
+
+def title_matches_search_query(title: str, search_query: str) -> bool:
+    """Return true only when every searched title word is present as a word.
+
+    This is intentionally stricter than substring matching: searching ``Ikka``
+    must not treat ``Nikka`` as the same film.  It lets a clean user query
+    rescue a noisy release title after the title-specific TMDB lookup fails.
+    """
+    query_tokens = set(normalized_title(search_query).split())
+    title_tokens = set(normalized_title(title).split())
+    return bool(query_tokens) and query_tokens <= title_tokens
+
+
+def tmdb_poster_for_candidate(title: str, search_query: str = "") -> str:
+    """Prefer the release-title lookup, then safely retry the exact query.
+
+    Source titles commonly append distributor/language words that are not part
+    of the TMDB title.  The fallback is limited to candidates whose visible
+    title contains every query word, so unrelated search results never inherit
+    the requested movie's poster.
+    """
+    poster = tmdb_poster_url(title)
+    if poster or not title_matches_search_query(title, search_query):
+        return poster
+    return tmdb_poster_url(search_query)
 
 
 def tmdb_backdrop_urls(timeout: float = 4.0) -> list[str]:
@@ -2802,7 +2828,7 @@ def jellyfin_library_item_by_id(jellyfin_id: str) -> dict[str, str] | None:
     return None
 
 
-def candidates_with_posters(candidates: list[Candidate | dict[str, Any]]) -> list[dict[str, Any]]:
+def candidates_with_posters(candidates: list[Candidate | dict[str, Any]], search_query: str = "") -> list[dict[str, Any]]:
     rows = [dict(candidate) if isinstance(candidate, dict) else asdict(candidate) for candidate in candidates]
     for row in rows:
         # Generated adapters already attach their human-readable source name.
@@ -2813,7 +2839,7 @@ def candidates_with_posters(candidates: list[Candidate | dict[str, Any]]) -> lis
     if not TMDB_API_KEY or not rows:
         return rows
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-        futures = [executor.submit(tmdb_poster_url, row["title"]) for row in rows]
+        futures = [executor.submit(tmdb_poster_for_candidate, row["title"], search_query) for row in rows]
         for row, future in zip(rows, futures):
             try:
                 poster_url = future.result(timeout=5)
@@ -4237,7 +4263,7 @@ class AppHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "ok": True,
-                    "candidates": candidates_with_posters(candidates),
+                    "candidates": candidates_with_posters(candidates, query),
                     "source": source_host,
                     "sources": source_summary,
                     "adapterFailures": adapter_failures,
