@@ -1,12 +1,15 @@
 """Private, bounded JavaScript renderer used only after a normal fetch is insufficient.
 
-This module deliberately does not click controls, submit forms, solve challenges,
-or persist browser state.  A browser context belongs to one analysis operation and
-is discarded at the end, so cookies and the user agent cannot leak across users.
+This module never interacts with challenges, login controls, or generic forms.
+For a public page that exposes one clearly labelled direct-download action, the
+workflow analyzer may ask it to perform that same normal browser action.  Browser
+state is ephemeral and discarded at the end, so cookies and local storage cannot
+leak across users.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any
 
 from network_safety import MAX_HTML_BYTES, redact_url, validate_public_url
@@ -121,3 +124,44 @@ class PlaywrightRenderer:
             )
         except Exception as exc:
             return RenderedPage(redact_url(safe), "", None, "", str(exc))
+
+    def direct_download(self, url: str) -> str:
+        """Follow one explicit public ``Direct/Instant Download`` UI action.
+
+        This is intentionally narrow: it does not fill forms, click generic
+        controls, or attempt any CAPTCHA/login interaction.  It only follows a
+        user-visible button whose label promises a direct/instant download, then
+        returns a public link shown by the resulting page.  The caller must still
+        verify the returned response by headers before exposing it.
+        """
+        safe = validate_public_url(url)
+        if not self._page:
+            raise RendererUnavailable("Playwright renderer is not active")
+        try:
+            self._page.goto(safe, wait_until="domcontentloaded")
+            if interactive_verification_present(self._page.content()):
+                return ""
+            buttons = self._page.get_by_role(
+                "button", name=re.compile(r"\b(?:direct|instant)\b.*\bdownload\b", re.I)
+            )
+            if not buttons.count():
+                return ""
+            button = buttons.first
+            # A form action changes server-side state. This limited path accepts
+            # only script-backed direct-download buttons, never submit controls.
+            if (button.get_attribute("type") or "button").lower() == "submit" or button.get_attribute("formaction"):
+                return ""
+            button.click()
+            self._page.wait_for_timeout(min(max(self.timeout_ms + 1_500, 6_500), 12_000))
+            if interactive_verification_present(self._page.content()):
+                return ""
+            links = self._page.get_by_role("link")
+            for index in range(links.count()):
+                link = links.nth(index)
+                label = (link.inner_text() or "").strip()
+                href = (link.get_attribute("href") or "").strip()
+                if re.search(r"\b(?:download here|direct download|instant download)\b", label, re.I):
+                    return validate_public_url(href)
+        except Exception:
+            return ""
+        return ""

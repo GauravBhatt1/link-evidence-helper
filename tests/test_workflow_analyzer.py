@@ -31,6 +31,38 @@ class WorkflowAnalyzerTests(TestCase):
             ("login_required", "Manual verification required"),
         )
 
+    def test_public_direct_download_action_is_verified_without_touching_a_challenge(self):
+        class Session:
+            def __init__(self, *args, **kwargs): pass
+            def fetch_html_once(self, url, referer=""):
+                pages = {
+                    "https://site.example/": ("<html></html>", 200, "text/html"),
+                    "https://site.example/movie": ('<a href="https://host.example/file">1080p Download</a>', 200, "text/html"),
+                    "https://host.example/file": ('<button type="button">Direct/Instant Download</button>', 200, "text/html"),
+                }
+                body, status, content_type = pages[url]
+                return body, SimpleNamespace(url=url, status=status, location=None, content_type=content_type, content_length="", headers={}), None
+            def inspect(self, url, method="HEAD"):
+                if method != "HEAD":
+                    raise AssertionError("Direct target must be header-verified")
+                return SimpleNamespace(url=url, status=200, location=None, content_type="application/octet-stream", content_length="10000000", headers={})
+
+        class Renderer:
+            def __enter__(self): return self
+            def close(self): pass
+            def render(self, url):
+                body = Session().fetch_html_once(url)[0]
+                status, content_type = 200, "text/html"
+                return RenderedPage(url, body, status, content_type, "", url)
+            def direct_download(self, url):
+                return "https://cdn.example/file.zip" if url == "https://host.example/file" else ""
+
+        with patch.object(workflow_analyzer, "SafeSession", Session), patch.object(workflow_analyzer, "PlaywrightRenderer", Renderer), patch.object(workflow_analyzer, "validate_public_url", lambda url: url):
+            result = workflow_analyzer.analyze_movie_workflow("https://site.example/", "https://site.example/movie", "1080p")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["results"][0]["final_url"], "https://cdn.example/file.zip")
+        self.assertEqual(result["results"][0]["source"], "Browser direct download")
+
     def test_published_file_size_list_maps_to_common_qualities(self):
         html = "<li><strong>File Size:</strong> 450mb 750mb 1.2Gb 2.8Gb 6Gb</li>"
         self.assertEqual(

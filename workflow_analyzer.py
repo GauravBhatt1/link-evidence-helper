@@ -366,6 +366,25 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
                     results.append(base); continue
                 page_base_url = rendered.navigation_url or action.url
                 server_actions = _merge_actions(server_actions, _parse(page_base_url, rendered.html))
+        # A small number of public hosts expose their verified file only after
+        # a clearly labelled client-side "Direct/Instant Download" action.
+        # This is not a form submission or a challenge interaction; the
+        # renderer refuses generic, login, and CAPTCHA controls.  The returned
+        # target is still verified by response headers before being used.
+        try:
+            direct_download = getattr(get_renderer(), "direct_download", None)
+            direct_url = direct_download(action.url) if callable(direct_download) else ""
+        except RendererUnavailable:
+            direct_url = ""
+        if direct_url:
+            direct_response = session.inspect(direct_url, "HEAD")
+            direct_row = _log(log, direct_response, "Public direct-download action", action, "Direct download target inspected")
+            if _final_file(direct_response, direct_url):
+                direct_row["extracted_action"], direct_row["next_step"] = "Actual downloadable response reached", "Final file URL reached"
+                base.update({"final_url": direct_url, "is_final_file": True, "status": "success", "message": "Verified final file response.", "source": "Browser direct download"})
+                results.append(base)
+                continue
+            direct_row["next_step"] = "Generated target was not a downloadable response"
         if getattr(response, "error", "") and not server_actions:
             row["extracted_action"], row["next_step"] = "No readable page or rendered action", "Stopped at response"
             results.append(base); continue
