@@ -434,9 +434,14 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
                 direct_row["extracted_action"], direct_row["next_step"] = "Actual downloadable response reached", "Final file URL reached"
                 base.update({"final_url": direct_url, "is_final_file": True, "status": "success", "message": "Verified final file response.", "source": "Browser direct download"})
                 results.append(base)
-                if _host_priority(action) == 0:
-                    queue.clear()
-                    break
+                # This narrow browser path only reaches a user-visible
+                # Direct/Instant Download control and then header-verifies
+                # the generated file.  It is a final Direct result even when
+                # its parent mirror was labelled only "Download Now".
+                # Continuing unrelated queued mirrors after it just adds
+                # latency and can enter ad or challenge chains.
+                queue.clear()
+                break
                 continue
             direct_row["next_step"] = "Generated target was not a downloadable response"
         if getattr(response, "error", "") and not server_actions:

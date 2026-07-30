@@ -84,6 +84,34 @@ class WorkflowAnalyzerTests(TestCase):
         self.assertEqual(result["results"][0]["final_url"], "https://cdn.example/file.zip")
         self.assertEqual(result["results"][0]["source"], "Browser direct download")
 
+    def test_browser_verified_direct_stops_unrelated_queued_mirrors(self):
+        requested: list[str] = []
+
+        class Session:
+            def __init__(self, *args, **kwargs): pass
+            def fetch_html_once(self, url, referer=""):
+                requested.append(url)
+                pages = {
+                    "https://site.example/movie": ('<a href="https://host.example/file">1080p Download</a>', 200, "text/html"),
+                    "https://host.example/file": ('<button type="button">Direct Download</button><a href="https://slow.example/chain">Mirror</a>', 200, "text/html"),
+                }
+                if url == "https://slow.example/chain":
+                    raise AssertionError("verified browser Direct result must stop queued mirrors")
+                body, status, content_type = pages[url]
+                return body, SimpleNamespace(url=url, status=status, location=None, content_type=content_type, content_length="", headers={}), None
+            def inspect(self, url, method="HEAD"):
+                return SimpleNamespace(url=url, status=200, location=None, content_type="application/octet-stream", content_length="10000000", headers={})
+
+        class Renderer:
+            def __enter__(self): return self
+            def close(self): pass
+            def direct_download(self, url): return "https://cdn.example/file.zip"
+
+        with patch.object(workflow_analyzer, "SafeSession", Session), patch.object(workflow_analyzer, "PlaywrightRenderer", Renderer), patch.object(workflow_analyzer, "validate_public_url", lambda url: url):
+            result = workflow_analyzer.analyze_movie_workflow("https://site.example/", "https://site.example/movie", "1080p")
+        self.assertEqual(result["status"], "success")
+        self.assertNotIn("https://slow.example/chain", requested)
+
     def test_published_file_size_list_maps_to_common_qualities(self):
         html = "<li><strong>File Size:</strong> 450mb 750mb 1.2Gb 2.8Gb 6Gb</li>"
         self.assertEqual(

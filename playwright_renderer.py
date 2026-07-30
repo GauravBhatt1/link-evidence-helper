@@ -152,6 +152,10 @@ class PlaywrightRenderer:
             if (button.get_attribute("type") or "button").lower() == "submit" or button.get_attribute("formaction"):
                 return ""
             button.click()
+            # This public host generates its visible final-link element after
+            # a delayed client-side action. Keep the bounded proven wait so a
+            # fast-path attempt never turns a valid workflow into a false
+            # negative merely because the DOM is not ready yet.
             self._page.wait_for_timeout(min(max(self.timeout_ms + 1_500, 6_500), 12_000))
             if interactive_verification_present(self._page.content()):
                 return ""
