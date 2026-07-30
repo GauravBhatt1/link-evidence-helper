@@ -80,6 +80,9 @@ FXLINKS_LINK_CACHE: dict[str, tuple[float, list[dict[str, str]]]] = {}
 FXLINKS_LISTING_CACHE: dict[str, tuple[float, list[dict[str, str]]]] = {}
 RESOLVED_SIZE_CACHE: dict[str, str] = {}
 FIND_RESULT_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+WORKFLOW_PREFETCH_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+WORKFLOW_PREFETCH_INFLIGHT: set[str] = set()
+WORKFLOW_PREFETCH_LOCK = threading.Lock()
 MEDIA_LIBRARY_CACHE: tuple[float, dict[str, list[dict[str, str]]]] = (0, {})
 JELLYFIN_LIBRARY_CACHE: tuple[float, dict[str, list[dict[str, str]]]] = (0, {})
 JELLYFIN_SHOW_DETAIL_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -87,6 +90,7 @@ AUTO_SYNC_LAST_RUN = 0.0
 TMDB_CACHE_SECONDS = 86400
 GDFLIX_CACHE_SECONDS = 21600
 FIND_CACHE_SECONDS = 3600
+WORKFLOW_PREFETCH_CACHE_SECONDS = 1800
 MEDIA_LIBRARY_CACHE_SECONDS = 300
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w154"
 TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w1280"
@@ -134,6 +138,34 @@ def normalize_workflow_result(workflow: dict[str, Any], source_url: str, source_
     ]
     message = "" if links else "No verified final link is available for this source."
     return {"ok": True, "links": links, "message": message, "debug": workflow.get("execution_log", []) if include_debug else [], "cached": False, "temporary": True, "workflow_status": workflow.get("status", "partial")}
+
+
+def workflow_prefetch_key(adapter_id: str, page_url: str, quality: str) -> str:
+    return f"{adapter_id}|{page_url}|{quality.lower()}"
+
+
+def prefetch_adapter_workflow(adapter: dict[str, Any], page_url: str, quality: str = "1080p") -> None:
+    """Warm a verified public-link result while the user reviews search cards."""
+    key = workflow_prefetch_key(str(adapter["id"]), page_url, quality)
+    with WORKFLOW_PREFETCH_LOCK:
+        cached = WORKFLOW_PREFETCH_CACHE.get(key)
+        if key in WORKFLOW_PREFETCH_INFLIGHT or (cached and time.time() - cached[0] < WORKFLOW_PREFETCH_CACHE_SECONDS):
+            return
+        WORKFLOW_PREFETCH_INFLIGHT.add(key)
+
+    def run() -> None:
+        try:
+            workflow = analyze_movie_workflow("https://" + str((adapter.get("domains") or [urlparse(page_url).hostname or ""])[0]), page_url, quality)
+            payload = normalize_workflow_result(workflow, f"adapter:{adapter['id']}", adapter["name"], False)
+            if payload["links"]:
+                WORKFLOW_PREFETCH_CACHE[key] = (time.time(), payload)
+        except Exception:
+            pass
+        finally:
+            with WORKFLOW_PREFETCH_LOCK:
+                WORKFLOW_PREFETCH_INFLIGHT.discard(key)
+
+    threading.Thread(target=run, name=f"workflow-prefetch-{adapter['id']}", daemon=True).start()
 
 
 def combined_sources() -> list[dict[str, Any]]:
@@ -4420,6 +4452,15 @@ class AppHandler(BaseHTTPRequestHandler):
                 for source in source_rows
             ]
             source_summary.extend([{"id": adapter["id"], "name": adapter["name"], "url": "https://"+adapter["domains"][0], "enabled": adapter["enabled"], "results": sum(1 for candidate in candidates if isinstance(candidate, dict) and candidate.get("source_id") == adapter["id"]), "health": adapter.get("health", {}).get("status", "Working")} for adapter in ENABLED_ADAPTERS])
+            # hdmovie2r's public host needs several seconds to generate its
+            # visible Direct link. Start its normal, already-authorized
+            # 1080p workflow while the user is reviewing the search cards.
+            # The result is only cached after the final response is verified.
+            if selected_source in {"all", "hdmovie2r_ltd"}:
+                candidate = next((item for item in candidates if isinstance(item, dict) and item.get("source_id") == "hdmovie2r_ltd"), None)
+                adapter = next((item for item in enabled_saved_adapters() if item["id"] == "hdmovie2r_ltd"), None)
+                if candidate and adapter:
+                    prefetch_adapter_workflow(adapter, str(candidate["url"]), "1080p")
             response(
                 self,
                 HTTPStatus.OK,
@@ -4662,6 +4703,13 @@ class AppHandler(BaseHTTPRequestHandler):
             if not adapter:
                 response(self, HTTPStatus.UNPROCESSABLE_ENTITY, {"ok": False, "error": "Adapter is disabled, invalid, or needs retesting"}); return
             try:
+                prefetch_key = workflow_prefetch_key(adapter["id"], url, quality)
+                cached_workflow = WORKFLOW_PREFETCH_CACHE.get(prefetch_key)
+                if cached_workflow and time.time() - cached_workflow[0] < WORKFLOW_PREFETCH_CACHE_SECONDS:
+                    cached_payload = dict(cached_workflow[1])
+                    cached_payload["cached"] = True
+                    response(self, HTTPStatus.OK, cached_payload)
+                    return
                 adapter_runtime = SiteAdapter(adapter)
                 links = adapter_runtime.find_links(url, quality)
                 for link in links:
