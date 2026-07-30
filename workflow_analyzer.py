@@ -289,8 +289,18 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
     site_url, movie_url = validate_public_url(site_url), validate_public_url(movie_url)
     deadline = time.monotonic() + MAX_WORKFLOW_SECONDS
     session, log, results = SafeSession(timeout=8), [], []
-    _, site, _ = session.fetch_html_once(site_url)
-    _log(log, site, "configured source website", None, "Movie page requested")
+    # A movie page on the configured source's own host does not need a
+    # preliminary homepage request: it provides no data to this analyzer and
+    # the movie request can still send the same public Referer.  Keep the
+    # request for cross-origin pages, where the first-party visit may be part
+    # of a normal public navigation flow.
+    same_origin = (urlparse(site_url).hostname or "").lower() == (urlparse(movie_url).hostname or "").lower()
+    if same_origin:
+        skipped = SimpleNamespace(url=redact_url(site_url), status=None, location=None, content_type="", headers={})
+        _log(log, skipped, "configured source website", None, "Same-origin homepage request skipped")
+    else:
+        _, site, _ = session.fetch_html_once(site_url)
+        _log(log, site, "configured source website", None, "Movie page requested")
     movie_html, movie, _ = session.fetch_html_once(movie_url, referer=site_url)
     _log(log, movie, "verified selected search result", None, "Download sections extracted")
     if not movie_html or not movie.status or movie.status >= 400:
