@@ -132,6 +132,62 @@ class WorkflowAnalyzerTests(TestCase):
         ]
         self.assertEqual([item.label for item in workflow_analyzer._branch_actions(actions)], ["DIRECT DOWNLOAD", "VCLOUD DOWNLOAD", "GDFLIX DOWNLOAD"])
 
+    def test_direct_redirect_completes_before_lower_priority_mirrors(self):
+        requested: list[str] = []
+
+        class Session:
+            def __init__(self, *args, **kwargs):
+                self.rows = {
+                    "https://site.example/": ("<html></html>", 200, None, "text/html"),
+                    "https://site.example/movie": ('<a href="https://landing.example/1080">1080p Download</a>', 200, None, "text/html"),
+                    "https://landing.example/1080": ('<a href="https://direct.example/start">DIRECT DOWNLOAD</a><a href="https://vcloud.example/file">VCLOUD DOWNLOAD</a><a href="https://gdflix.example/file">GDFLIX DOWNLOAD</a>', 200, None, "text/html"),
+                    "https://direct.example/start": ("", 302, "https://cdn.example/movie.mkv", "text/html"),
+                    "https://cdn.example/movie.mkv": ("", 200, None, "video/x-matroska"),
+                }
+
+            def fetch_html_once(self, url, referer=""):
+                requested.append(url)
+                if url in {"https://vcloud.example/file", "https://gdflix.example/file"}:
+                    raise AssertionError("A verified Direct result should stop lower-priority mirrors")
+                body, status, location, content_type = self.rows[url]
+                return body, SimpleNamespace(url=url, status=status, location=location, content_type=content_type, content_length="", headers={}), location
+
+        with patch.object(workflow_analyzer, "SafeSession", Session), patch.object(workflow_analyzer, "validate_public_url", lambda url: url):
+            result = workflow_analyzer.analyze_movie_workflow("https://site.example/", "https://site.example/movie", "1080p")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["results"][-1]["final_url"], "https://cdn.example/movie.mkv")
+        self.assertNotIn("https://vcloud.example/file", requested)
+        self.assertNotIn("https://gdflix.example/file", requested)
+
+    def test_accepted_intermediate_shell_uses_renderer_then_direct_path(self):
+        class Session:
+            def __init__(self, *args, **kwargs):
+                self.rows = {
+                    "https://site.example/": ("<html></html>", 200, None, "text/html"),
+                    "https://site.example/movie": ('<a href="https://landing.example/1080">1080p Download</a>', 200, None, "text/html"),
+                    "https://landing.example/1080": ("<html></html>", 202, None, "text/html"),
+                    "https://direct.example/start": ("", 302, "https://cdn.example/movie.mkv", "text/html"),
+                    "https://cdn.example/movie.mkv": ("", 200, None, "video/x-matroska"),
+                }
+
+            def fetch_html_once(self, url, referer=""):
+                body, status, location, content_type = self.rows[url]
+                return body, SimpleNamespace(url=url, status=status, location=location, content_type=content_type, content_length="", headers={}), location
+
+        rendered_urls: list[str] = []
+
+        class Renderer:
+            def __enter__(self): return self
+            def close(self): pass
+            def render(self, url):
+                rendered_urls.append(url)
+                return RenderedPage(url, '<a href="https://direct.example/start">DIRECT DOWNLOAD</a>', 202, "text/html", "", url)
+
+        with patch.object(workflow_analyzer, "SafeSession", Session), patch.object(workflow_analyzer, "PlaywrightRenderer", Renderer), patch.object(workflow_analyzer, "validate_public_url", lambda url: url):
+            result = workflow_analyzer.analyze_movie_workflow("https://site.example/", "https://site.example/movie", "1080p")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(rendered_urls, ["https://landing.example/1080"])
+
     def test_quality_root_ignores_navigation_with_inherited_heading(self):
         class Session:
             def __init__(self, *args, **kwargs):

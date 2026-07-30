@@ -37,6 +37,7 @@ MAX_WORKFLOW_SECONDS = 42
 STATIC_LOCATION_RE = re.compile(r"(?:window\.|document\.)?(?:location(?:\.href)?\s*=|location\.(?:assign|replace)\s*\(|open\s*\()\s*['\"]([^'\"]+)['\"]", re.I)
 META_REFRESH_RE = re.compile(r"\s*\d+(?:\.\d+)?\s*;\s*url\s*=\s*(.+)\s*", re.I)
 SIZE_RE = re.compile(r"\b(\d+(?:\.\d+)?)\s*(kb|mb|gb|tb)\b", re.I)
+DIRECT_DOWNLOAD_BUTTON_RE = re.compile(r"<button\b(?P<attrs>[^>]*)>(?P<label>.*?)</button\s*>", re.I | re.S)
 
 
 @dataclass(frozen=True)
@@ -158,10 +159,31 @@ def _branch_actions(actions: list[Action]) -> list[Action]:
     """Prefer download actions, but do not discard an unlabeled real branch."""
     direct = _pick(actions, lambda item: item.method != "GET" or _is_download(item) or bool(item.quality) or "static" in item.reason, MAX_ACTIONS_PER_PAGE)
     candidates = direct or _pick(actions, lambda item: item.method != "GET" or not NAVIGATION_RE.search(item.label), MAX_ACTIONS_PER_PAGE)
-    def rank(item: Action) -> int:
-        text = f"{item.label} {item.url}"
-        return next((priority for pattern, priority in HOST_PRIORITY if pattern.search(text)), 3)
-    return sorted(candidates, key=rank)
+    return sorted(candidates, key=_host_priority)
+
+
+def _host_priority(action: Action) -> int:
+    """Rank an action so a direct path is never delayed by blocked mirrors."""
+    text = f"{action.label} {action.url}"
+    return next((priority for pattern, priority in HOST_PRIORITY if pattern.search(text)), 3)
+
+
+def _has_explicit_direct_download_button(html: str) -> bool:
+    """Avoid launching a browser for pages that cannot use the narrow UI path.
+
+    The browser-only action is useful for a small class of public hosts, but
+    opening Chromium for every mirror adds seconds per branch.  It is therefore
+    eligible only when server HTML already exposes a real button with the
+    explicit Direct/Instant Download wording.  Forms and ordinary anchors stay
+    on the normal HTTP traversal path.
+    """
+    for match in DIRECT_DOWNLOAD_BUTTON_RE.finditer(html or ""):
+        attrs = match.group("attrs")
+        label = re.sub(r"<[^>]+>", " ", match.group("label"))
+        text = f"{attrs} {unescape(label)}"
+        if re.search(r"\b(?:direct|instant)\b.*\bdownload\b", text, re.I):
+            return True
+    return False
 
 
 def _same_resource(left: str, right: str) -> bool:
@@ -280,9 +302,10 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
     movie_actions = _parse(movie_url, movie_html)
     quality_sizes = _quality_sizes_from_movie_page(movie_html)
     # The normal request establishes first-party behaviour and catches an
-    # immediate challenge.  Every ordinary HTML workflow page is then also
-    # rendered once so client-created buttons are part of the graph.
-    if movie_html:
+    # immediate challenge.  Browser rendering is a fallback for a page whose
+    # useful actions are genuinely client-created; rendering every ordinary
+    # HTML movie page makes link discovery unnecessarily slow.
+    if movie_html and _needs_javascript_rendering(movie_html, movie_actions):
         try:
             rendered = get_renderer().render(movie_url)
         except RendererUnavailable as exc:
@@ -314,6 +337,10 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
         if time.monotonic() >= deadline:
             timed_out = True
             break
+        # Follow Direct first even when its redirect was discovered after
+        # VCLOUD/GDFLIX. This is both the preferred source order and prevents
+        # a slow or challenged mirror from delaying an already-valid path.
+        queue.sort(key=lambda item: _host_priority(item[0]))
         action, depth, quality = queue.pop(0)
         key = (action.url, action.method)
         if key in visited:
@@ -336,10 +363,17 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
         if _final_file(response, action.url):
             row["extracted_action"], row["next_step"] = "Actual downloadable response reached", "Final file URL reached"
             base.update({"final_url": action.url, "is_final_file": True, "status": "success", "message": "Verified final file response."})
-            results.append(base); continue
+            results.append(base)
+            # A requested quality now has a verified Direct result. Continuing
+            # through lower-priority mirrors only adds latency and can involve
+            # unrelated social/ad destinations, not additional evidence.
+            if _host_priority(action) == 0:
+                queue.clear()
+                break
+            continue
         if response.status in REDIRECT_CODES and next_url:
             row["extracted_action"], row["next_step"] = f"HTTP redirect to {redact_url(next_url)}", "Redirect destination requested"
-            queue.append((Action(next_url, "HTTP redirect", action.url, "HTTP Location header", quality), depth + 1, quality))
+            queue.append((Action(next_url, f"{action.label} → HTTP redirect", action.url, "HTTP Location header", quality), depth + 1, quality))
             continue
         blocker = _blocked_html(html) if html else None
         if blocker:
@@ -347,12 +381,17 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
             base.update({"status": "blocked", "blocked_by": blocker[0], "message": blocker[1]})
             results.append(base); continue
         server_actions = _parse(action.url, html) if html else []
-        try:
-            rendered = get_renderer().render(action.url)
-        except RendererUnavailable as exc:
-            rendered = None
-            row["extracted_action"], row["next_step"] = "JavaScript renderer unavailable", "Server-rendered actions inspected"
-            base["message"] = f"Browser rendering unavailable: {exc}"
+        rendered = None
+        # filesdl-style intermediary shells intentionally answer 202 and only
+        # populate their mirror buttons after ordinary client-side rendering.
+        # Treat that status as a narrow rendering signal; a normal 200 landing
+        # page with useful server actions still avoids the browser entirely.
+        if _needs_javascript_rendering(html, server_actions) or response.status == 202:
+            try:
+                rendered = get_renderer().render(action.url)
+            except RendererUnavailable as exc:
+                row["extracted_action"], row["next_step"] = "JavaScript renderer unavailable", "Server-rendered actions inspected"
+                base["message"] = f"Browser rendering unavailable: {exc}"
         if rendered:
             rendered_response = SimpleNamespace(url=rendered.url, status=rendered.status, location=None, content_type=rendered.content_type, headers={}, error=rendered.error)
             rendered_row = _log(log, rendered_response, "JavaScript-rendered page inspection", action, "Rendered page inspected", "Rendered DOM actions extracted")
@@ -371,11 +410,13 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
         # This is not a form submission or a challenge interaction; the
         # renderer refuses generic, login, and CAPTCHA controls.  The returned
         # target is still verified by response headers before being used.
-        try:
-            direct_download = getattr(get_renderer(), "direct_download", None)
-            direct_url = direct_download(action.url) if callable(direct_download) else ""
-        except RendererUnavailable:
-            direct_url = ""
+        direct_url = ""
+        if _has_explicit_direct_download_button(html):
+            try:
+                direct_download = getattr(get_renderer(), "direct_download", None)
+                direct_url = direct_download(action.url) if callable(direct_download) else ""
+            except RendererUnavailable:
+                direct_url = ""
         if direct_url:
             direct_response = session.inspect(direct_url, "HEAD")
             direct_row = _log(log, direct_response, "Public direct-download action", action, "Direct download target inspected")
@@ -383,6 +424,9 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
                 direct_row["extracted_action"], direct_row["next_step"] = "Actual downloadable response reached", "Final file URL reached"
                 base.update({"final_url": direct_url, "is_final_file": True, "status": "success", "message": "Verified final file response.", "source": "Browser direct download"})
                 results.append(base)
+                if _host_priority(action) == 0:
+                    queue.clear()
+                    break
                 continue
             direct_row["next_step"] = "Generated target was not a downloadable response"
         if getattr(response, "error", "") and not server_actions:
