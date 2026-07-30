@@ -14,7 +14,7 @@ from html.parser import HTMLParser
 from types import SimpleNamespace
 import time
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 from network_safety import REDIRECT_CODES, SafeSession, redact_url, validate_public_url
 from playwright_renderer import PlaywrightRenderer, RendererUnavailable
@@ -35,6 +35,13 @@ FILE_RE = re.compile(r"\.(?:mkv|mp4|webm|avi|m4v|mov|ts|zip)(?=$|[?#;\"'\s])", r
 FINAL_TYPES = ("video/", "audio/", "application/zip")
 UNSAFE_PACKAGE_RE = re.compile(r"\.(?:apk|apks|xapk|exe|msi|dmg|pkg|deb|rpm)(?:$|[?#;])", re.I)
 TELEGRAM_FILE_HOSTS = ("telesco.pe", "telegram.org", "telegram.me")
+# HubCloud's public share page points to one short-lived generator page which
+# publishes its own signed R2 delivery URL alongside unrelated mirrors.  The
+# second source should use that native delivery path only, never treat the
+# co-located FSL/PixelDrain/10Gbps adverts as equivalent source branches.
+HUBCLOUD_HOST = "hubcloud.cx"
+HUBCLOUD_GENERATOR_HOST = "sportverse.cc"
+HUBCLOUD_DELIVERY_HOST = "r2.cloudflarestorage.com"
 # Find Links is a synchronous user request. Keep the graph useful but bounded
 # well below common proxy/browser request limits; unfinished queued mirrors are
 # reported as partial rather than causing the client connection to time out.
@@ -174,6 +181,35 @@ def _host_priority(action: Action) -> int:
     return next((priority for pattern, priority in HOST_PRIORITY if pattern.search(text)), 3)
 
 
+def _host(url: str) -> str:
+    return (urlparse(url).hostname or "").lower()
+
+
+def _hubcloud_next_actions(page_url: str, actions: list[Action]) -> list[Action] | None:
+    """Keep HubCloud's public workflow on its own generated delivery path.
+
+    ``None`` means this is not a HubCloud hop and normal graph branching
+    applies.  The restrictions deliberately key off the page URL and exact
+    visible path characteristics, rather than any filename or opaque token.
+    """
+    host = _host(page_url)
+    if host == HUBCLOUD_HOST or host.endswith("." + HUBCLOUD_HOST):
+        return [
+            action for action in actions
+            if _host(action.url) == HUBCLOUD_GENERATOR_HOST
+            and urlparse(action.url).path == "/hubcloud.php"
+            and re.search(r"\bgenerate\s+direct\s+download\s+link\b", action.label, re.I)
+        ]
+    if host == HUBCLOUD_GENERATOR_HOST and urlparse(page_url).path == "/hubcloud.php":
+        return [
+            action for action in actions
+            if _host(action.url) == HUBCLOUD_DELIVERY_HOST or _host(action.url).endswith("." + HUBCLOUD_DELIVERY_HOST)
+            and urlparse(action.url).path.startswith("/hub2/")
+            and re.search(r"\bdownload\b", action.label, re.I)
+        ]
+    return None
+
+
 def _has_explicit_direct_download_button(html: str) -> bool:
     """Avoid launching a browser for pages that cannot use the narrow UI path.
 
@@ -229,7 +265,12 @@ def _final_file(response: Any, source_url: str) -> bool:
     if any(host == blocked or host.endswith("." + blocked) for blocked in TELEGRAM_FILE_HOSTS):
         return False
     disposition = str(getattr(response, "headers", {}).get("content-disposition", ""))
-    evidence = f"{parsed.path} {disposition}"
+    # S3/R2 signed downloads may supply the attachment filename as the
+    # standard response-content-disposition query parameter rather than a
+    # response header.  Treat only that named parameter as filename evidence;
+    # arbitrary media-looking URL query text remains insufficient.
+    signed_disposition = " ".join(parse_qs(parsed.query).get("response-content-disposition", []))
+    evidence = f"{parsed.path} {disposition} {signed_disposition}"
     if UNSAFE_PACKAGE_RE.search(evidence):
         return False
     content_type = str(response.content_type or "").lower().split(";", 1)[0]
@@ -243,12 +284,15 @@ def _final_file(response: Any, source_url: str) -> bool:
 
 
 def _blocked_html(body: str) -> tuple[str, str] | None:
-    lowered = body.lower()
+    # Ad templates frequently retain disabled CAPTCHA snippets in HTML
+    # comments.  Those do not make a public page interactive verification.
+    visible_body = re.sub(r"<!--.*?-->", "", body or "", flags=re.S)
+    lowered = visible_body.lower()
     if "turnstile" in lowered or "cf-turnstile" in lowered:
         return "cloudflare_turnstile", "Manual verification required"
-    if BLOCKER_RE.search(body):
+    if BLOCKER_RE.search(visible_body):
         return "captcha_required", "Manual verification required"
-    if LOGIN_RE.search(body):
+    if LOGIN_RE.search(visible_body):
         return "login_required", "Manual verification required"
     return None
 
@@ -333,6 +377,21 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
         _log(log, site, "configured source website", None, "Movie page requested")
     movie_html, movie, _ = session.fetch_html_once(movie_url, referer=site_url)
     _log(log, movie, "verified selected search result", None, "Download sections extracted")
+    # A small number of ordinary public share pages reject urllib's TLS
+    # fingerprint even after accepting normal browser navigation.  Render that
+    # exact public page once before declaring the movie page unavailable.  The
+    # rendered DOM still goes through the same CAPTCHA/login blocker below.
+    if (not movie_html or not movie.status or movie.status >= 400):
+        try:
+            rendered = get_renderer().render(movie_url)
+        except RendererUnavailable as exc:
+            rendered = None
+            _log(log, SimpleNamespace(url=redact_url(movie_url), status=None, location=None, content_type="", headers={}), "Browser fallback for rejected public page", None, "HTTP failure retained", str(exc))
+        if rendered and rendered.html and rendered.status and rendered.status < 400:
+            movie_html = rendered.html
+            movie_url = rendered.navigation_url or movie_url
+            movie = SimpleNamespace(url=rendered.url, status=rendered.status, location=None, content_type=rendered.content_type, headers={})
+            _log(log, movie, "Browser fallback for rejected public page", None, "Rendered movie page inspected", "Public browser DOM used after HTTP rejection")
     if not movie_html or not movie.status or movie.status >= 400:
         return {"status": "failed", "site": site_url, "movie_url": movie_url, "results": [], "execution_log": log, "workflow_steps": _workflow_steps(False, []), "message": "Movie page could not be fetched as HTML."}
     blocked = _blocked_html(movie_html)
@@ -361,11 +420,18 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
             if blocked:
                 return {"status": "blocked", "site": site_url, "movie_url": movie_url, "results": [{"quality": "", "source": "Movie page", "page_url": movie_url, "final_url": None, "is_final_file": False, "status": "blocked", "blocked_by": blocked[0], "message": blocked[1]}], "execution_log": log, "workflow_steps": _workflow_steps(True, [{"status": "blocked"}]), "message": blocked[1]}
             movie_actions = _merge_actions(movie_actions, rendered_actions)
-    # Headings can make unrelated navigation links inherit a quality label.
-    # A root quality branch must be both quality-tagged and download-like.
-    quality_actions = _pick(movie_actions, lambda action: bool(action.quality) and not NAVIGATION_RE.search(action.label) and (not selected_quality or selected_quality.lower() in {"all", "*"} or action.quality.lower() == selected_quality.lower()), MAX_QUALITY_LINKS)
-    if not quality_actions:
-        quality_actions = _pick(movie_actions, _is_download, MAX_QUALITY_LINKS)
+    # HubCloud share pages include unrelated tutorial/advert navigation which
+    # can inherit a filename's 1080p heading. Its visible generator action is
+    # the sole valid root for this source's native direct-delivery path.
+    hubcloud_root_actions = _hubcloud_next_actions(movie_url, movie_actions)
+    if hubcloud_root_actions is not None:
+        quality_actions = hubcloud_root_actions
+    else:
+        # Headings can make unrelated navigation links inherit a quality label.
+        # A root quality branch must be both quality-tagged and download-like.
+        quality_actions = _pick(movie_actions, lambda action: bool(action.quality) and not NAVIGATION_RE.search(action.label) and (not selected_quality or selected_quality.lower() in {"all", "*"} or action.quality.lower() == selected_quality.lower()), MAX_QUALITY_LINKS)
+        if not quality_actions:
+            quality_actions = _pick(movie_actions, _is_download, MAX_QUALITY_LINKS)
 
     # A global queue makes this a bounded graph traversal: each download
     # branch is inspected once, rather than stopping after the first landing
@@ -481,7 +547,8 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
             row["extracted_action"], row["next_step"] = "Traversal limit reached", "Stopped at bounded depth"
             base["message"] = "Workflow depth limit reached before a final file response."
             results.append(base); continue
-        next_actions = _branch_actions(server_actions)
+        hubcloud_actions = _hubcloud_next_actions(action.url, server_actions)
+        next_actions = hubcloud_actions if hubcloud_actions is not None else _branch_actions(server_actions)
         next_actions = [item for item in next_actions if not _same_resource(item.url, action.url)]
         if selected_quality and selected_quality.lower() not in {"all", "*"}:
             wanted = selected_quality.lower()

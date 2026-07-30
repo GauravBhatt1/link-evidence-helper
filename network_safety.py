@@ -53,7 +53,14 @@ class SafeSession:
     def __init__(self, timeout: int = DEFAULT_TIMEOUT, max_html_bytes: int = MAX_HTML_BYTES):
         self.timeout, self.max_html_bytes = min(max(timeout, 1), 30), min(max_html_bytes, MAX_HTML_BYTES)
         self.cookies = CookieJar()
-        self.headers = {"User-Agent": "EvidenceLinkAdapterMaker/1.0", "Accept": "text/html,application/xhtml+xml,*/*;q=0.2"}
+        # Some public file-share pages reject unknown automation identifiers
+        # before serving their ordinary HTML.  Use a conventional browser
+        # identification for the same GET/HEAD-only navigation a user makes;
+        # this does not alter the explicit CAPTCHA/login blocking policy.
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,*/*;q=0.2",
+        }
         self._opener = build_opener(_NoRedirect(), HTTPCookieProcessor(self.cookies))
 
     def inspect(self, url: str, method: str = "HEAD", referer: str = "") -> InspectionResponse:

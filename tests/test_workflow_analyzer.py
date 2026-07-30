@@ -47,6 +47,7 @@ class WorkflowAnalyzerTests(TestCase):
 
     def test_generic_sign_in_copy_is_not_treated_as_a_login_wall(self):
         self.assertIsNone(workflow_analyzer._blocked_html('<div class="login-modal">Sign in</div>'))
+        self.assertIsNone(workflow_analyzer._blocked_html('<!-- <script src="https://example.test/recaptcha.js"></script> -->'))
         self.assertEqual(
             workflow_analyzer._blocked_html('<p>Authentication required</p>'),
             ("login_required", "Manual verification required"),
@@ -84,6 +85,67 @@ class WorkflowAnalyzerTests(TestCase):
         self.assertEqual(result["results"][0]["final_url"], "https://cdn.example/file.zip")
         self.assertEqual(result["results"][0]["source"], "Browser direct download")
 
+    def test_hubcloud_uses_its_generated_r2_delivery_and_skips_other_mirrors(self):
+        requested: list[str] = []
+
+        class Session:
+            def __init__(self, *args, **kwargs): pass
+            def fetch_html_once(self, url, referer=""):
+                requested.append(url)
+                pages = {
+                    "https://site.example/": ("<html></html>", 200, "text/html"),
+                    "https://hubcloud.cx/drive/share": (
+                        '<h3>1080p</h3><a href="https://tinyurl.example/tutorial">How to Download From HubCloud</a>'
+                        '<a href="https://sportverse.cc/hubcloud.php?host=hubcloud">Generate Direct Download Link</a>', 200, "text/html"
+                    ),
+                    "https://sportverse.cc/hubcloud.php?host=hubcloud": (
+                        '<a href="https://ad.example/file.mkv">Download [FSL Server]</a>'
+                        '<a href="https://r2.cloudflarestorage.com/hub2/file?signature=temporary">Download [FSL Server]</a>'
+                        '<a href="https://pixeldrain.example/u/file">Download [Pixel Server]</a>', 200, "text/html"
+                    ),
+                    "https://r2.cloudflarestorage.com/hub2/file?signature=temporary": ("", 200, "video/x-matroska"),
+                }
+                if url in {"https://ad.example/file.mkv", "https://pixeldrain.example/u/file"}:
+                    raise AssertionError("HubCloud must not request an unrelated mirror")
+                body, status, content_type = pages[url]
+                return body, SimpleNamespace(url=url, status=status, location=None, content_type=content_type, content_length="", headers={}), None
+
+        with patch.object(workflow_analyzer, "SafeSession", Session), patch.object(workflow_analyzer, "validate_public_url", lambda url: url):
+            result = workflow_analyzer.analyze_movie_workflow("https://site.example/", "https://hubcloud.cx/drive/share")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["results"][0]["final_url"], "https://r2.cloudflarestorage.com/hub2/file?signature=temporary")
+        self.assertEqual(requested, [
+            "https://site.example/", "https://hubcloud.cx/drive/share",
+            "https://sportverse.cc/hubcloud.php?host=hubcloud",
+            "https://r2.cloudflarestorage.com/hub2/file?signature=temporary",
+        ])
+
+    def test_public_page_http_rejection_can_use_normal_browser_dom(self):
+        class Session:
+            def __init__(self, *args, **kwargs): pass
+            def fetch_html_once(self, url, referer=""):
+                pages = {
+                    "https://site.example/": ("<html></html>", 200, "text/html"),
+                    "https://share.example/drive": ("<html>Request blocked</html>", 403, "text/html"),
+                    "https://cdn.example/file.mkv": ("", 200, "video/x-matroska"),
+                }
+                body, status, content_type = pages[url]
+                return body, SimpleNamespace(url=url, status=status, location=None, content_type=content_type, content_length="", headers={}), None
+
+        class Renderer:
+            def __enter__(self): return self
+            def close(self): pass
+            def render(self, url):
+                if url != "https://share.example/drive":
+                    raise AssertionError(f"Unexpected browser URL: {url}")
+                return RenderedPage(url, '<a href="https://cdn.example/file.mkv">1080p Download</a>', 200, "text/html", "", url)
+
+        with patch.object(workflow_analyzer, "SafeSession", Session), patch.object(workflow_analyzer, "PlaywrightRenderer", Renderer), patch.object(workflow_analyzer, "validate_public_url", lambda url: url):
+            result = workflow_analyzer.analyze_movie_workflow("https://site.example/", "https://share.example/drive", "1080p")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["results"][0]["final_url"], "https://cdn.example/file.mkv")
+        self.assertTrue(any(row["reason_followed"] == "Browser fallback for rejected public page" for row in result["execution_log"]))
+
     def test_telegram_apk_is_never_accepted_as_a_verified_movie_file(self):
         response = SimpleNamespace(
             status=200,
@@ -93,6 +155,13 @@ class WorkflowAnalyzerTests(TestCase):
         self.assertFalse(workflow_analyzer._final_file(
             response,
             "https://cdn4.telesco.pe/file/Telegram.apk?token=temporary",
+        ))
+
+    def test_signed_r2_attachment_filename_can_verify_generic_media_response(self):
+        response = SimpleNamespace(status=200, content_type="application/octet-stream", headers={})
+        self.assertTrue(workflow_analyzer._final_file(
+            response,
+            "https://bucket.r2.cloudflarestorage.com/hub2/object?X-Amz-Signature=temporary&response-content-disposition=attachment%3B%20filename%3D%22Movie.1080p.mkv%22",
         ))
 
     def test_generic_binary_requires_media_filename_evidence(self):
