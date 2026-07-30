@@ -24,7 +24,9 @@ DOWNLOAD_RE = re.compile(r"\b(?:download|direct|instant|mirror|server|drive|gdf[
 NAVIGATION_RE = re.compile(r"\b(?:home|menu|privacy|terms|contact|telegram|trailer|login|sign\s*in|download\s*tips|tips)\b", re.I)
 HOST_PRIORITY = ((re.compile(r"\bdirect\s*download\b", re.I), 0), (re.compile(r"\bvcloud\b", re.I), 1), (re.compile(r"\bgdf[l]?ix\b", re.I), 2))
 BLOCKER_RE = re.compile(r"cloudflare\s*turnstile|cf-turnstile|g-recaptcha|hcaptcha|captcha|verify\s+(?:that\s+)?you(?:'re| are)\s+human", re.I)
-LOGIN_RE = re.compile(r"\b(?:sign in|log in|login required|authentication required)\b", re.I)
+# "Sign in" frequently appears in a dormant header/login modal on otherwise
+# public pages.  Only explicit access-denied wording is a workflow blocker.
+LOGIN_RE = re.compile(r"\b(?:login required|authentication required)\b", re.I)
 FILE_RE = re.compile(r"\.(?:mkv|mp4|webm|avi|zip)(?:$|[?#])", re.I)
 FINAL_TYPES = ("video/", "audio/", "application/octet-stream", "application/zip")
 # Find Links is a synchronous user request. Keep the graph useful but bounded

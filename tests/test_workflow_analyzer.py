@@ -24,6 +24,13 @@ class _FakeSession:
 
 
 class WorkflowAnalyzerTests(TestCase):
+    def test_generic_sign_in_copy_is_not_treated_as_a_login_wall(self):
+        self.assertIsNone(workflow_analyzer._blocked_html('<div class="login-modal">Sign in</div>'))
+        self.assertEqual(
+            workflow_analyzer._blocked_html('<p>Authentication required</p>'),
+            ("login_required", "Manual verification required"),
+        )
+
     def test_published_file_size_list_maps_to_common_qualities(self):
         html = "<li><strong>File Size:</strong> 450mb 750mb 1.2Gb 2.8Gb 6Gb</li>"
         self.assertEqual(

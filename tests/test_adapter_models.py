@@ -3,6 +3,7 @@ from adapter_models import blank_adapter, enable_workflow_fallback_for_verified_
 from adapter_analyzer import PageParser, _score
 from adapter_runtime import SiteAdapter, normalized_title
 from adapter_analyzer import _looks_like_javascript_search
+from playwright_renderer import interactive_verification_present
 
 class AdapterModelTests(unittest.TestCase):
     def test_blank_adapter_is_editable_and_valid(self):
@@ -22,6 +23,11 @@ class AdapterModelTests(unittest.TestCase):
     def test_dynamic_search_shell_is_not_treated_as_working_results(self):
         html = '<div id="results-grid"></div><script>fetch("/documents/search")</script>'
         self.assertTrue(_looks_like_javascript_search(html))
+
+    def test_passive_cloudflare_javascript_detection_is_not_a_manual_challenge(self):
+        html = '<script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js"></script>'
+        self.assertFalse(interactive_verification_present(html))
+        self.assertTrue(interactive_verification_present('<div class="cf-turnstile"></div>'))
 
     def test_runtime_ignores_share_and_non_http_actions(self):
         adapter = SiteAdapter(blank_adapter("Example Site", "https://example.com"))

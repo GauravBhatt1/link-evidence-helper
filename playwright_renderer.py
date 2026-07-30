@@ -13,9 +13,15 @@ from network_safety import MAX_HTML_BYTES, redact_url, validate_public_url
 
 
 def interactive_verification_present(html: str) -> bool:
-    """Detect a challenge/login page; detection only, never interaction."""
+    """Detect an interactive challenge/login page; detection only, never interaction.
+
+    Cloudflare's JavaScript Detection beacon is often injected into otherwise
+    public pages.  It runs invisibly in an ordinary browser and is not a
+    Turnstile widget or a human challenge.  Treating that beacon as a block
+    prevented normal browser rendering of those pages before it could begin.
+    """
     lowered = html.lower()
-    markers = ("cf-turnstile", "turnstile", "g-recaptcha", "hcaptcha", "captcha", "challenge-platform", "login required", "sign in")
+    markers = ("cf-turnstile", "turnstile", "g-recaptcha", "hcaptcha", "captcha", "login required", "authentication required")
     return any(marker in lowered for marker in markers)
 
 
