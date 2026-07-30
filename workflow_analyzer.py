@@ -22,7 +22,11 @@ from playwright_renderer import PlaywrightRenderer, RendererUnavailable
 QUALITY_RE = re.compile(r"\b(?:2160|1440|1080|720|480)p\b|\b4k\b", re.I)
 DOWNLOAD_RE = re.compile(r"\b(?:download|direct|instant|mirror|server|drive|gdf[l]?ix|vcloud|fast\s*cloud|zipdisk|cloud\s*resume|quick\s*download|get\s*(?:link|file)|continue)\b", re.I)
 NAVIGATION_RE = re.compile(r"\b(?:home|menu|privacy|terms|contact|telegram|trailer|login|sign\s*in|download\s*tips|tips)\b", re.I)
-HOST_PRIORITY = ((re.compile(r"\bdirect\s*download\b", re.I), 0), (re.compile(r"\bvcloud\b", re.I), 1), (re.compile(r"\bgdf[l]?ix\b", re.I), 2))
+# HubDrive pages expose the same narrow, visible Direct/Instant Download
+# action that is header-verified below.  Visiting it before generic mirrors
+# avoids spending a user request on known blocked GDFLIX/DriveHub branches;
+# it is still never reported unless the generated file response is real.
+HOST_PRIORITY = ((re.compile(r"\bdirect\s*download\b", re.I), 0), (re.compile(r"\bhubdrive\b", re.I), 1), (re.compile(r"\bvcloud\b", re.I), 2), (re.compile(r"\bgdf[l]?ix\b", re.I), 3))
 BLOCKER_RE = re.compile(r"cloudflare\s*turnstile|cf-turnstile|g-recaptcha|hcaptcha|captcha|verify\s+(?:that\s+)?you(?:'re| are)\s+human", re.I)
 # "Sign in" frequently appears in a dormant header/login modal on otherwise
 # public pages.  Only explicit access-denied wording is a workflow blocker.

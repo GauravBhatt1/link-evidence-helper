@@ -173,13 +173,14 @@ class WorkflowAnalyzerTests(TestCase):
         self.assertTrue(any(item["blocked_by"] == "cloudflare_turnstile" for item in result["results"]))
         self.assertTrue(any(item["final_url"] == "https://mirror.example/file.mkv" for item in result["results"]))
 
-    def test_host_priority_prefers_direct_then_vcloud_then_gdflix(self):
+    def test_host_priority_prefers_verified_direct_hosts_then_vcloud_then_gdflix(self):
         actions = [
             workflow_analyzer.Action("https://g.example/file", "GDFLIX DOWNLOAD", "https://page.example", "visible link"),
             workflow_analyzer.Action("https://v.example/file", "VCLOUD DOWNLOAD", "https://page.example", "visible link"),
+            workflow_analyzer.Action("https://hubdrive.example/file", "Download Now", "https://page.example", "visible link"),
             workflow_analyzer.Action("https://d.example/file", "DIRECT DOWNLOAD", "https://page.example", "visible link"),
         ]
-        self.assertEqual([item.label for item in workflow_analyzer._branch_actions(actions)], ["DIRECT DOWNLOAD", "VCLOUD DOWNLOAD", "GDFLIX DOWNLOAD"])
+        self.assertEqual([item.label for item in workflow_analyzer._branch_actions(actions)], ["DIRECT DOWNLOAD", "Download Now", "VCLOUD DOWNLOAD", "GDFLIX DOWNLOAD"])
 
     def test_direct_redirect_completes_before_lower_priority_mirrors(self):
         requested: list[str] = []
