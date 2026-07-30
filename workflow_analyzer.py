@@ -31,8 +31,10 @@ BLOCKER_RE = re.compile(r"cloudflare\s*turnstile|cf-turnstile|g-recaptcha|hcaptc
 # "Sign in" frequently appears in a dormant header/login modal on otherwise
 # public pages.  Only explicit access-denied wording is a workflow blocker.
 LOGIN_RE = re.compile(r"\b(?:login required|authentication required)\b", re.I)
-FILE_RE = re.compile(r"\.(?:mkv|mp4|webm|avi|zip)(?:$|[?#])", re.I)
-FINAL_TYPES = ("video/", "audio/", "application/octet-stream", "application/zip")
+FILE_RE = re.compile(r"\.(?:mkv|mp4|webm|avi|m4v|mov|ts|zip)(?=$|[?#;\"'\s])", re.I)
+FINAL_TYPES = ("video/", "audio/", "application/zip")
+UNSAFE_PACKAGE_RE = re.compile(r"\.(?:apk|apks|xapk|exe|msi|dmg|pkg|deb|rpm)(?:$|[?#;])", re.I)
+TELEGRAM_FILE_HOSTS = ("telesco.pe", "telegram.org", "telegram.me")
 # Find Links is a synchronous user request. Keep the graph useful but bounded
 # well below common proxy/browser request limits; unfinished queued mirrors are
 # reported as partial rather than causing the client connection to time out.
@@ -213,7 +215,27 @@ def _log(log: list[dict[str, Any]], response: Any, reason: str, action: Action |
 
 
 def _final_file(response: Any, source_url: str) -> bool:
-    return bool(response.status and 200 <= response.status < 300 and (response.content_type.lower().startswith(FINAL_TYPES) or FILE_RE.search(source_url)))
+    """Accept only a plausible media/archive response, never a generic app binary.
+
+    ``application/octet-stream`` is intentionally not sufficient evidence: ad
+    redirects and Telegram file delivery can use that generic MIME type for an
+    APK.  It needs a supported media/archive filename in either the final URL
+    or Content-Disposition before it can be exposed as a delivery link.
+    """
+    if not response.status or not 200 <= response.status < 300:
+        return False
+    parsed = urlparse(source_url)
+    host = (parsed.hostname or "").lower()
+    if any(host == blocked or host.endswith("." + blocked) for blocked in TELEGRAM_FILE_HOSTS):
+        return False
+    disposition = str(getattr(response, "headers", {}).get("content-disposition", ""))
+    evidence = f"{parsed.path} {disposition}"
+    if UNSAFE_PACKAGE_RE.search(evidence):
+        return False
+    content_type = str(response.content_type or "").lower().split(";", 1)[0]
+    if content_type.startswith(("video/", "audio/")) or content_type == "application/zip":
+        return True
+    return content_type == "application/octet-stream" and bool(FILE_RE.search(evidence))
 
 
 def _blocked_html(body: str) -> tuple[str, str] | None:

@@ -84,6 +84,25 @@ class WorkflowAnalyzerTests(TestCase):
         self.assertEqual(result["results"][0]["final_url"], "https://cdn.example/file.zip")
         self.assertEqual(result["results"][0]["source"], "Browser direct download")
 
+    def test_telegram_apk_is_never_accepted_as_a_verified_movie_file(self):
+        response = SimpleNamespace(
+            status=200,
+            content_type="application/octet-stream",
+            headers={"content-disposition": 'attachment; filename="Telegram.apk"'},
+        )
+        self.assertFalse(workflow_analyzer._final_file(
+            response,
+            "https://cdn4.telesco.pe/file/Telegram.apk?token=temporary",
+        ))
+
+    def test_generic_binary_requires_media_filename_evidence(self):
+        response = SimpleNamespace(status=200, content_type="application/octet-stream", headers={})
+        self.assertFalse(workflow_analyzer._final_file(response, "https://cdn.example/download?id=123"))
+        self.assertTrue(workflow_analyzer._final_file(
+            SimpleNamespace(status=200, content_type="application/octet-stream", headers={"content-disposition": 'attachment; filename="movie.mkv"'}),
+            "https://cdn.example/download?id=123",
+        ))
+
     def test_browser_verified_direct_stops_unrelated_queued_mirrors(self):
         requested: list[str] = []
 
