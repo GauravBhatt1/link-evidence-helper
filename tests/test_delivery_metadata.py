@@ -26,3 +26,12 @@ class DeliveryMetadataTests(unittest.TestCase):
         self.assertEqual(item["size"], "Size unavailable")
         self.assertEqual(item["season"], "Season 2")
         self.assertEqual(item["kind"], "Season Zip")
+
+    def test_filename_stays_an_archive_when_an_opaque_delivery_url_follows_it(self):
+        item = web_app.enrich_delivery_link({
+            "filename": "Adarsh.Baal.Vidyalaya.S01.1080p.zip",
+            "url": "https://pub-example.r2.dev/opaque-object",
+            "size": "8.88 GB",
+        })
+        self.assertEqual(item["season"], "Season 1")
+        self.assertEqual(item["kind"], "Season Zip")

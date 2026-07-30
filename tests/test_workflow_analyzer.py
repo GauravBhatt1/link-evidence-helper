@@ -180,6 +180,21 @@ class WorkflowAnalyzerTests(TestCase):
             },
         )
 
+    def test_title_case_content_disposition_verifies_hubdrive_style_direct_file(self):
+        response = SimpleNamespace(
+            status=200,
+            content_type="application/octet-stream",
+            content_length="9539721175",
+            headers={"Content-Disposition": "attachment; filename*=UTF-8''Adarsh.Baal.Vidyalaya.S01.1080p.zip"},
+        )
+        self.assertTrue(workflow_analyzer._final_file(
+            response, "https://pub-example.r2.dev/opaque-object"
+        ))
+        self.assertEqual(
+            workflow_analyzer._final_file_metadata(response, "https://pub-example.r2.dev/opaque-object")["file_name"],
+            "Adarsh.Baal.Vidyalaya.S01.1080p.zip",
+        )
+
     def test_generic_binary_requires_media_filename_evidence(self):
         response = SimpleNamespace(status=200, content_type="application/octet-stream", headers={})
         self.assertFalse(workflow_analyzer._final_file(response, "https://cdn.example/download?id=123"))

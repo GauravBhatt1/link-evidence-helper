@@ -264,7 +264,7 @@ def _final_file(response: Any, source_url: str) -> bool:
     host = (parsed.hostname or "").lower()
     if any(host == blocked or host.endswith("." + blocked) for blocked in TELEGRAM_FILE_HOSTS):
         return False
-    disposition = str(getattr(response, "headers", {}).get("content-disposition", ""))
+    disposition = _response_header(response, "content-disposition")
     # S3/R2 signed downloads may supply the attachment filename as the
     # standard response-content-disposition query parameter rather than a
     # response header.  Treat only that named parameter as filename evidence;
@@ -283,12 +283,20 @@ def _final_file(response: Any, source_url: str) -> bool:
     return content_type == "application/octet-stream" and bool(FILE_RE.search(evidence))
 
 
+def _response_header(response: Any, name: str) -> str:
+    """Read an HTTP header without relying on a mapping's original casing."""
+    headers = getattr(response, "headers", {}) or {}
+    for key, value in getattr(headers, "items", lambda: ())():
+        if str(key).lower() == name.lower():
+            return str(value or "")
+    return ""
+
+
 def _filename_from_final_response(response: Any, source_url: str) -> str:
     """Return published filename evidence without exposing signed URL tokens."""
-    headers = getattr(response, "headers", {}) or {}
     parsed = urlparse(source_url)
     disposition = " ".join((
-        str(headers.get("content-disposition", "")),
+        _response_header(response, "content-disposition"),
         " ".join(parse_qs(parsed.query).get("response-content-disposition", [])),
     ))
     match = re.search(r"filename\*?=(?:UTF-8''|[\"'])?([^;\"']+)", disposition, re.I)

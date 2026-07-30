@@ -2357,7 +2357,9 @@ def delivery_kind_metadata(*values: str) -> dict[str, str]:
     combined_match = re.search(r"\bs0*(\d{1,2})[-_. ]*e0*(\d{1,3})\b", text, re.IGNORECASE)
     season_match = re.search(r"\b(?:season|s)[\s._-]*0*(\d{1,2})\b", text, re.IGNORECASE)
     episode_match = re.search(r"\b(?:episode|ep|e)[\s._-]*0*(\d{1,3})\b", text, re.IGNORECASE)
-    filename = delivery_filename(text)
+    # Parse each field independently: appending an opaque URL after a filename
+    # would otherwise prevent the end-of-filename extension match.
+    filename = next((delivery_filename(str(value or "")) for value in values if delivery_filename(str(value or ""))), "")
     lower = text.lower()
     season_number = combined_match.group(1) if combined_match else (season_match.group(1) if season_match else "")
     episode_number = combined_match.group(2) if combined_match else (episode_match.group(1) if episode_match else "")
@@ -2373,8 +2375,8 @@ def enrich_delivery_link(item: dict[str, Any]) -> dict[str, Any]:
     """Make delivery cards consistent regardless of which source resolved them."""
     result = dict(item)
     filename = delivery_filename(str(result.get("filename") or "")) or delivery_filename(str(result.get("url") or ""))
-    text = " ".join(str(result.get(key) or "") for key in ("filename", "variant", "page_url", "url"))
-    inferred = delivery_kind_metadata(text)
+    metadata_fields = tuple(str(result.get(key) or "") for key in ("filename", "variant", "page_url", "url"))
+    inferred = delivery_kind_metadata(*metadata_fields)
     result["filename"] = filename
     result["season"] = str(result.get("season") or inferred["season"])
     result["kind"] = str(result.get("kind") or inferred["kind"])
