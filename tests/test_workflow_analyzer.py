@@ -164,6 +164,22 @@ class WorkflowAnalyzerTests(TestCase):
             "https://bucket.r2.cloudflarestorage.com/hub2/object?X-Amz-Signature=temporary&response-content-disposition=attachment%3B%20filename%3D%22Movie.1080p.mkv%22",
         ))
 
+    def test_final_file_metadata_uses_safe_filename_and_content_length(self):
+        response = SimpleNamespace(
+            status=200,
+            content_type="application/octet-stream",
+            content_length="1610612736",
+            headers={"content-disposition": 'attachment; filename="Example.Show.S02E03.1080p.mkv"'},
+        )
+        self.assertEqual(
+            workflow_analyzer._final_file_metadata(response, "https://bucket.example/hub2/opaque-object"),
+            {
+                "file_name": "Example.Show.S02E03.1080p.mkv",
+                "content_length": "1610612736",
+                "content_type": "application/octet-stream",
+            },
+        )
+
     def test_generic_binary_requires_media_filename_evidence(self):
         response = SimpleNamespace(status=200, content_type="application/octet-stream", headers={})
         self.assertFalse(workflow_analyzer._final_file(response, "https://cdn.example/download?id=123"))

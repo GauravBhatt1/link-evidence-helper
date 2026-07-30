@@ -14,7 +14,7 @@ from html.parser import HTMLParser
 from types import SimpleNamespace
 import time
 from typing import Any
-from urllib.parse import parse_qs, urljoin, urlparse
+from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 from network_safety import REDIRECT_CODES, SafeSession, redact_url, validate_public_url
 from playwright_renderer import PlaywrightRenderer, RendererUnavailable
@@ -283,6 +283,29 @@ def _final_file(response: Any, source_url: str) -> bool:
     return content_type == "application/octet-stream" and bool(FILE_RE.search(evidence))
 
 
+def _filename_from_final_response(response: Any, source_url: str) -> str:
+    """Return published filename evidence without exposing signed URL tokens."""
+    headers = getattr(response, "headers", {}) or {}
+    parsed = urlparse(source_url)
+    disposition = " ".join((
+        str(headers.get("content-disposition", "")),
+        " ".join(parse_qs(parsed.query).get("response-content-disposition", [])),
+    ))
+    match = re.search(r"filename\*?=(?:UTF-8''|[\"'])?([^;\"']+)", disposition, re.I)
+    value = unquote(match.group(1).strip()) if match else unquote(parsed.path.rsplit("/", 1)[-1])
+    # Object-store paths such as /hub2/<opaque-id> are not useful filenames.
+    return value if FILE_RE.search(value) else ""
+
+
+def _final_file_metadata(response: Any, source_url: str) -> dict[str, str]:
+    """Keep only safe, user-facing metadata from an already verified response."""
+    return {
+        "file_name": _filename_from_final_response(response, source_url),
+        "content_length": str(getattr(response, "content_length", "") or ""),
+        "content_type": str(getattr(response, "content_type", "") or ""),
+    }
+
+
 def _blocked_html(body: str) -> tuple[str, str] | None:
     # Ad templates frequently retain disabled CAPTCHA snippets in HTML
     # comments.  Those do not make a public page interactive verification.
@@ -468,7 +491,7 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
             break
         if _final_file(response, action.url):
             row["extracted_action"], row["next_step"] = "Actual downloadable response reached", "Final file URL reached"
-            base.update({"final_url": action.url, "is_final_file": True, "status": "success", "message": "Verified final file response."})
+            base.update({"final_url": action.url, "is_final_file": True, "status": "success", "message": "Verified final file response.", **_final_file_metadata(response, action.url)})
             results.append(base)
             # A requested quality now has a verified Direct result. Continuing
             # through lower-priority mirrors only adds latency and can involve
@@ -528,7 +551,7 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
             direct_row = _log(log, direct_response, "Public direct-download action", action, "Direct download target inspected")
             if _final_file(direct_response, direct_url):
                 direct_row["extracted_action"], direct_row["next_step"] = "Actual downloadable response reached", "Final file URL reached"
-                base.update({"final_url": direct_url, "is_final_file": True, "status": "success", "message": "Verified final file response.", "source": "Browser direct download"})
+                base.update({"final_url": direct_url, "is_final_file": True, "status": "success", "message": "Verified final file response.", "source": "Browser direct download", **_final_file_metadata(direct_response, direct_url)})
                 results.append(base)
                 # This narrow browser path only reaches a user-visible
                 # Direct/Instant Download control and then header-verifies

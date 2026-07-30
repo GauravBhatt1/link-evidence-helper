@@ -127,12 +127,14 @@ def analyzer_enabled_for(url: str, adapter: dict[str, Any] | None = None) -> boo
 def normalize_workflow_result(workflow: dict[str, Any], source_url: str, source_name: str, include_debug: bool) -> dict[str, Any]:
     """Convert internal analyzer output to the established Find Links payload."""
     links = [
-        {
+        enrich_delivery_link({
             "quality": item.get("quality") or "Unknown", "quality_label": item.get("quality") or "Unknown",
             "size": item.get("size") or "verified", "url": item["final_url"], "source": source_url,
             "source_name": source_name, "variant": item.get("source") or "Verified file",
+            "filename": item.get("file_name") or "", "content_length": item.get("content_length") or "",
+            "content_type": item.get("content_type") or "",
             "temporary": True,
-        }
+        })
         for item in workflow.get("results", [])
         if item.get("is_final_file") and item.get("final_url")
     ]
@@ -1741,6 +1743,7 @@ HTML = """<!doctype html>
         : "";
       linksEl.innerHTML = targetNote + visibleItems.map((item, index) => {
         const pending = Boolean(item.pending);
+        const fileName = String(item.filename || "");
         const displayUrl = pending ? "Direct link not loaded yet." : item.url;
         const buttonText = pending ? "Get Link" : "Copy";
         const itemKey = item.resolve_url || item.url || `${item.quality}-${item.variant}-${index}`;
@@ -1791,6 +1794,7 @@ HTML = """<!doctype html>
               ${item.confidence ? `<span class="tag">Confidence: ${escapeHtml(item.confidence)}</span>` : ""}
               ${item.season ? `<span class="tag">${escapeHtml(item.season)}</span>` : ""}
               ${item.kind ? `<span class="tag">${escapeHtml(item.kind)}</span>` : ""}
+              ${fileName ? `<span class="tag" title="${escapeHtml(fileName)}">File: ${escapeHtml(fileName)}</span>` : ""}
             </div>
           ` : ""}
           ${item.variant ? `<div class="link-variant">${escapeHtml(item.variant)}</div>` : ""}
@@ -2334,6 +2338,51 @@ def human_size(content_length: str) -> str:
     if unit_index == 0:
         return f"{int(value)} {units[unit_index]}"
     return f"{value:.2f} {units[unit_index]}"
+
+
+ARCHIVE_EXTENSIONS = (".zip", ".rar", ".7z")
+MEDIA_FILENAME_RE = re.compile(r"[^/?#]+\.(?:mkv|mp4|webm|avi|m4v|mov|ts|zip|rar|7z)(?:$|[?#])", re.IGNORECASE)
+
+
+def delivery_filename(value: str) -> str:
+    """Extract a readable final filename; opaque delivery paths stay hidden."""
+    text = str(value or "").strip()
+    match = MEDIA_FILENAME_RE.search(text)
+    return match.group(0).split("?", 1)[0].split("#", 1)[0] if match else ""
+
+
+def delivery_kind_metadata(*values: str) -> dict[str, str]:
+    """Use the same episode/archive labels for every source response shape."""
+    text = " ".join(str(value or "") for value in values)
+    combined_match = re.search(r"\bs0*(\d{1,2})[-_. ]*e0*(\d{1,3})\b", text, re.IGNORECASE)
+    season_match = re.search(r"\b(?:season|s)[\s._-]*0*(\d{1,2})\b", text, re.IGNORECASE)
+    episode_match = re.search(r"\b(?:episode|ep|e)[\s._-]*0*(\d{1,3})\b", text, re.IGNORECASE)
+    filename = delivery_filename(text)
+    lower = text.lower()
+    season_number = combined_match.group(1) if combined_match else (season_match.group(1) if season_match else "")
+    episode_number = combined_match.group(2) if combined_match else (episode_match.group(1) if episode_match else "")
+    season = f"Season {int(season_number)}" if season_number else ""
+    if episode_number:
+        return {"season": season, "kind": f"Episode {int(episode_number):02d}"}
+    if filename.lower().endswith(ARCHIVE_EXTENSIONS) or re.search(r"\b(?:season\s*(?:zip|pack)|complete\s+season|batch|pack)\b", lower):
+        return {"season": season, "kind": "Season Zip" if season else "Archive"}
+    return {"season": season, "kind": "Video file"}
+
+
+def enrich_delivery_link(item: dict[str, Any]) -> dict[str, Any]:
+    """Make delivery cards consistent regardless of which source resolved them."""
+    result = dict(item)
+    filename = delivery_filename(str(result.get("filename") or "")) or delivery_filename(str(result.get("url") or ""))
+    text = " ".join(str(result.get(key) or "") for key in ("filename", "variant", "page_url", "url"))
+    inferred = delivery_kind_metadata(text)
+    result["filename"] = filename
+    result["season"] = str(result.get("season") or inferred["season"])
+    result["kind"] = str(result.get("kind") or inferred["kind"])
+    size = str(result.get("size") or "").strip()
+    if size.lower() in {"", "verified", "unknown", "size unknown"}:
+        header_size = human_size(str(result.get("content_length") or ""))
+        result["size"] = header_size if header_size != "size unknown" else "Size unavailable"
+    return result
 
 
 def clean_movie_title_for_tmdb(title: str) -> tuple[str, str, bool]:
@@ -4730,7 +4779,7 @@ class AppHandler(BaseHTTPRequestHandler):
                     return
                 response(self, HTTPStatus.OK, {
                     "ok": True,
-                    "links": links,
+                    "links": [enrich_delivery_link(link) for link in links],
                     "message": "" if links else adapter_runtime.last_find_reason,
                     "debug": [],
                     "cached": False,
@@ -4764,13 +4813,13 @@ class AppHandler(BaseHTTPRequestHandler):
                 response(self, HTTPStatus.UNPROCESSABLE_ENTITY, {"ok": False, "error": resolved.get("message") or "Delivery path could not be resolved"})
                 return
             public_url = str(resolved["url"])
-            response(self, HTTPStatus.OK, {"ok": True, "links": [{
+            response(self, HTTPStatus.OK, {"ok": True, "links": [enrich_delivery_link({
                 "quality": str(custom_result.get("quality") or "Unknown"), "quality_label": str(custom_result.get("quality") or "Unknown"),
                 "size": str(custom_result.get("fileSize") or "Unknown"), "url": public_url,
                 "source": str(candidate_payload.get("source") or ""), "source_name": source_name,
                 "variant": str(custom_result.get("filename") or ""), "provider": str(custom_result.get("providerName") or ""),
                 "page_url": str(custom_result.get("pageUrl") or ""), "confidence": str(custom_result.get("confidence") or "low"),
-            }], "debug": [], "cached": False, "episodeTarget": requested_episode, "seasonTarget": requested_season, "episodeFallback": False})
+            })], "debug": [], "cached": False, "episodeTarget": requested_episode, "seasonTarget": requested_season, "episodeFallback": False})
             return
         # The Season ZIP action is scoped to one season. A source result that
         # explicitly names another season must never be resolved as a fallback.
@@ -4976,7 +5025,7 @@ class AppHandler(BaseHTTPRequestHandler):
             ]
         payload = {
             "ok": True,
-            "links": sort_links(links),
+            "links": [enrich_delivery_link(item) for item in sort_links(links)],
             "debug": debug,
             "cached": False,
             "episodeTarget": requested_episode,
