@@ -233,6 +233,10 @@ def _final_file(response: Any, source_url: str) -> bool:
     if UNSAFE_PACKAGE_RE.search(evidence):
         return False
     content_type = str(response.content_type or "").lower().split(";", 1)[0]
+    # A filename-looking path is often used by interstitial/ad pages.  A real
+    # final file must never identify itself as an HTML document.
+    if not content_type or "html" in content_type:
+        return False
     if content_type.startswith(("video/", "audio/")) or content_type == "application/zip":
         return True
     return content_type == "application/octet-stream" and bool(FILE_RE.search(evidence))

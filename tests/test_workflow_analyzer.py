@@ -103,6 +103,12 @@ class WorkflowAnalyzerTests(TestCase):
             "https://cdn.example/download?id=123",
         ))
 
+    def test_html_page_with_a_mkv_looking_url_is_not_a_final_file(self):
+        self.assertFalse(workflow_analyzer._final_file(
+            SimpleNamespace(status=200, content_type="text/html;charset=UTF-8", headers={}),
+            "https://bdl.example/pretend-movie.mkv",
+        ))
+
     def test_browser_verified_direct_stops_unrelated_queued_mirrors(self):
         requested: list[str] = []
 
