@@ -131,12 +131,15 @@ class LibraryService:
         self.tmdb_key = tmdb_key
         self.language = os.environ.get("TMDB_LANGUAGE", "en-US")
         self._scan_lock = threading.Lock()
+        self._jobs_lock = threading.RLock()
         self._jobs: dict[str, dict[str, Any]] = {}
         self._init_db()
 
     def _connection(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=30)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute("PRAGMA foreign_keys=ON")
         return conn
 
     def _init_db(self) -> None:
@@ -302,17 +305,32 @@ class LibraryService:
 
     def start_scan(self, kind: str = "full", item_id: str | None = None, refresh_metadata: bool = False) -> str:
         if not self._scan_lock.acquire(blocking=False):
-            active = next((job_id for job_id, job in self._jobs.items() if job.get("status") == "running"), "")
+            with self._jobs_lock:
+                active = next((job_id for job_id, job in self._jobs.items() if job.get("status") == "running"), "")
             raise RuntimeError(f"A library scan is already running ({active}).")
         job_id = str(uuid.uuid4())
-        self._jobs[job_id] = {"id": job_id, "kind": kind, "status": "running", "startedAt": _now(), "progress": {"percentage": 0, "foldersChecked": 0, "filesChecked": 0, "newItems": 0, "updatedItems": 0, "removedItems": 0, "matchingItems": 0, "errors": []}}
-        with self._connection() as db:
-            db.execute("INSERT INTO scan_jobs(id,kind,status,progress,started_at) VALUES(?,?,?,?,?)", (job_id, kind, "running", _json(self._jobs[job_id]["progress"]), self._jobs[job_id]["startedAt"]))
-        threading.Thread(target=self._scan_worker, args=(job_id, kind, item_id, refresh_metadata), daemon=True).start()
+        job = {"id": job_id, "kind": kind, "status": "running", "startedAt": _now(), "progress": {"percentage": 0, "foldersChecked": 0, "filesChecked": 0, "newItems": 0, "updatedItems": 0, "removedItems": 0, "matchingItems": 0, "errors": []}}
+        try:
+            with self._connection() as db:
+                db.execute("INSERT INTO scan_jobs(id,kind,status,progress,started_at) VALUES(?,?,?,?,?)", (job_id, kind, "running", _json(job["progress"]), job["startedAt"]))
+            with self._jobs_lock:
+                self._jobs[job_id] = job
+            threading.Thread(target=self._scan_worker, args=(job_id, kind, item_id, refresh_metadata), daemon=True).start()
+        except Exception:
+            self._scan_lock.release()
+            raise
         return job_id
 
+    def get_job(self, job_id: str) -> dict[str, Any] | None:
+        with self._jobs_lock:
+            job = self._jobs.get(job_id)
+            if not job:
+                return None
+            return {**job, "progress": dict(job.get("progress") or {})}
+
     def _scan_worker(self, job_id: str, kind: str, item_id: str | None, refresh_metadata: bool) -> None:
-        job = self._jobs[job_id]
+        with self._jobs_lock:
+            job = self._jobs[job_id]
         progress = job["progress"]
         try:
             if item_id:
@@ -373,9 +391,11 @@ class LibraryService:
         finally:
             job["finishedAt"] = _now()
             job["progress"] = progress
-            with self._connection() as db:
-                db.execute("UPDATE scan_jobs SET status=?, progress=?, finished_at=?, error=? WHERE id=?", (job["status"], _json(progress), job["finishedAt"], "\n".join(progress["errors"]), job_id))
-            self._scan_lock.release()
+            try:
+                with self._connection() as db:
+                    db.execute("UPDATE scan_jobs SET status=?, progress=?, finished_at=?, error=? WHERE id=?", (job["status"], _json(progress), job["finishedAt"], "\n".join(progress["errors"]), job_id))
+            finally:
+                self._scan_lock.release()
 
     def _rescan_item_files(self, item_id: str, progress: dict[str, Any]) -> None:
         """Rescan only the configured library folder belonging to one item."""

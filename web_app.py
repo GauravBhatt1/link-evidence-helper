@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import html
 import json
+import logging
 import os
 import re
 import secrets
@@ -42,6 +43,8 @@ from adapter_storage import AdapterStorage
 from adapter_models import adapter_id, enable_workflow_fallback_for_verified_onboarding
 from adapter_runtime import SiteAdapter, normalized_title
 from workflow_analyzer import analyze_movie_workflow
+from network_safety import redact_url
+from runtime_support import BoundedCache
 
 
 DEFAULT_QUALITIES = ("480p", "720p", "1080p", "2160p", "4k")
@@ -72,20 +75,23 @@ ADAPTERS = AdapterStorage(APP_DATA_DIR / "adapters")
 ENABLED_ADAPTERS: list[dict[str, Any]] = []
 ADMIN_TOKEN = ""
 ANALYZER_ENABLED_DOMAINS: set[str] = set()
-TMDB_POSTER_CACHE: dict[str, tuple[float, str]] = {}
+LOG = logging.getLogger("link_evidence_helper")
+TMDB_POSTER_CACHE: BoundedCache[str, tuple[float, str]] = BoundedCache(512)
 TMDB_BACKDROP_CACHE: tuple[float, list[str]] = (0, [])
-GDFLIX_LINK_CACHE: dict[str, tuple[float, str]] = {}
-DFAST_LINK_CACHE: dict[str, tuple[float, str]] = {}
-FXLINKS_LINK_CACHE: dict[str, tuple[float, list[dict[str, str]]]] = {}
-FXLINKS_LISTING_CACHE: dict[str, tuple[float, list[dict[str, str]]]] = {}
-RESOLVED_SIZE_CACHE: dict[str, str] = {}
-FIND_RESULT_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
-WORKFLOW_PREFETCH_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+GDFLIX_LINK_CACHE: BoundedCache[str, tuple[float, str]] = BoundedCache(512)
+DFAST_LINK_CACHE: BoundedCache[str, tuple[float, str]] = BoundedCache(512)
+FXLINKS_LINK_CACHE: BoundedCache[str, tuple[float, list[dict[str, str]]]] = BoundedCache(256)
+FXLINKS_LISTING_CACHE: BoundedCache[str, tuple[float, list[dict[str, str]]]] = BoundedCache(256)
+RESOLVED_SIZE_CACHE: BoundedCache[str, str] = BoundedCache(1024)
+FIND_RESULT_CACHE: BoundedCache[str, tuple[float, dict[str, Any]]] = BoundedCache(256)
+WORKFLOW_PREFETCH_CACHE: BoundedCache[str, tuple[float, dict[str, Any]]] = BoundedCache(128)
 WORKFLOW_PREFETCH_INFLIGHT: set[str] = set()
 WORKFLOW_PREFETCH_LOCK = threading.Lock()
+WORKFLOW_PREFETCH_SLOTS = threading.BoundedSemaphore(4)
+WORKFLOW_PREFETCH_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="workflow-prefetch")
 MEDIA_LIBRARY_CACHE: tuple[float, dict[str, list[dict[str, str]]]] = (0, {})
 JELLYFIN_LIBRARY_CACHE: tuple[float, dict[str, list[dict[str, str]]]] = (0, {})
-JELLYFIN_SHOW_DETAIL_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+JELLYFIN_SHOW_DETAIL_CACHE: BoundedCache[str, tuple[float, dict[str, Any]]] = BoundedCache(256)
 AUTO_SYNC_LAST_RUN = 0.0
 TMDB_CACHE_SECONDS = 86400
 GDFLIX_CACHE_SECONDS = 21600
@@ -153,6 +159,9 @@ def prefetch_adapter_workflow(adapter: dict[str, Any], page_url: str, quality: s
         cached = WORKFLOW_PREFETCH_CACHE.get(key)
         if key in WORKFLOW_PREFETCH_INFLIGHT or (cached and time.time() - cached[0] < WORKFLOW_PREFETCH_CACHE_SECONDS):
             return
+        if not WORKFLOW_PREFETCH_SLOTS.acquire(blocking=False):
+            LOG.info("workflow prefetch skipped: capacity reached adapter=%s page=%s", adapter.get("id", ""), redact_url(page_url))
+            return
         WORKFLOW_PREFETCH_INFLIGHT.add(key)
 
     def run() -> None:
@@ -161,13 +170,20 @@ def prefetch_adapter_workflow(adapter: dict[str, Any], page_url: str, quality: s
             payload = normalize_workflow_result(workflow, f"adapter:{adapter['id']}", adapter["name"], False)
             if payload["links"]:
                 WORKFLOW_PREFETCH_CACHE[key] = (time.time(), payload)
-        except Exception:
-            pass
+        except Exception as exc:
+            LOG.warning("workflow prefetch failed adapter=%s page=%s error=%s", adapter.get("id", ""), redact_url(page_url), type(exc).__name__)
         finally:
             with WORKFLOW_PREFETCH_LOCK:
                 WORKFLOW_PREFETCH_INFLIGHT.discard(key)
+            WORKFLOW_PREFETCH_SLOTS.release()
 
-    threading.Thread(target=run, name=f"workflow-prefetch-{adapter['id']}", daemon=True).start()
+    try:
+        WORKFLOW_PREFETCH_EXECUTOR.submit(run)
+    except Exception:
+        with WORKFLOW_PREFETCH_LOCK:
+            WORKFLOW_PREFETCH_INFLIGHT.discard(key)
+        WORKFLOW_PREFETCH_SLOTS.release()
+        LOG.warning("workflow prefetch could not be scheduled adapter=%s page=%s", adapter.get("id", ""), redact_url(page_url))
 
 
 def combined_sources() -> list[dict[str, Any]]:
@@ -4032,7 +4048,7 @@ def library_response(handler: BaseHTTPRequestHandler, parsed: Any, route_path: s
         elif len(parts) == 6 and parts[:3] == ["api", "library", "tv"] and parts[4] == "seasons" and parts[5].isdigit():
             response(handler, HTTPStatus.OK, {"ok": True, "items": LIBRARY.seasons(parts[3], int(parts[5]))})
         elif len(parts) == 5 and parts[:4] == ["api", "library", "scan", "status"]:
-            job = LIBRARY._jobs.get(parts[4])
+            job = LIBRARY.get_job(parts[4])
             if not job:
                 with LIBRARY._connection() as db:
                     row = db.execute("SELECT * FROM scan_jobs WHERE id=?", (parts[4],)).fetchone()
