@@ -1326,6 +1326,8 @@ HTML = """<!doctype html>
       episodeTarget: null,
       episodeFallback: false,
       hasSearched: false,
+      requestSequence: { search: 0, find: 0 },
+      activeRequests: {},
     };
 
     const $ = (id) => document.getElementById(id);
@@ -1475,6 +1477,15 @@ HTML = """<!doctype html>
     if (accessToken) localStorage.setItem("accessToken", accessToken);
     let adminPassword = sessionStorage.getItem("adminPassword") || "";
 
+    class ApiError extends Error {
+      constructor(message, status = 0, code = "request_failed") {
+        super(message);
+        this.name = "ApiError";
+        this.status = status;
+        this.code = code;
+      }
+    }
+
     async function api(path, options = {}) {
       const appBase = location.pathname.startsWith("/index") ? "/index" : "";
       const response = await fetch(`${appBase}${path}`, {
@@ -1496,13 +1507,13 @@ HTML = """<!doctype html>
       }
       if (!isSuccess) {
         const message = typeof body === "object" ? (body.message || body.error) : body;
-        throw new Error(message || `Request failed: ${response.status}`);
+        throw new ApiError(message || `Request failed: ${response.status}`, response.status, typeof body === "object" ? (body.code || "http_error") : "http_error");
       }
       if (typeof body !== "object" || body === null) {
-        throw new Error("Invalid response format");
+        throw new ApiError("Invalid response format", response.status, "invalid_response");
       }
       if (body.success === false || body.ok === false) {
-        throw new Error(body.message || body.error || "Request failed");
+        throw new ApiError(body.message || body.error || "Request failed", response.status, body.code || "application_error");
       }
       if ((location.hostname === "localhost" || location.hostname === "127.0.0.1") && body) {
         const safeDebug = {...body};
@@ -1511,6 +1522,37 @@ HTML = """<!doctype html>
       }
       body.apiHttpStatus = response.status;
       return body;
+    }
+
+    function cancelRequest(kind) {
+      const active = state.activeRequests[kind];
+      if (!active) return;
+      state.requestSequence[kind] += 1;
+      active.controller.abort();
+      delete state.activeRequests[kind];
+    }
+
+    function beginRequest(kind, cancelKinds = []) {
+      cancelKinds.forEach(cancelRequest);
+      cancelRequest(kind);
+      const id = ++state.requestSequence[kind];
+      const controller = new AbortController();
+      state.activeRequests[kind] = { id, controller };
+      setBusy(true);
+      return { id, signal: controller.signal };
+    }
+
+    function requestIsCurrent(kind, id) {
+      return state.activeRequests[kind]?.id === id;
+    }
+
+    function finishRequest(kind, id) {
+      if (requestIsCurrent(kind, id)) delete state.activeRequests[kind];
+      setBusy(Object.keys(state.activeRequests).length > 0);
+    }
+
+    function requestWasCancelled(error) {
+      return error?.name === "AbortError";
     }
     function candidateLanguage(candidate) {
       if (candidate?.language) return candidate.language;
@@ -1987,7 +2029,7 @@ HTML = """<!doctype html>
         setStatus("Name required", true);
         return;
       }
-      setBusy(true);
+      const request = beginRequest("search", ["find"]);
       setStatus("Searching...");
       startProgress("Searching titles", 10);
       state.links = [];
@@ -1995,7 +2037,8 @@ HTML = """<!doctype html>
       linkFiltersEl.innerHTML = "";
       linksEl.innerHTML = '<div class="empty">Choose a result and find a link.</div>';
       try {
-        const body = await api(`/api/search?q=${encodeURIComponent(query)}`);
+        const body = await api(`/api/search?q=${encodeURIComponent(query)}`, { signal: request.signal });
+        if (!requestIsCurrent("search", request.id)) return;
         state.candidates = body.candidates || [];
         state.hasSearched = true;
         state.episodeTarget = body.episodeTarget || episodeTargetFromQuery(query);
@@ -2011,6 +2054,7 @@ HTML = """<!doctype html>
         );
         stopProgress(true, "Search complete");
       } catch (error) {
+        if (requestWasCancelled(error) || !requestIsCurrent("search", request.id)) return;
         state.candidates = [];
         state.hasSearched = true;
         state.selected = -1;
@@ -2018,7 +2062,7 @@ HTML = """<!doctype html>
         setStatus(error.message, true);
         failProgress("Search failed");
       } finally {
-        setBusy(false);
+        finishRequest("search", request.id);
       }
     }
 
@@ -2029,7 +2073,7 @@ HTML = """<!doctype html>
         setStatus("Select a result", true);
         return;
       }
-      setBusy(true);
+      const request = beginRequest("find");
       setStatus(state.quality === "all" ? "Scanning qualities..." : `Scanning ${state.quality}...`);
       const isSeries = /\\b(season|web\\s*series|series|episode|s\\d{1,2})\\b/i.test(candidate.title || "");
       const estimateSeconds = state.quality === "all" ? (isSeries ? 12 : 30) : (isSeries ? 4 : 8);
@@ -2045,8 +2089,10 @@ HTML = """<!doctype html>
       try {
         const body = await api("/api/find", {
           method: "POST",
+          signal: request.signal,
           body: JSON.stringify({ query, candidate, quality: state.quality, episodeTarget: state.episodeTarget || episodeTargetFromQuery(query) }),
         });
+        if (!requestIsCurrent("find", request.id)) return;
         state.links = body.links || [];
         state.linkMessage = body.message || "";
         state.episodeTarget = body.episodeTarget || state.episodeTarget;
@@ -2057,11 +2103,12 @@ HTML = """<!doctype html>
         setStatus((body.links || []).length ? (body.cached ? "Done (cached)" : "Done") : "No final link");
         stopProgress(true, (body.links || []).length ? (body.cached ? "Links ready from cache" : "Links ready") : "No final link");
       } catch (error) {
+        if (requestWasCancelled(error) || !requestIsCurrent("find", request.id)) return;
         renderLinks([]);
         setStatus(error.message, true);
         failProgress("Find failed");
       } finally {
-        setBusy(false);
+        finishRequest("find", request.id);
       }
     }
 
@@ -3865,8 +3912,17 @@ def response(handler: BaseHTTPRequestHandler, status: HTTPStatus, payload: Any) 
     # unambiguous transport-success field for new clients. A 2xx response is
     # never turned into a failure merely because an optional parser found no
     # matches.
-    if isinstance(payload, dict) and "success" not in payload:
-        payload = {**payload, "success": bool(200 <= int(status) < 300 and payload.get("ok", True) is not False)}
+    if isinstance(payload, dict):
+        transport_success = 200 <= int(status) < 300
+        application_success = payload.get("ok", True) is not False
+        payload = {
+            **payload,
+            "ok": application_success,
+            "success": transport_success and application_success,
+            "code": str(payload.get("code") or ("ok" if transport_success and application_success else "request_failed")),
+        }
+        if not payload["success"] and not (payload.get("error") or payload.get("message")):
+            payload["error"] = "Request failed"
     raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     try:
         handler.send_response(status)
