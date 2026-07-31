@@ -1,0 +1,48 @@
+"""Fast semantic UI checks; rendered viewport behaviour is tested separately."""
+import unittest
+from html.parser import HTMLParser
+
+import web_app
+
+
+class _PageIndex(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.by_id, self.buttons = {}, []
+
+    def handle_starttag(self, tag, attrs):
+        node = {"tag": tag, **dict(attrs)}
+        if node.get("id"):
+            self.by_id[node["id"]] = node
+        if tag == "button":
+            self.buttons.append(node)
+
+
+class UiStructureTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.page = _PageIndex()
+        cls.page.feed(web_app.HTML)
+
+    def test_search_controls_have_labels_and_usable_targets(self):
+        query = self.page.by_id["query"]
+        search = self.page.by_id["searchBtn"]
+        qualities = [button for button in self.page.buttons if button.get("data-quality")]
+        self.assertEqual(query.get("aria-label"), "Search title")
+        self.assertEqual(search["tag"], "button")
+        self.assertEqual({button["data-quality"] for button in qualities}, {"480p", "720p", "1080p", "2160p", "all"})
+
+    def test_navigation_and_mobile_menu_are_connected_accessibly(self):
+        mobile_menu = self.page.by_id["mobileMoreMenu"]
+        more = self.page.by_id["mobileMoreBtn"]
+        desktop_views = {button["data-view"] for button in self.page.buttons if button.get("data-view")}
+        self.assertEqual(more.get("aria-controls"), mobile_menu.get("id"))
+        self.assertEqual(more.get("aria-expanded"), "false")
+        self.assertTrue({"search", "movies", "tv", "missing", "recent", "admin", "sources"} <= desktop_views)
+
+    def test_dynamic_regions_are_announced_and_modal_is_a_dialog(self):
+        self.assertEqual(self.page.by_id["toast"].get("role"), "status")
+        self.assertEqual(self.page.by_id["progressWrap"].get("aria-live"), "polite")
+        detail = self.page.by_id["libraryDetail"]
+        self.assertEqual(detail.get("role"), "dialog")
+        self.assertEqual(detail.get("aria-modal"), "true")
