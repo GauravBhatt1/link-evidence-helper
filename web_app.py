@@ -1768,7 +1768,7 @@ HTML = """<!doctype html>
             : `<div class="media-hero-poster" aria-hidden="true"></div>`}
           <div class="media-hero-copy">
             <div><span class="result-eyebrow">Selected result ${content ? state.selectedContent + 1 : state.selected + 1}</span><strong class="result-title">${escapeHtml(content?.title || candidate.title || "Untitled result")}</strong></div>
-            <div class="result-meta"><span class="meta-chip">${escapeHtml(variantLanguage(variant) || candidateLanguage(candidate))}</span><span class="meta-chip">${escapeHtml(variant?.quality || candidate.quality || "Quality unknown")}</span><span class="meta-chip">${escapeHtml(variant?.sources?.length ? `${variant.sources.length} source${variant.sources.length === 1 ? "" : "s"}` : candidate.source_name || "Existing Site")}</span>${isTvCandidate ? '<span class="meta-chip">TV Series</span>' : '<span class="meta-chip">Movie</span>'}</div>
+            <div class="result-meta"><span class="meta-chip">${escapeHtml(variantLanguage(variant) || candidateLanguage(candidate))}</span><span class="meta-chip">${escapeHtml(variant?.quality === "Multiple" ? "Multiple qualities" : (variant?.quality || candidate.quality || "Quality unknown"))}</span><span class="meta-chip">Target ${escapeHtml(state.quality === "all" ? "all qualities" : state.quality)}</span><span class="meta-chip">${escapeHtml(variant?.sources?.length ? `${variant.sources.length} source${variant.sources.length === 1 ? "" : "s"}` : candidate.source_name || "Existing Site")}</span>${isTvCandidate ? '<span class="meta-chip">TV Series</span>' : '<span class="meta-chip">Movie</span>'}</div>
             ${libraryLabel ? `<span class="selected-library-note ${escapeHtml(candidate.library_status)}">${escapeHtml(libraryLabel)}</span>` : ""}
           </div>
         </article>
@@ -1801,7 +1801,7 @@ HTML = """<!doctype html>
               <span class="poster-badge">${contentIndex + 1}</span>
             </span>
             <span class="content-summary"><strong class="content-title">${escapeHtml(content.title || "Untitled result")}</strong><small class="content-counts">${content.releaseVariants?.length || 0} variants · ${content.totalSources || 0} sources</small></span>
-            <span class="release-variants">${(content.releaseVariants || []).map((variant, variantIndex) => `<button class="variant-choice ${contentIndex === state.selectedContent && variantIndex === state.selectedVariant ? "active" : ""}" data-content-index="${contentIndex}" data-variant-index="${variantIndex}">${escapeHtml([variantLanguage(variant), variant.quality, variant.releaseType !== "Unknown" ? variant.releaseType : "", variant.approxSize].filter(Boolean).join(" · "))}</button>`).join("")}</span>
+            <span class="release-variants">${(content.releaseVariants || []).map((variant, variantIndex) => `<button class="variant-choice ${contentIndex === state.selectedContent && variantIndex === state.selectedVariant ? "active" : ""}" data-content-index="${contentIndex}" data-variant-index="${variantIndex}">${escapeHtml([variantLanguage(variant), variant.quality === "Multiple" ? "Multiple qualities" : variant.quality, variant.releaseType !== "Unknown" ? variant.releaseType : "", variant.approxSize].filter(Boolean).join(" · "))}</button>`).join("")}</span>
           </article>
         `).join("");
         candidatesEl.querySelectorAll(".variant-choice").forEach((button) => {

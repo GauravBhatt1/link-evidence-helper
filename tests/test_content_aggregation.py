@@ -35,6 +35,16 @@ class ContentAggregationTests(unittest.TestCase):
         self.assertEqual([variant.language for variant in contents[0].releaseVariants], ["Hindi/English", "Hindi"])
         self.assertEqual(len(compatibility_candidates(contents)), 1)
 
+    def test_multi_quality_release_page_is_not_labelled_as_its_first_quality(self):
+        contents = aggregate_candidates([{
+            "title": "Example Film 2024 Hindi 480p | 720p | 1080p | 2160p BluRay",
+            "quality": "480p",
+            "url": "https://one.example/example-film",
+            "source_id": "one",
+            "source_name": "One",
+        }])
+        self.assertEqual(contents[0].releaseVariants[0].quality, "Multiple")
+
     def test_failover_uses_next_source_after_verification_failure(self):
         variant = aggregate_candidates(self.rows())[0].releaseVariants[0]
         checked = []
