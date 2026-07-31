@@ -24,7 +24,7 @@ class SourceSearchConcurrencyTests(unittest.TestCase):
             patch.object(web_app, "custom_authorized_search", side_effect=lambda *_args: mark("custom", (["custom"], {"custom": {}}))),
             patch.object(web_app, "saved_adapter_search", side_effect=lambda *_args: mark("adapter", (["adapter"], []))),
         ):
-            rows, diagnostics, failures = web_app.search_all_configured_sources("Ikka", "all")
+            rows, diagnostics, failures = web_app.search_all_configured_sources("Ikka")
 
         self.assertEqual(rows, ["legacy", "custom", "adapter"])
         self.assertEqual(diagnostics, {"custom": {}})

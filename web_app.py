@@ -1233,7 +1233,7 @@ HTML = """<!doctype html>
               <label for="query">Name</label>
               <input id="query" autocomplete="off" placeholder="Type name">
             </div>
-            <select id="sourceSelector" aria-label="Source"><option value="all">All Sources</option><option value="existing">Existing Working Site</option></select><button class="btn" id="searchBtn">Search</button>
+            <button class="btn" id="searchBtn">Search</button>
           </div>
 
           <div class="field">
@@ -1335,7 +1335,6 @@ HTML = """<!doctype html>
     const progressMetaEl = $("progressMeta");
     const findBtn = $("findBtn");
     const searchBtn = $("searchBtn");
-    const sourceSelector = $("sourceSelector");
     const posterPanelEl = $("posterPanel");
     const welcomePanelEl = $("welcomePanel");
     const linksPanelEl = $("linksPanel");
@@ -1507,9 +1506,6 @@ HTML = """<!doctype html>
       body.apiHttpStatus = response.status;
       return body;
     }
-    async function loadSearchSources() { try { const body=await api("/api/search/sources"); sourceSelector.innerHTML=(body.sources||[]).map(s=>`<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join(""); } catch (_) {} }
-    loadSearchSources();
-
     function candidateLanguage(candidate) {
       if (candidate?.language) return candidate.language;
       const text = String(candidate?.title || "");
@@ -1993,7 +1989,7 @@ HTML = """<!doctype html>
       linkFiltersEl.innerHTML = "";
       linksEl.innerHTML = '<div class="empty">Choose a result and find a link.</div>';
       try {
-        const body = await api(`/api/search?q=${encodeURIComponent(query)}&source=${encodeURIComponent(sourceSelector.value)}`);
+        const body = await api(`/api/search?q=${encodeURIComponent(query)}`);
         state.candidates = body.candidates || [];
         state.hasSearched = true;
         state.episodeTarget = body.episodeTarget || episodeTargetFromQuery(query);
@@ -2169,7 +2165,7 @@ HTML = """<!doctype html>
     }
     async function renderAdapterMaker() { libraryViewEl.innerHTML=`<div class="library-toolbar"><h2>Adapter Maker</h2><span class="library-stat">Simple guided setup</span></div><div class="admin-grid"><section class="admin-panel"><div class="panel-body"><div class="field"><label>Site name</label><input id="adapterName" placeholder="Example Site"></div><div class="field"><label>Main site URL</label><input id="adapterMain" type="url" placeholder="https://example.com"></div><div class="field"><label>Example content/page URL</label><input id="adapterPage" type="url" placeholder="https://example.com/title/example"></div><div class="field"><label>Optional search query</label><input id="adapterQuery" placeholder="Example title"></div><div class="field"><label>Optional expected quality</label><select id="adapterQuality"><option value="">Any quality</option><option>480p</option><option>720p</option><option>1080p</option><option value="2160p">4K / 2160p</option></select></div><div class="field"><label>Optional example final URL</label><input id="adapterFinal" type="url" placeholder="https://host.example/file"></div><div class="actions"><button class="btn" id="adapterAnalyze">Analyze Site</button><button class="btn secondary" id="adapterTest" disabled>Test Adapter</button><button class="btn secondary" id="adapterSave" disabled>Save Adapter</button></div><label class="pending-note" id="adapterOverrideWrap" hidden><input id="adapterOverride" type="checkbox"> I understand this adapter needs review, but save it anyway.</label><div id="adapterResult" class="pending-note">Enter the two website URLs, then choose Analyze Site.</div></div></section><section class="admin-panel"><h3>Adapter result</h3><div id="adapterCards" class="admin-list">The status cards will appear here.</div><details class="pending-note"><summary>Advanced Debug</summary><pre id="adapterDebug"></pre></details><details class="pending-note"><summary>Generated adapter JSON</summary><pre id="adapterPreview"></pre></details></section></div>`;let result=null;const payload=()=>({siteName:$("adapterName").value,mainSiteUrl:$("adapterMain").value,examplePageUrl:$("adapterPage").value,searchQuery:$("adapterQuery").value,expectedQuality:$("adapterQuality").value,exampleFinalUrl:$("adapterFinal").value});const scoreLabel=n=>n>=95?"🟢 Excellent":n>=80?"🟢 Good":n>=60?"🟡 Needs Review":"🔴 Failed";const simpleReason=(checks,js)=>js?"❌ This site needs a browser-based adapter.":!checks.search_working?"❌ Search not detected":!checks.quality_detected?"❌ Quality not found":!checks.download_button_detected?"❌ Download button not found":!checks.redirect_chain_working?"❌ Redirect chain not working":!checks.final_link_detected?"❌ Final link could not be identified":"❌ Adapter needs review";const show=r=>{const report=r.report||{},checks=report.simple_checks||{};const names={main_site_reachable:"Main site reachable",search_working:"Search working",example_page_valid:"Example page valid",quality_detected:"Quality detected",download_button_detected:"Download button detected",redirect_chain_working:"Redirect chain working",final_link_detected:"Final link detected"};$("adapterCards").innerHTML=Object.entries(names).map(([key,label])=>`<div class="admin-row"><strong>${checks[key]?"🟢":"🔴"} ${label}</strong><small>${checks[key]?"Working":"Not found"}</small></div>`).join("");const ready=Boolean(report.ready_to_save);$("adapterResult").innerHTML=`<strong>${ready?"✅ READY TO USE":"❌ NOT READY"}</strong><br>${ready?"Your adapter passed all automatic checks.":simpleReason(checks,report.javascript_required)}<br><br>Adapter Confidence: <strong>${Number(report.adapter_confidence||0)}% — ${scoreLabel(Number(report.adapter_confidence||0))}</strong>`;$("adapterPreview").textContent=JSON.stringify(r.adapter,null,2);$("adapterDebug").textContent=JSON.stringify({report:r.report,selector_candidates:r.selector_candidates,debug:r.debug},null,2);$("adapterTest").disabled=false;$("adapterOverrideWrap").hidden=ready;$("adapterSave").disabled=!ready&&!$("adapterOverride").checked;};$("adapterOverride").onchange=()=>{$("adapterSave").disabled=!result||!(result.report?.ready_to_save||$("adapterOverride").checked)};$("adapterAnalyze").onclick=async()=>{const b=$("adapterAnalyze");b.disabled=true;$("adapterResult").textContent="Checking the website…";try{result=await api("/api/adapters/analyze",{method:"POST",body:JSON.stringify(payload())});show(result)}catch(e){$("adapterResult").textContent=`❌ ${e.message}`}finally{b.disabled=false}};$("adapterTest").onclick=async()=>{if(!result)return;$("adapterResult").textContent="Testing the adapter…";try{result=await api("/api/adapters/test",{method:"POST",body:JSON.stringify({adapter:result.adapter,examplePageUrl:$("adapterPage").value,expectedQuality:$("adapterQuality").value})});show(result)}catch(e){$("adapterResult").textContent=`❌ ${e.message}`}};$("adapterSave").onclick=async()=>{if(!result)return;try{const r=await api("/api/adapters/save",{method:"POST",body:JSON.stringify({adapter:result.adapter})});showToast(`Adapter ${r.adapter.id} saved`)}catch(e){$("adapterResult").textContent=`❌ ${e.message}`}}; }
     async function enhanceAdminAdapters(){try{const body=await api("/api/adapters");const grid=libraryViewEl.querySelector(".admin-grid");if(!grid||$("savedAdapters"))return;grid.insertAdjacentHTML("beforeend",`<section class="admin-panel" id="savedAdapters"><h3>Adapters</h3><div class="admin-list">${(body.adapters||[]).map(a=>`<div class="admin-row"><strong>${escapeHtml(a.name)} · ${a.enabled?(a.health?.status==="Working"?"🟢 Working":"🟡 Needs retest"):"⚪ Disabled"}</strong><small>${escapeHtml(a.health?.last_tested_at||"Never tested")}</small><span class="episode-row-actions"><button class="btn secondary adapter-toggle" data-id="${escapeHtml(a.id)}" data-enabled="${a.enabled?"0":"1"}">${a.enabled?"Disable":"Enable"}</button><button class="btn secondary adapter-retest" data-id="${escapeHtml(a.id)}">Retest</button><button class="btn secondary adapter-delete" data-id="${escapeHtml(a.id)}">Delete</button></span></div>`).join("")||"No saved adapters."}</div></section>`);grid.querySelectorAll(".adapter-toggle").forEach(b=>b.onclick=async()=>{await api("/api/adapters/toggle",{method:"POST",body:JSON.stringify({adapterId:b.dataset.id,enabled:b.dataset.enabled==="1"})});renderAdmin()});grid.querySelectorAll(".adapter-retest").forEach(b=>b.onclick=async()=>{const a=(body.adapters||[]).find(x=>x.id===b.dataset.id);if(!a)return;await api("/api/adapters/retest",{method:"POST",body:JSON.stringify({adapterId:a.id,adapter:a,examplePageUrl:`https://${a.domains[0]}`})});renderAdmin()});grid.querySelectorAll(".adapter-delete").forEach(b=>b.onclick=async()=>{if(!confirm("Delete this adapter?"))return;await api("/api/adapters/delete",{method:"POST",body:JSON.stringify({adapterId:b.dataset.id})});renderAdmin()});}catch(_){}}
-    function enhanceAdapterMaker(){const wrap=$("adapterOverrideWrap"),save=$("adapterSave");if(!wrap||!save||$("adapterUseInSearch"))return;wrap.insertAdjacentHTML("beforebegin",'<label class="pending-note"><input id="adapterUseInSearch" type="checkbox" checked> Use this adapter in main search</label>');save.addEventListener("click",async event=>{event.stopImmediatePropagation();const preview=$("adapterPreview"),result=$("adapterResult");try{const adapter=JSON.parse(preview.textContent);adapter.enabled=$("adapterUseInSearch").checked;let mode="";for(;;){try{const body=await api("/api/adapters/save",{method:"POST",body:JSON.stringify({adapter,saveMode:mode})});result.innerHTML=`<strong>✅ Adapter saved successfully</strong><br>Name: ${escapeHtml(body.adapter.name)}<br>File: ${escapeHtml(body.storage_location)}<br>Main search: ${body.main_search_enabled?"Enabled":"Disabled — retest needed"}`;showToast(`Adapter ${body.adapter.name} saved`);await loadSearchSources();break;}catch(error){if(!/already exists/i.test(error.message||""))throw error;const choice=window.prompt("An adapter with this ID already exists. Type UPDATE to replace it, NEW to save a separate copy, or leave blank to cancel.","");if(!choice)break;mode=/^update$/i.test(choice)?"update":/^new$/i.test(choice)?"new":"";if(!mode){result.textContent="Save cancelled. Type UPDATE or NEW when asked.";break;}}}}catch(error){result.textContent=`❌ ${error.message}`;}},true);const edit=sessionStorage.getItem("adapter-edit");if(edit){try{const a=JSON.parse(edit);$("adapterName").value=a.name||"";$("adapterMain").value=`https://${(a.domains||[])[0]||""}`;$("adapterPage").value=a.maker?.example_page_url||"";$("adapterQuery").value=a.maker?.search_query||"";$("adapterQuality").value=a.maker?.expected_quality||"";$("adapterUseInSearch").checked=Boolean(a.enabled);$("adapterPreview").textContent=JSON.stringify(a,null,2);$("adapterResult").textContent="Editing saved adapter. Click Analyze Site to retest it before saving.";sessionStorage.removeItem("adapter-edit");}catch(_){}}}
+    function enhanceAdapterMaker(){const wrap=$("adapterOverrideWrap"),save=$("adapterSave");if(!wrap||!save||$("adapterUseInSearch"))return;wrap.insertAdjacentHTML("beforebegin",'<label class="pending-note"><input id="adapterUseInSearch" type="checkbox" checked> Use this adapter in main search</label>');save.addEventListener("click",async event=>{event.stopImmediatePropagation();const preview=$("adapterPreview"),result=$("adapterResult");try{const adapter=JSON.parse(preview.textContent);adapter.enabled=$("adapterUseInSearch").checked;let mode="";for(;;){try{const body=await api("/api/adapters/save",{method:"POST",body:JSON.stringify({adapter,saveMode:mode})});result.innerHTML=`<strong>✅ Adapter saved successfully</strong><br>Name: ${escapeHtml(body.adapter.name)}<br>File: ${escapeHtml(body.storage_location)}<br>Main search: ${body.main_search_enabled?"Enabled":"Disabled — retest needed"}`;showToast(`Adapter ${body.adapter.name} saved`);break;}catch(error){if(!/already exists/i.test(error.message||""))throw error;const choice=window.prompt("An adapter with this ID already exists. Type UPDATE to replace it, NEW to save a separate copy, or leave blank to cancel.","");if(!choice)break;mode=/^update$/i.test(choice)?"update":/^new$/i.test(choice)?"new":"";if(!mode){result.textContent="Save cancelled. Type UPDATE or NEW when asked.";break;}}}}catch(error){result.textContent=`❌ ${error.message}`;}},true);const edit=sessionStorage.getItem("adapter-edit");if(edit){try{const a=JSON.parse(edit);$("adapterName").value=a.name||"";$("adapterMain").value=`https://${(a.domains||[])[0]||""}`;$("adapterPage").value=a.maker?.example_page_url||"";$("adapterQuery").value=a.maker?.search_query||"";$("adapterQuality").value=a.maker?.expected_quality||"";$("adapterUseInSearch").checked=Boolean(a.enabled);$("adapterPreview").textContent=JSON.stringify(a,null,2);$("adapterResult").textContent="Editing saved adapter. Click Analyze Site to retest it before saving.";sessionStorage.removeItem("adapter-edit");}catch(_){}}}
     async function renderSavedAdapters(){try{const body=await api("/api/adapters"),summary=body.summary||{},adapters=body.adapters||[],invalid=body.invalid_files||[];const grid=libraryViewEl.querySelector(".admin-grid");if(!grid||$("savedAdapters"))return;const statusIcon=s=>({Working:"🟢",Failed:"🔴",Disabled:"⚪","Needs retest":"🟡"}[s]||"🟡");grid.insertAdjacentHTML("beforeend",`<section class="admin-panel" id="savedAdapters"><div class="library-toolbar"><h3>Saved Adapters</h3><button class="btn secondary" id="refreshAdapters">Refresh List</button></div><div class="admin-kpi"><span>Total Saved<b>${Number(summary.total||0)}</b></span><span>Enabled in Search<b>${Number(summary.enabled||0)}</b></span><span>Working<b>${Number(summary.working||0)}</b></span><span>Failed<b>${Number(summary.failed||0)}</b></span><span>Disabled<b>${Number(summary.disabled||0)}</b></span></div><div class="pending-note">Adapter storage: <strong>${escapeHtml(body.storage_directory||"adapters/")}</strong></div><div class="row"><div class="field"><label>Find adapter</label><input id="adapterFilter" placeholder="Name or domain"></div><div class="field"><label>Status</label><select id="adapterStatus"><option value="">All</option><option>Working</option><option>Needs retest</option><option>Failed</option><option>Disabled</option><option>Enabled</option></select></div></div><div class="admin-list" id="savedAdapterRows"></div></section>`);const rows=$("savedAdapterRows");const draw=()=>{const term=$("adapterFilter").value.toLowerCase(),filter=$("adapterStatus").value;const visible=adapters.filter(a=>{const text=`${a.name} ${(a.domains||[]).join(" ")}`.toLowerCase();return (!term||text.includes(term))&&(!filter||(filter==="Enabled"?a.enabled:a.display_status===filter));});rows.innerHTML=[...visible.map(a=>`<div class="admin-row"><strong>${statusIcon(a.display_status)} ${escapeHtml(a.name)}</strong><small>ID: ${escapeHtml(a.id)} · Domain: ${escapeHtml((a.domains||[])[0]||"—")}<br>Status: ${escapeHtml(a.display_status)} · Main Search: ${a.enabled?"Enabled":"No"}<br>Last tested: ${escapeHtml(a.health?.last_tested_at?displayTime(a.health.last_tested_at):"Never")} · ${escapeHtml(a.health?.last_test_status||"Not tested")}<br>File: ${escapeHtml(a.storage_location||a.file_name||"")}</small><span class="episode-row-actions"><button class="btn secondary saved-retest" data-id="${escapeHtml(a.id)}">Test</button><button class="btn secondary saved-toggle" data-id="${escapeHtml(a.id)}" data-enabled="${a.enabled?"0":"1"}">${a.enabled?"Disable":"Enable"}</button><button class="btn secondary saved-edit" data-id="${escapeHtml(a.id)}">Edit</button><details><summary>View details</summary><pre>${escapeHtml(JSON.stringify(a,null,2))}</pre></details><button class="btn secondary saved-delete" data-id="${escapeHtml(a.id)}">Delete</button></span></div>`),...invalid.map(f=>`<div class="admin-row"><strong>🔴 Invalid adapter file</strong><small>${escapeHtml(f.storage_location)} · ${escapeHtml(f.error||"Invalid JSON")}</small></div>`)].join("")||'<div class="pending-note">No saved adapters match this filter.</div>';rows.querySelectorAll(".saved-toggle").forEach(b=>b.onclick=async()=>{await api("/api/adapters/toggle",{method:"POST",body:JSON.stringify({adapterId:b.dataset.id,enabled:b.dataset.enabled==="1"})});renderAdmin();});rows.querySelectorAll(".saved-retest").forEach(b=>b.onclick=async()=>{const a=adapters.find(x=>x.id===b.dataset.id);if(!a)return;b.disabled=true;b.textContent="Testing…";try{await api("/api/adapters/retest",{method:"POST",body:JSON.stringify({adapterId:a.id,adapter:a,examplePageUrl:a.maker?.example_page_url||`https://${a.domains[0]}`})});renderAdmin();}catch(e){setStatus(e.message,true);b.disabled=false;b.textContent="Test";}});rows.querySelectorAll(".saved-edit").forEach(b=>b.onclick=()=>{const a=adapters.find(x=>x.id===b.dataset.id);if(a){sessionStorage.setItem("adapter-edit",JSON.stringify(a));libraryState.view="adapters";history.pushState({view:"adapters"},"",libraryRoute("adapters"));renderLibrary();}});rows.querySelectorAll(".saved-delete").forEach(b=>b.onclick=async()=>{if(!confirm("Delete this adapter file?"))return;await api("/api/adapters/delete",{method:"POST",body:JSON.stringify({adapterId:b.dataset.id})});renderAdmin();});};$("adapterFilter").oninput=draw;$("adapterStatus").onchange=draw;$("refreshAdapters").onclick=renderAdmin;draw();}catch(error){setStatus(error.message||"Saved Adapters unavailable",true);}}
     async function renderLibrary() {
       if(libraryState.view==="movies") return renderCollection("movie");
@@ -3114,12 +3110,8 @@ def enabled_saved_adapters() -> list[dict[str, Any]]:
     return [item for item in ENABLED_ADAPTERS if item.get("enabled") and item.get("health", {}).get("last_test_status") == "passed" and item.get("search", {}).get("url_template") and item.get("domains")]
 
 
-def saved_adapter_search(query: str, selected_source: str) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+def saved_adapter_search(query: str) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     adapters = enabled_saved_adapters()
-    if selected_source not in {"all", "existing"}:
-        adapters = [item for item in adapters if item["id"] == selected_source]
-    if selected_source == "existing":
-        return [], []
     rows: list[dict[str, Any]] = []; failures: list[dict[str, str]] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(4, len(adapters)))) as executor:
         futures = {executor.submit(SiteAdapter(adapter).search, query): adapter for adapter in adapters}
@@ -3133,21 +3125,20 @@ def saved_adapter_search(query: str, selected_source: str) -> tuple[list[dict[st
     return rows, failures
 
 
-def search_all_configured_sources(query: str, selected_source: str) -> tuple[list[Any], dict[str, dict[str, Any]], list[dict[str, str]]]:
+def search_all_configured_sources(query: str) -> tuple[list[Any], dict[str, dict[str, Any]], list[dict[str, str]]]:
     """Search independent source types concurrently without changing result order.
 
     A slow compatible source must not postpone starting a saved adapter search.
     We still merge in the established source order, so an adapter completing
     first never changes which source is shown first in the UI.
     """
-    include_existing = selected_source in {"all", "existing"}
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        legacy_future = executor.submit(search_movie, query, 10, 20, 2_000_000) if include_existing else None
-        custom_future = executor.submit(custom_authorized_search, query) if include_existing else None
-        adapter_future = executor.submit(saved_adapter_search, query, selected_source)
+        legacy_future = executor.submit(search_movie, query, 10, 20, 2_000_000)
+        custom_future = executor.submit(custom_authorized_search, query)
+        adapter_future = executor.submit(saved_adapter_search, query)
 
-        legacy_candidates = legacy_future.result() if legacy_future else []
-        custom_candidates, custom_diagnostics = custom_future.result() if custom_future else ([], {})
+        legacy_candidates = legacy_future.result()
+        custom_candidates, custom_diagnostics = custom_future.result()
         adapter_candidates, adapter_failures = adapter_future.result()
     return [*legacy_candidates, *custom_candidates, *adapter_candidates], custom_diagnostics, adapter_failures
 
@@ -4400,11 +4391,6 @@ class AppHandler(BaseHTTPRequestHandler):
                 return
             response(self, HTTPStatus.OK, {"ok": True, "images": tmdb_backdrop_urls()})
             return
-        if route_path == "/api/search/sources":
-            if not is_authorized(self, parsed):
-                response(self, HTTPStatus.FORBIDDEN, {"ok": False, "error": "Token required"}); return
-            response(self, HTTPStatus.OK, {"ok": True, "sources": [{"id":"all","name":"All Sources"}, {"id":"existing","name":"Existing Working Site"}, *[{"id": item["id"], "name": item["name"]} for item in enabled_saved_adapters()]]})
-            return
         if library_response(self, parsed, route_path):
             return
         if library_admin_dashboard_response(self, parsed, route_path):
@@ -4465,7 +4451,6 @@ class AppHandler(BaseHTTPRequestHandler):
                 response(self, HTTPStatus.FORBIDDEN, {"ok": False, "error": "Token required"})
                 return
             query = parse_qs(parsed.query).get("q", [""])[0].strip()
-            selected_source = parse_qs(parsed.query).get("source", ["all"])[0].strip() or "all"
             if not query:
                 response(self, HTTPStatus.BAD_REQUEST, {"ok": False, "error": "Name required"})
                 return
@@ -4476,7 +4461,7 @@ class AppHandler(BaseHTTPRequestHandler):
             search_query = episode_search_fallback(query) if episode_target else query
             try:
                 candidates: list[Any] = []; custom_diagnostics: dict[str, dict[str, Any]] = {}; adapter_failures: list[dict[str, str]] = []
-                candidates, custom_diagnostics, adapter_failures = search_all_configured_sources(search_query, selected_source)
+                candidates, custom_diagnostics, adapter_failures = search_all_configured_sources(search_query)
                 candidates = merge_search_candidates(candidates)
                 # Most index sites have one show page, not a page per episode. Retry
                 # the title alone if its year was not indexed by the source.
@@ -4484,7 +4469,7 @@ class AppHandler(BaseHTTPRequestHandler):
                     title_only = re.sub(r"\b(?:19|20)\d{2}\b", " ", search_query)
                     title_only = re.sub(r"\s+", " ", title_only).strip()
                     if title_only and title_only != search_query:
-                        candidates, custom_diagnostics, adapter_failures = search_all_configured_sources(title_only, selected_source)
+                        candidates, custom_diagnostics, adapter_failures = search_all_configured_sources(title_only)
                         candidates = merge_search_candidates(candidates)
                         if candidates:
                             search_query = title_only
@@ -4507,11 +4492,10 @@ class AppHandler(BaseHTTPRequestHandler):
             # visible Direct link. Start its normal, already-authorized
             # 1080p workflow while the user is reviewing the search cards.
             # The result is only cached after the final response is verified.
-            if selected_source in {"all", "hdmovie2r_ltd"}:
-                candidate = next((item for item in candidates if isinstance(item, dict) and item.get("source_id") == "hdmovie2r_ltd"), None)
-                adapter = next((item for item in enabled_saved_adapters() if item["id"] == "hdmovie2r_ltd"), None)
-                if candidate and adapter:
-                    prefetch_adapter_workflow(adapter, str(candidate["url"]), "1080p")
+            candidate = next((item for item in candidates if isinstance(item, dict) and item.get("source_id") == "hdmovie2r_ltd"), None)
+            adapter = next((item for item in enabled_saved_adapters() if item["id"] == "hdmovie2r_ltd"), None)
+            if candidate and adapter:
+                prefetch_adapter_workflow(adapter, str(candidate["url"]), "1080p")
             response(
                 self,
                 HTTPStatus.OK,
