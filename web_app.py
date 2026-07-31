@@ -4421,6 +4421,36 @@ def library_admin_post(handler: BaseHTTPRequestHandler, parsed: Any, route_path:
     return True
 
 
+class BoundedThreadingHTTPServer(ThreadingHTTPServer):
+    """Reject overload instead of creating an unbounded handler thread."""
+
+    def __init__(self, *args: Any, max_workers: int = 32, **kwargs: Any) -> None:
+        self._request_slots = threading.BoundedSemaphore(max(1, max_workers))
+        super().__init__(*args, **kwargs)
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        if not self._request_slots.acquire(blocking=False):
+            try:
+                request.sendall(
+                    b"HTTP/1.1 503 Service Unavailable\r\n"
+                    b"Content-Type: application/json\r\nConnection: close\r\n"
+                    b"Content-Length: 53\r\n\r\n"
+                    b'{"ok":false,"error":"Server is busy; retry shortly."}'
+                )
+            except OSError:
+                pass
+            finally:
+                self.shutdown_request(request)
+            return
+        super().process_request(request, client_address)
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._request_slots.release()
+
+
 class AppHandler(BaseHTTPRequestHandler):
     server_version = "EvidenceLinkWeb/1.0"
 
@@ -5201,7 +5231,10 @@ def main() -> int:
                 print(f"Scheduled library sync failed: {exc}")
             time.sleep(30)
     threading.Thread(target=auto_sync_loop, daemon=True).start()
-    httpd = ThreadingHTTPServer((args.host, args.port), AppHandler)
+    httpd = BoundedThreadingHTTPServer(
+        (args.host, args.port), AppHandler,
+        max_workers=max(1, int(os.environ.get("MAX_HTTP_WORKERS", "32"))),
+    )
     print(f"Serving on http://{args.host}:{args.port}")
     if MEDIA_LIBRARY_PATHS:
         print("Media library paths: " + ", ".join(MEDIA_LIBRARY_PATHS))
