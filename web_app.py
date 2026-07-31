@@ -42,6 +42,10 @@ from adapter_analyzer import analyze as analyze_adapter, discover_search_results
 from adapter_storage import AdapterStorage
 from adapter_models import adapter_id, enable_workflow_fallback_for_verified_onboarding
 from adapter_runtime import SiteAdapter, normalized_title
+from content_aggregation import (
+    aggregate_candidates, compatibility_candidates, find_variant,
+    serialize_contents,
+)
 from workflow_analyzer import analyze_movie_workflow
 from network_safety import redact_url
 from runtime_support import BoundedCache
@@ -84,6 +88,7 @@ FXLINKS_LINK_CACHE: BoundedCache[str, tuple[float, list[dict[str, str]]]] = Boun
 FXLINKS_LISTING_CACHE: BoundedCache[str, tuple[float, list[dict[str, str]]]] = BoundedCache(256)
 RESOLVED_SIZE_CACHE: BoundedCache[str, str] = BoundedCache(1024)
 FIND_RESULT_CACHE: BoundedCache[str, tuple[float, dict[str, Any]]] = BoundedCache(256)
+CONTENT_VARIANT_CACHE: BoundedCache[str, tuple[float, list[Any]]] = BoundedCache(128)
 WORKFLOW_PREFETCH_CACHE: BoundedCache[str, tuple[float, dict[str, Any]]] = BoundedCache(128)
 WORKFLOW_PREFETCH_INFLIGHT: set[str] = set()
 WORKFLOW_PREFETCH_LOCK = threading.Lock()
@@ -96,6 +101,7 @@ AUTO_SYNC_LAST_RUN = 0.0
 TMDB_CACHE_SECONDS = 86400
 GDFLIX_CACHE_SECONDS = 21600
 FIND_CACHE_SECONDS = 3600
+CONTENT_VARIANT_CACHE_SECONDS = 900
 WORKFLOW_PREFETCH_CACHE_SECONDS = 1800
 MEDIA_LIBRARY_CACHE_SECONDS = 300
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w154"
@@ -3246,6 +3252,41 @@ def merge_search_candidates(rows: list[Any]) -> list[Any]:
     return merged
 
 
+def aggregate_search_response(rows: list[Any], search_query: str) -> tuple[list[Any], list[dict[str, Any]]]:
+    """Build the phase-one content contract and its temporary legacy view.
+
+    Adapters continue to return their current row shape.  This boundary is the
+    only place those rows become normalized content/release/source models.
+    The flattened projection keeps the existing UI and its selected-candidate
+    `/api/find` call working until the release UI is introduced.
+    """
+    decorated = candidates_with_posters(rows, search_query)
+    contents = aggregate_candidates(decorated)
+    for content in contents:
+        CONTENT_VARIANT_CACHE[content.contentId] = (time.time(), [content])
+    return contents, compatibility_candidates(contents)
+
+
+def candidate_for_content_variant(content_id: str, variant_id: str) -> dict[str, Any] | None:
+    """Resolve a Get Link identity to the source candidates in priority order."""
+    cached = CONTENT_VARIANT_CACHE.get(content_id)
+    if not cached or time.time() - cached[0] >= CONTENT_VARIANT_CACHE_SECONDS:
+        return None
+    variant = find_variant(cached[1], content_id, variant_id)
+    if not variant or not variant.sources:
+        return None
+    # The current resolver accepts the pre-aggregation candidate shape.  Keep
+    # that adapter here rather than leaking it back into the frontend.
+    selected = dict(variant.sources[0].workflowMetadata["candidate"])
+    selected.update({
+        "contentId": content_id,
+        "variantId": variant_id,
+        "sourceId": variant.sources[0].sourceId,
+        "failoverSourceIds": [source.sourceId for source in variant.sources],
+    })
+    return selected
+
+
 def source_name_for_url(source_url: str) -> str:
     """Return the admin-facing source name for a configured source URL."""
     normalized = source_url.rstrip("/")
@@ -4646,12 +4687,16 @@ class AppHandler(BaseHTTPRequestHandler):
             adapter = next((item for item in enabled_saved_adapters() if item["id"] == "hdmovie2r_ltd"), None)
             if candidate and adapter:
                 prefetch_adapter_workflow(adapter, str(candidate["url"]), "1080p")
+            contents, legacy_candidates = aggregate_search_response(candidates, query)
             response(
                 self,
                 HTTPStatus.OK,
                 {
                     "ok": True,
-                    "candidates": candidates_with_posters(candidates, query),
+                    # `contents` is the new backend contract. `candidates` is
+                    # intentionally a compatibility adapter for the current UI.
+                    "contents": serialize_contents(contents),
+                    "candidates": legacy_candidates,
                     "source": source_host,
                     "sources": source_summary,
                     "adapterFailures": adapter_failures,
@@ -4855,6 +4900,8 @@ class AppHandler(BaseHTTPRequestHandler):
             response(self, HTTPStatus.OK, {"ok": True, "url": best, "size": size_label})
             return
 
+        content_id = str(payload.get("contentId") or "").strip()
+        variant_id = str(payload.get("variantId") or "").strip()
         query = str(payload.get("query") or "").strip()
         quality = str(payload.get("quality") or "1080p").strip()
         requested_episode = payload.get("episodeTarget") or episode_target_from_query(query)
@@ -4878,8 +4925,20 @@ class AppHandler(BaseHTTPRequestHandler):
             except (TypeError, ValueError):
                 requested_season = None
         candidate_payload = payload.get("candidate") or {}
+        if content_id or variant_id:
+            if not content_id or not variant_id:
+                response(self, HTTPStatus.BAD_REQUEST, {"ok": False, "error": "contentId and variantId are required together"})
+                return
+            candidate_payload = candidate_for_content_variant(content_id, variant_id) or {}
+            if not candidate_payload:
+                response(self, HTTPStatus.NOT_FOUND, {"ok": False, "error": "Content variant has expired; search again"})
+                return
         title = str(candidate_payload.get("title") or "").strip()
         url = str(candidate_payload.get("url") or "").strip()
+        # New callers identify a normalized content/variant; the legacy UI
+        # still supplies a query plus a candidate during the transition.
+        if not query and content_id:
+            query = title
         if not query or not title or not url.startswith("http"):
             response(self, HTTPStatus.BAD_REQUEST, {"ok": False, "error": "Missing selected result"})
             return
