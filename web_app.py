@@ -1089,8 +1089,11 @@ HTML = """<!doctype html>
     .library-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
     .library-card { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:7px; background:#151e27; cursor:pointer; text-align:left; color:var(--text); padding:0; }
     .library-card:hover { border-color:#8b5cf6; transform:translateY(-1px); }
-    .library-card img, .library-placeholder { width:100%; aspect-ratio:2/3; display:block; object-fit:cover; background:#202630; }
-    .library-placeholder { display:grid; place-items:center; color:var(--muted); font-size:12px; }
+    .library-poster { position:relative; width:100%; aspect-ratio:2/3; display:grid; overflow:hidden; background:linear-gradient(145deg,#213246,#111923); }
+    .library-card img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#202630; }
+    .library-placeholder { display:grid; place-items:center; align-content:center; gap:5px; padding:10px; color:var(--muted); font-size:11px; font-weight:700; letter-spacing:.04em; text-align:center; }
+    .library-placeholder::before { content:"▧"; color:#7392b4; font-size:25px; line-height:1; }
+    #loadMore { grid-column:1 / -1; min-height:48px; margin-top:2px; }
     .library-card-copy { padding:8px; display:grid; gap:5px; }
     .library-card-title { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:13px; font-weight:750; }
     .library-card-meta { display:flex; gap:4px; flex-wrap:wrap; color:var(--muted); font-size:11px; }
@@ -1105,7 +1108,7 @@ HTML = """<!doctype html>
     .season-accordion { border:1px solid var(--line); border-radius:5px; background:#17212b; margin-bottom:6px; }.season-accordion summary { padding:10px; cursor:pointer; font-weight:700; }.season-accordion .episode-list { padding:0 9px 9px; }.season-zip-tools { display:grid; gap:6px; padding:0 9px 9px; border-bottom:1px solid var(--line); }.season-zip-find { justify-self:start; min-height:32px; padding:5px 8px; font-size:11px; }.season-zip-result:empty { display:none; }.season-zip-result .library-link-list { margin:0; }
     .back-to-top { position:fixed; right:16px; bottom:72px; z-index:35; display:none; border:0; border-radius:50%; width:42px; height:42px; color:#fff; background:#6d3bc4; box-shadow:0 6px 16px #000; }.back-to-top.visible { display:block; }
     .bottom-nav { display:none; }
-    @media (max-width:650px) { .app-nav { display:none; }.bottom-nav { position:fixed; display:grid; grid-template-columns:repeat(4,1fr); gap:1px; left:0; right:0; bottom:0; z-index:40; padding:5px; background:#121923; border-top:1px solid var(--line); }.bottom-nav button { border:0; background:transparent; color:var(--muted); padding:7px 2px; font-size:11px; }.bottom-nav button.active { color:#c6a6ff; }.shell { padding-bottom:65px; }.library-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }.library-toolbar h2 { flex-basis:100%; }.library-filters { margin-left:-2px; margin-right:-2px; }.detail-hero { grid-template-columns:92px 1fr; min-height:220px; padding:12px; gap:11px; }.detail-poster { width:92px; }.detail-title { font-size:21px; }.detail-overview { font-size:13px; }.library-detail { padding:0; }.detail-sheet { min-height:100%; border-radius:0; }.file-row,.episode-row { align-items:flex-start; flex-direction:column; }.episode-row-actions { width:100%; }.episode-row-actions .btn { flex:1; }.back-to-top { bottom:68px; }.admin-grid { grid-template-columns:1fr; }.admin-kpi { grid-template-columns:repeat(2,1fr); }.match-search { flex-direction:column; }.match-search .btn { width:100%; }.tmdb-choice { grid-template-columns:34px 1fr; }.tmdb-choice > span:last-child { grid-column:2; }.rename-move { grid-template-columns:1fr; gap:3px; }.rename-move b { display:none; } }
+    @media (max-width:650px) { .app-nav { display:none; }.bottom-nav { position:sticky; top:56px; display:grid; grid-template-columns:repeat(5,1fr); gap:1px; z-index:40; margin:0 -6px 12px; padding:5px; background:#121923; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }.bottom-nav button { border:0; background:transparent; color:var(--muted); padding:7px 2px; font-size:11px; }.bottom-nav button.active { color:#c6a6ff; }.mobile-more-menu { position:fixed; top:108px; right:8px; z-index:45; display:grid; gap:4px; min-width:172px; padding:6px; border:1px solid var(--line); border-radius:8px; background:#111923; box-shadow:0 12px 30px rgba(0,0,0,.4); }.mobile-more-menu[hidden] { display:none; }.mobile-more-menu button { min-height:42px; border:0; border-radius:5px; padding:8px 10px; color:var(--text); background:#172434; text-align:left; font-weight:700; }.mobile-more-menu button.active { background:#243b5a; }.shell { padding-bottom:24px; scroll-padding-bottom:92px; }.library-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }.library-toolbar h2 { flex-basis:100%; }.library-filters { margin-left:-2px; margin-right:-2px; }.detail-hero { grid-template-columns:92px 1fr; min-height:220px; padding:12px; gap:11px; }.detail-poster { width:92px; }.detail-title { font-size:21px; }.detail-overview { font-size:13px; }.library-detail { padding:0; }.detail-sheet { min-height:100%; border-radius:0; }.file-row,.episode-row { align-items:flex-start; flex-direction:column; }.episode-row-actions { width:100%; }.episode-row-actions .btn { flex:1; }.back-to-top { bottom:18px; }.admin-grid { grid-template-columns:1fr; }.admin-kpi { grid-template-columns:repeat(2,1fr); }.match-search { flex-direction:column; }.match-search .btn { width:100%; }.tmdb-choice { grid-template-columns:34px 1fr; }.tmdb-choice > span:last-child { grid-column:2; }.rename-move { grid-template-columns:1fr; gap:3px; }.rename-move b { display:none; } }
 
     /* Product refresh: a quieter, task-first workspace rather than a media wallpaper. */
     :root { --bg: #0b1018; --panel: #111923; --panel-2: #192434; --line: #27364a; --text: #edf3fb; --muted: #9babc0; --accent: #3b82f6; --accent-2: #60a5fa; }
@@ -1172,6 +1175,7 @@ HTML = """<!doctype html>
       .search-panel #searchBtn { min-height: 44px; }
       .search-panel .actions { display: none; }
       .quality-grid { grid-template-columns: repeat(5, 1fr); }
+      .quality { min-height: 44px; }
       .welcome-panel { grid-template-columns: 1fr; min-height: 0; padding: 22px 18px; gap: 18px; }
       .welcome-copy h2 { font-size: 21px; }
       .bottom-nav { padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); background: rgba(13,20,30,.97); }
@@ -1179,6 +1183,7 @@ HTML = """<!doctype html>
       .bottom-nav button.active { background: #1b3657; color: #dbeafe; }
       .source-card { grid-template-columns: 1fr; gap: 12px; padding: 14px; }
       .source-actions { justify-content: flex-start; }
+      .source-actions .btn { min-height: 44px; }
     }
   </style>
 </head>
@@ -1201,6 +1206,7 @@ HTML = """<!doctype html>
       </div>
       <div class="status" id="status">Ready</div>
     </div>
+    <nav class="bottom-nav" aria-label="Mobile navigation" id="bottomNav"><button data-view="search">Search</button><button data-view="movies">Movies</button><button data-view="tv">TV Shows</button><button data-view="missing">Missing</button><button id="mobileMoreBtn" aria-expanded="false" aria-controls="mobileMoreMenu">More</button></nav>
     <div class="workspace-bar" aria-label="Application status">
       <span class="workspace-dot"></span><strong>MEDIA DISCOVERY</strong><span class="workspace-divider"></span>
       <span>Search → choose → retrieve</span><span class="workspace-divider"></span>
@@ -1231,7 +1237,7 @@ HTML = """<!doctype html>
           <div class="row">
             <div class="field">
               <label for="query">Name</label>
-              <input id="query" autocomplete="off" placeholder="Type name">
+              <input id="query" aria-label="Search title" autocomplete="off" placeholder="Type name">
             </div>
             <button class="btn" id="searchBtn">Search</button>
           </div>
@@ -1299,7 +1305,7 @@ HTML = """<!doctype html>
   </main>
   <div class="library-detail" id="libraryDetail" aria-modal="true" role="dialog"></div>
   <button class="back-to-top" id="backToTop" aria-label="Back to top">↑</button>
-  <nav class="bottom-nav" aria-label="Mobile navigation" id="bottomNav"><button data-view="search">Search</button><button data-view="movies">Movies</button><button data-view="tv">TV Shows</button><button data-view="missing">Missing</button></nav>
+  <div class="mobile-more-menu" id="mobileMoreMenu" hidden><button data-view="recent">Recently Added</button><button data-view="admin">Admin</button><button data-view="sources">Sources</button></div>
 
   <script>
     const state = {
@@ -2104,7 +2110,9 @@ HTML = """<!doctype html>
     function saveLibraryScroll() { try { sessionStorage.setItem(`jobinfo:library-scroll:${location.pathname}${location.search}`, String(window.scrollY)); } catch (_) {} }
     function restoreLibraryScroll() { try { const saved=Number(sessionStorage.getItem(`jobinfo:library-scroll:${location.pathname}${location.search}`)||0); if(saved) requestAnimationFrame(()=>window.scrollTo({top:saved,behavior:"instant"})); } catch (_) {} }
     function setActiveNav(view) { document.querySelectorAll("[data-view]").forEach(b=>b.classList.toggle("active", b.dataset.view===view)); }
+    function closeMobileMore(){ const menu=$("mobileMoreMenu"),button=$("mobileMoreBtn"); if(menu)menu.hidden=true; if(button)button.setAttribute("aria-expanded","false"); }
     function navigate(view, push=true) {
+      closeMobileMore();
       libraryState.view=view; setActiveNav(view);
       const library = view !== "search";
       searchWorkspaceEl.classList.toggle("hidden", library); libraryViewEl.classList.toggle("active", library);
@@ -2114,7 +2122,7 @@ HTML = """<!doctype html>
     }
     async function libraryStats() { try { libraryState.stats=await api("/api/library/stats"); return libraryState.stats; } catch(error) { return {movies:{count:0,available:0,totalSize:0},tv:{count:0,available:0,totalSize:0},configurationErrors:[{error:error.message}]}; } }
     function libraryToolbar(title, stats, admin=true) { const errors=(stats.configurationErrors||[]).map(e=>e.error).filter(Boolean); return `<div class="library-toolbar"><h2>${title}</h2><div class="library-stats"><span class="library-stat">${stats.count||0} items</span><span class="library-stat">${stats.available||0} available</span><span class="library-stat">${bytes(stats.totalSize)}</span></div>${admin?'<button class="btn secondary" id="scanLibrary">Scan Library</button>':''}</div>${errors.length?`<div class="pending-note">${escapeHtml(errors[0])} Configure MOVIES_PATHS / TV_SHOWS_PATHS on the server, then scan.</div>`:""}`; }
-    function card(item, kind) { const status=item.needsMatch?"NEEDS MATCH":(item.available?"AVAILABLE":"MISSING"); const title=escapeHtml(item.title); const poster=libraryImage(item.posterUrl); const tvMeta=kind==="tv"?(item.totalEpisodes?`${item.availableSeasons||0}/${item.totalSeasons||"?"} seasons · ${item.availableEpisodes||0}/${item.totalEpisodes} episodes${item.progress!=null?` · ${item.progress}%`:""}`:`${item.total_files||0} files`):bytes(item.total_size); return `<button class="library-card" data-item="${escapeHtml(item.id)}" data-kind="${kind}">${poster?`<img src="${escapeHtml(poster)}" loading="lazy" alt="">`:'<div class="library-placeholder">NO POSTER</div>'}<span class="library-card-copy"><span class="library-card-title">${title}</span><span class="library-card-meta"><span>${escapeHtml(item.year||"—")}</span><span>${escapeHtml((item.local_languages||[]).join(" · ")||item.original_language||"Unknown")}</span></span><span class="library-card-meta">${statusBadge(status)} <span>${escapeHtml((item.qualities||[]).join(" "))}</span><span>${tvMeta}</span></span></span></button>`; }
+    function card(item, kind) { const status=item.needsMatch?"NEEDS MATCH":(item.available?"AVAILABLE":"MISSING"); const title=escapeHtml(item.title); const poster=libraryImage(item.posterUrl); const tvMeta=kind==="tv"?(item.totalEpisodes?`${item.availableSeasons||0}/${item.totalSeasons||"?"} seasons · ${item.availableEpisodes||0}/${item.totalEpisodes} episodes${item.progress!=null?` · ${item.progress}%`:""}`:`${item.total_files||0} files`):bytes(item.total_size); const posterMarkup=`<span class="library-poster"><span class="library-placeholder" aria-hidden="true">No poster</span>${poster?`<img src="${escapeHtml(poster)}" loading="lazy" alt="" onerror="this.hidden=true">`:""}</span>`; return `<button class="library-card" data-item="${escapeHtml(item.id)}" data-kind="${kind}">${posterMarkup}<span class="library-card-copy"><span class="library-card-title">${title}</span><span class="library-card-meta"><span>${escapeHtml(item.year||"—")}</span><span>${escapeHtml((item.local_languages||[]).join(" · ")||item.original_language||"Unknown")}</span></span><span class="library-card-meta">${statusBadge(status)} <span>${escapeHtml((item.qualities||[]).join(" "))}</span><span>${tvMeta}</span></span></span></button>`; }
     async function renderCollection(kind) {
       const statsAll=await libraryStats(), stats=kind==="movie"?statsAll.movies:statsAll.tv;
       const endpoint=kind==="movie"?"/api/library/movies":"/api/library/tv";
@@ -2310,7 +2318,8 @@ HTML = """<!doctype html>
     }
     new MutationObserver(attachSeasonZipActions).observe(libraryDetailEl,{childList:true,subtree:true});
     function closeLibraryDetail(){ const wasDeepLink=Boolean(libraryDetailFromUrl()); libraryDetailEl.classList.remove("open");libraryDetailEl.innerHTML="";libraryState.detail=null; if(wasDeepLink){ history.replaceState({view:libraryState.view},"",libraryRoute(libraryState.view)); restoreLibraryScroll(); } }
-    document.querySelectorAll("#appNav [data-view],#bottomNav [data-view]").forEach(button=>button.addEventListener("click",()=>navigate(button.dataset.view)));
+    document.querySelectorAll("#appNav [data-view],#bottomNav [data-view],#mobileMoreMenu [data-view]").forEach(button=>button.addEventListener("click",()=>navigate(button.dataset.view)));
+    $("mobileMoreBtn")?.addEventListener("click",()=>{const menu=$("mobileMoreMenu"),button=$("mobileMoreBtn"),open=menu.hidden;menu.hidden=!open;button.setAttribute("aria-expanded",String(open));});
     window.addEventListener("popstate",async()=>{const view=libraryViewFromPath(), detail=libraryDetailFromUrl(); await navigate(view,false); if(detail) openLibraryDetail(detail.kind,detail.id,{push:false,season:detail.season}); else {closeLibraryDetail();restoreLibraryScroll();}}); libraryDetailEl.addEventListener("click",e=>{if(e.target===libraryDetailEl)closeLibraryDetail()}); window.addEventListener("scroll",()=>backToTopEl.classList.toggle("visible",window.scrollY>700)); backToTopEl.onclick=()=>window.scrollTo({top:0,behavior:"smooth"});
     if(isLibraryRoute()) { const detail=libraryDetailFromUrl(); navigate(libraryViewFromPath(),false).then(()=>{ if(detail) openLibraryDetail(detail.kind,detail.id,{push:false,season:detail.season}); else restoreLibraryScroll(); }); }
     loadWallpapers();
