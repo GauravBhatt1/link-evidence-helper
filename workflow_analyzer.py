@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 from network_safety import REDIRECT_CODES, SafeSession, redact_url, validate_public_url
 from playwright_renderer import PlaywrightRenderer, RendererUnavailable
+from challenge_detection import visible_document_text
 
 QUALITY_RE = re.compile(r"\b(?:2160|1440|1080|720|480)p\b|\b4k\b", re.I)
 DOWNLOAD_RE = re.compile(r"\b(?:download|direct|instant|mirror|server|drive|gdf[l]?ix|vcloud|fast\s*cloud|zipdisk|cloud\s*resume|quick\s*download|get\s*(?:link|file)|continue)\b", re.I)
@@ -61,6 +62,7 @@ class Action:
     reason: str
     quality: str = ""
     method: str = "GET"
+    state: str = ""
 
 
 class WorkflowParser(HTMLParser):
@@ -73,7 +75,7 @@ class WorkflowParser(HTMLParser):
         self._forms: list[dict[str, str]] = []
         self._script: list[str] | None = None
 
-    def _add(self, target: str, label: str, reason: str, quality_text: str = "", method: str = "GET") -> None:
+    def _add(self, target: str, label: str, reason: str, quality_text: str = "", method: str = "GET", state: str = "") -> None:
         if not target:
             return
         try:
@@ -83,7 +85,7 @@ class WorkflowParser(HTMLParser):
         combined = " ".join((self._heading, label, url, quality_text))
         match = QUALITY_RE.search(combined)
         quality = match.group(0).upper() if match else ""
-        self.actions.append(Action(url, label[:180] or "Unnamed action", self.base_url, reason, quality, method.upper()))
+        self.actions.append(Action(url, label[:180] or "Unnamed action", self.base_url, reason, quality, method.upper(), state))
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attr = {key.lower(): value or "" for key, value in attrs}
@@ -116,7 +118,8 @@ class WorkflowParser(HTMLParser):
             label = " ".join("".join(chunks).split()) or attrs.get("aria-label") or attrs.get("title") or "Unnamed action"
             target = attrs.get("href") or attrs.get("data-url") or attrs.get("data-href") or ""
             if target and not target.lower().startswith(("javascript:", "#")):
-                self._add(target, label, "visible link or button", heading + " " + attrs.get("class", ""))
+                state = "|".join(f"{key}={attrs[key]}" for key in ("data-action", "data-method", "data-quality", "target") if attrs.get(key))
+                self._add(target, label, "visible link or button", heading + " " + attrs.get("class", ""), state=state)
             onclick = attrs.get("onclick", "")
             match = STATIC_LOCATION_RE.search(onclick)
             if match:
@@ -124,7 +127,8 @@ class WorkflowParser(HTMLParser):
         if tag == "form" and self._forms:
             form = self._forms.pop()
             method = form.get("method", "GET").upper()
-            self._add(form.get("action", self.base_url), f"Form ({method})", "HTML form action detected", self._heading, method)
+            state = "|".join(f"{key}={form[key]}" for key in ("enctype", "target", "id", "name") if form.get(key))
+            self._add(form.get("action", self.base_url), f"Form ({method})", "HTML form action detected", self._heading, method, state)
         if tag == "script" and self._script is not None:
             script = "".join(self._script)
             for match in STATIC_LOCATION_RE.finditer(script):
@@ -143,10 +147,10 @@ def _is_download(action: Action) -> bool:
 
 
 def _pick(actions: list[Action], predicate: Any, maximum: int) -> list[Action]:
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str, str, str, str]] = set()
     chosen: list[Action] = []
     for action in actions:
-        key = (action.url, action.method, action.quality)
+        key = (action.url, action.method, action.quality, action.source_page, action.state)
         if key not in seen and predicate(action):
             seen.add(key)
             chosen.append(action)
@@ -158,10 +162,10 @@ def _pick(actions: list[Action], predicate: Any, maximum: int) -> list[Action]:
 def _merge_actions(*groups: list[Action]) -> list[Action]:
     """Combine server and rendered DOM actions without re-visiting a target."""
     merged: list[Action] = []
-    seen: set[tuple[str, str, str]] = set()
+    seen: set[tuple[str, str, str, str, str]] = set()
     for group in groups:
         for action in group:
-            key = (action.url, action.method, action.quality)
+            key = (action.url, action.method, action.quality, action.source_page, action.state)
             if key not in seen:
                 seen.add(key)
                 merged.append(action)
@@ -317,13 +321,14 @@ def _final_file_metadata(response: Any, source_url: str) -> dict[str, str]:
 def _blocked_html(body: str) -> tuple[str, str] | None:
     # Ad templates frequently retain disabled CAPTCHA snippets in HTML
     # comments.  Those do not make a public page interactive verification.
-    visible_body = re.sub(r"<!--.*?-->", "", body or "", flags=re.S)
+    visible_body = visible_document_text(body)
     lowered = visible_body.lower()
-    if "turnstile" in lowered or "cf-turnstile" in lowered:
+    visible_text = re.sub(r"<[^>]+>", " ", visible_body)
+    if re.search(r"<(?:div|iframe|form|section)\b[^>]*(?:cf-turnstile|g-recaptcha|hcaptcha)[^>]*>", visible_body, re.I):
         return "cloudflare_turnstile", "Manual verification required"
-    if BLOCKER_RE.search(visible_body):
+    if BLOCKER_RE.search(visible_text):
         return "captcha_required", "Manual verification required"
-    if LOGIN_RE.search(visible_body):
+    if LOGIN_RE.search(visible_text):
         return "login_required", "Manual verification required"
     return None
 
@@ -363,8 +368,11 @@ def _workflow_steps(movie_ok: bool, results: list[dict[str, Any]]) -> list[dict[
     steps.append({"label": "Download / quality page", "state": "passed" if results else "failed"})
     if any(item["status"] == "success" for item in results):
         return steps + [{"label": "Final file", "state": "passed"}]
-    if any(item["status"] == "blocked" for item in results):
+    blocked = [item for item in results if item["status"] == "blocked"]
+    if blocked and len(blocked) == len(results):
         return steps + [{"label": "Manual verification required", "state": "failed"}]
+    if blocked:
+        return steps + [{"label": "Final file", "state": "failed"}, {"label": "Manual verification on alternate branch", "state": "partial"}]
     return steps + [{"label": "Final file", "state": "failed"}]
 
 
@@ -468,7 +476,7 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
     # branch is inspected once, rather than stopping after the first landing
     # page or the first quality that happens to be encountered.
     queue: list[tuple[Action, int, str]] = [(action, 0, action.quality or "Unknown quality") for action in quality_actions]
-    visited: set[tuple[str, str]] = set()
+    visited: set[tuple[str, str, str, str]] = set()
     timed_out = False
     while queue and len(visited) < MAX_WORKFLOW_NODES:
         if time.monotonic() >= deadline:
@@ -479,7 +487,7 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
         # a slow or challenged mirror from delaying an already-valid path.
         queue.sort(key=lambda item: _host_priority(item[0]))
         action, depth, quality = queue.pop(0)
-        key = (action.url, action.method)
+        key = (action.url, action.method, action.source_page, action.state)
         if key in visited:
             continue
         visited.add(key)

@@ -13,6 +13,7 @@ import re
 from typing import Any
 
 from network_safety import MAX_HTML_BYTES, redact_url, validate_public_url
+from challenge_detection import visible_document_text
 
 
 def interactive_verification_present(html: str) -> bool:
@@ -23,7 +24,7 @@ def interactive_verification_present(html: str) -> bool:
     Turnstile widget or a human challenge.  Treating that beacon as a block
     prevented normal browser rendering of those pages before it could begin.
     """
-    lowered = html.lower()
+    lowered = visible_document_text(html).lower()
     markers = ("cf-turnstile", "turnstile", "g-recaptcha", "hcaptcha", "captcha", "login required", "authentication required")
     return any(marker in lowered for marker in markers)
 
