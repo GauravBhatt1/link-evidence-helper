@@ -18,7 +18,13 @@ def _id(prefix: str, *parts: object) -> str:
 
 
 def normalized_title(value: str) -> str:
-    text = re.sub(r"\b(?:download|480p|720p|1080p|2160p|4k|uhd|fhd|web[- ]?dl|web[- ]?rip|bluray|brrip|hdrip|x26[45]|hevc|10bit|dual audio|multi audio|hindi dubbed|hindi|english|tamil|telugu|malayalam|kannada|season|series|episode|ep)\b", " ", value, flags=re.I)
+    """Return the source-independent title portion of a release label.
+
+    Providers frequently add harmless labels such as ``Movie`` and ``ESub``.
+    Those must not turn an otherwise identical title/year into a second
+    Content record when a source has no TMDB id.
+    """
+    text = re.sub(r"\b(?:download|movie|esub|480p|720p|1080p|2160p|4k|uhd|fhd|web[- ]?dl|web[- ]?rip|bluray|brrip|hdrip|x26[45]|hevc|10bit|dual audio|multi audio|hindi dubbed|hindi|english|tamil|telugu|malayalam|kannada|season|series|episode|ep)\b", " ", value, flags=re.I)
     text = re.sub(r"\b(?:19|20)\d{2}\b|\b\d+(?:\.\d+)?\s*(?:kb|mb|gb|tb)\b", " ", text, flags=re.I)
     return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
 
@@ -137,14 +143,23 @@ def serialize_contents(contents: Iterable[Content]) -> list[dict[str, Any]]:
 
 
 def compatibility_candidates(contents: Iterable[Content]) -> list[dict[str, Any]]:
-    """Temporary old-client projection; it leaves the current UI untouched."""
+    """Temporary old-client projection: one tile for each aggregated title.
+
+    The old poster-grid UI knows only a flat candidate list.  Project its
+    first (highest-priority) variant/source for each Content so it cannot
+    render the same film twice merely because two providers returned it.  The
+    complete releaseVariants/sources set remains available in ``contents``
+    and Get Link still receives the selected contentId/variantId.
+    """
     rows: list[dict[str, Any]] = []
     for content in contents:
-        for variant in content.releaseVariants:
-            for source in variant.sources:
-                candidate = dict(source.workflowMetadata["candidate"])
-                candidate.update({"contentId": content.contentId, "variantId": variant.variantId, "sourceId": source.sourceId})
-                rows.append(candidate)
+        if not content.releaseVariants or not content.releaseVariants[0].sources:
+            continue
+        variant = content.releaseVariants[0]
+        source = variant.sources[0]
+        candidate = dict(source.workflowMetadata["candidate"])
+        candidate.update({"contentId": content.contentId, "variantId": variant.variantId, "sourceId": source.sourceId})
+        rows.append(candidate)
     return rows
 
 

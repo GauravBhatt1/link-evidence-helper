@@ -46,3 +46,11 @@ class UiStructureTests(unittest.TestCase):
         detail = self.page.by_id["libraryDetail"]
         self.assertEqual(detail.get("role"), "dialog")
         self.assertEqual(detail.get("aria-modal"), "true")
+
+    def test_movie_results_prefer_normalized_contents_and_find_by_variant_identity(self):
+        # The flat candidate projection remains only as a rolling-deploy
+        # fallback; normal movie rendering and Get Link use the aggregate API.
+        self.assertIn("state.contents = Array.isArray(body.contents) ? body.contents : []", web_app.HTML)
+        self.assertIn("state.candidates = state.contents.length ? [] : (body.candidates || [])", web_app.HTML)
+        self.assertIn('data-variant-index="${variantIndex}"', web_app.HTML)
+        self.assertIn("contentId: content.contentId, variantId: variant.variantId", web_app.HTML)

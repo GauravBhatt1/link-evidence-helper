@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from content_aggregation import aggregate_candidates, failover_sources
+from content_aggregation import aggregate_candidates, compatibility_candidates, failover_sources
 
 
 class ContentAggregationTests(unittest.TestCase):
@@ -23,6 +23,17 @@ class ContentAggregationTests(unittest.TestCase):
         content = aggregate_candidates(self.rows())[0]
         self.assertEqual([item.quality for item in content.releaseVariants], ["1080P", "720P"])
         self.assertEqual([item.adapterName for item in content.releaseVariants[0].sources], ["one", "two"])
+
+    def test_provider_release_labels_merge_into_one_content_and_legacy_tile(self):
+        contents = aggregate_candidates([
+            {"title": "Download Iron Man 3 (2013) Dual Audio {Hindi-English} Movie 1080p BluRay ESub", "url": "https://one.example/iron-man-3", "source_id": "one", "source_name": "One"},
+            {"title": "Iron Man 3 (2013) Hindi Dubbed", "url": "https://two.example/iron-man-3", "source_id": "two", "source_name": "Two"},
+        ])
+        self.assertEqual(len(contents), 1)
+        self.assertEqual(contents[0].totalSources, 2)
+        self.assertEqual(len(contents[0].releaseVariants), 2)
+        self.assertEqual([variant.language for variant in contents[0].releaseVariants], ["Hindi/English", "Hindi"])
+        self.assertEqual(len(compatibility_candidates(contents)), 1)
 
     def test_failover_uses_next_source_after_verification_failure(self):
         variant = aggregate_candidates(self.rows())[0].releaseVariants[0]

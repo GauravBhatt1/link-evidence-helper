@@ -768,6 +768,20 @@ HTML = """<!doctype html>
       font-size: 12px;
     }
 
+    .content-card {
+      display: grid;
+      gap: 7px;
+      padding-bottom: 8px;
+    }
+
+    .content-card .poster-frame { min-height: 156px; }
+    .content-summary { display: grid; gap: 3px; padding: 0 7px; }
+    .content-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+    .content-counts { color: var(--muted); font-size: 11px; }
+    .release-variants { display: grid; gap: 4px; padding: 0 7px; }
+    .variant-choice { width: 100%; border: 1px solid var(--line); border-radius: 4px; padding: 5px 6px; background: #17232d; color: var(--text); cursor: pointer; font: inherit; font-size: 11px; text-align: left; }
+    .variant-choice.active { border-color: var(--accent); background: rgba(49, 139, 184, .24); }
+
     .link-list {
       display: grid;
       gap: 8px;
@@ -1337,10 +1351,13 @@ HTML = """<!doctype html>
   <script>
     const state = {
       quality: "1080p",
+      contents: [],
       candidates: [],
       linkMessage: "",
       links: [],
       selected: -1,
+      selectedContent: -1,
+      selectedVariant: -1,
       busy: false,
       seasonFilter: "all",
       typeFilter: "all",
@@ -1396,7 +1413,7 @@ HTML = """<!doctype html>
     function setBusy(value) {
       state.busy = value;
       searchBtn.disabled = value;
-      findBtn.disabled = value || state.selected < 0;
+      findBtn.disabled = value || !hasSelection();
     }
 
     function renderProgress(percent, label, meta) {
@@ -1601,6 +1618,29 @@ HTML = """<!doctype html>
       return languages.length ? languages.join("-") : "Language unknown";
     }
 
+    function selectedContent() {
+      return state.contents[state.selectedContent] || null;
+    }
+
+    function selectedVariant() {
+      const content = selectedContent();
+      return content?.releaseVariants?.[state.selectedVariant] || null;
+    }
+
+    function selectedCandidate() {
+      const variant = selectedVariant();
+      return variant?.sources?.[0]?.workflowMetadata?.candidate || state.candidates[state.selected] || null;
+    }
+
+    function hasSelection() {
+      return Boolean(selectedVariant() || state.candidates[state.selected]);
+    }
+
+    function variantLanguage(variant) {
+      if (!variant) return "";
+      return variant.audioVariant === "Dual Audio" ? String(variant.language || "").replaceAll("/", "-") : variant.language;
+    }
+
     function libraryBadge(candidate) {
       const status = candidate?.library_status || "";
       if (status !== "available" && status !== "missing") return "";
@@ -1664,7 +1704,9 @@ HTML = """<!doctype html>
     }
 
     function renderSelectedCandidate() {
-      const candidate = state.candidates[state.selected];
+      const content = selectedContent();
+      const variant = selectedVariant();
+      const candidate = selectedCandidate();
       if (!candidate) {
         selectedResultEl.classList.remove("active");
         selectedResultEl.innerHTML = "";
@@ -1686,8 +1728,8 @@ HTML = """<!doctype html>
             ? `<img class="media-hero-poster" src="${escapeHtml(candidate.poster_url)}" alt="">`
             : `<div class="media-hero-poster" aria-hidden="true"></div>`}
           <div class="media-hero-copy">
-            <div><span class="result-eyebrow">Selected result ${state.selected + 1}</span><strong class="result-title">${escapeHtml(candidate.title || "Untitled result")}</strong></div>
-            <div class="result-meta"><span class="meta-chip">${escapeHtml(candidateLanguage(candidate))}</span><span class="meta-chip">${escapeHtml(candidate.source_name||"Existing Site")}</span>${candidate.quality?`<span class="meta-chip">${escapeHtml(candidate.quality)}</span>`:""}${isTvCandidate ? '<span class="meta-chip">TV Series</span>' : '<span class="meta-chip">Movie</span>'}</div>
+            <div><span class="result-eyebrow">Selected result ${content ? state.selectedContent + 1 : state.selected + 1}</span><strong class="result-title">${escapeHtml(content?.title || candidate.title || "Untitled result")}</strong></div>
+            <div class="result-meta"><span class="meta-chip">${escapeHtml(variantLanguage(variant) || candidateLanguage(candidate))}</span><span class="meta-chip">${escapeHtml(variant?.quality || candidate.quality || "Quality unknown")}</span><span class="meta-chip">${escapeHtml(variant?.sources?.length ? `${variant.sources.length} source${variant.sources.length === 1 ? "" : "s"}` : candidate.source_name || "Existing Site")}</span>${isTvCandidate ? '<span class="meta-chip">TV Series</span>' : '<span class="meta-chip">Movie</span>'}</div>
             ${libraryLabel ? `<span class="selected-library-note ${escapeHtml(candidate.library_status)}">${escapeHtml(libraryLabel)}</span>` : ""}
           </div>
         </article>
@@ -1696,10 +1738,11 @@ HTML = """<!doctype html>
     }
 
     function renderCandidates() {
-      findBtn.disabled = state.busy || state.selected < 0;
+      findBtn.disabled = state.busy || !hasSelection();
       findBtn.textContent = state.episodeTarget ? "Find Episode Link" : "Find Links";
       renderSelectedCandidate();
-      if (!state.candidates.length) {
+      const hasContents = state.contents.length > 0;
+      if (!hasContents && !state.candidates.length) {
         posterPanelEl.classList.add("is-hidden");
         welcomePanelEl.classList.remove("is-hidden");
         if (state.hasSearched) {
@@ -1709,6 +1752,24 @@ HTML = """<!doctype html>
       }
       welcomePanelEl.classList.add("is-hidden");
       posterPanelEl.classList.remove("is-hidden");
+      if (hasContents) {
+        candidatesEl.innerHTML = state.contents.map((content, contentIndex) => `
+          <article class="candidate poster-card content-card" data-content-index="${contentIndex}" title="${escapeHtml(content.title)}">
+            <span class="poster-frame">
+              ${content.poster
+                ? `<img class="poster" src="${escapeHtml(content.poster)}" alt="" loading="lazy">`
+                : `<span class="poster empty-poster">NO IMG</span>`}
+              <span class="poster-badge">${contentIndex + 1}</span>
+            </span>
+            <span class="content-summary"><strong class="content-title">${escapeHtml(content.title || "Untitled result")}</strong><small class="content-counts">${content.releaseVariants?.length || 0} variants · ${content.totalSources || 0} sources</small></span>
+            <span class="release-variants">${(content.releaseVariants || []).map((variant, variantIndex) => `<button class="variant-choice ${contentIndex === state.selectedContent && variantIndex === state.selectedVariant ? "active" : ""}" data-content-index="${contentIndex}" data-variant-index="${variantIndex}">${escapeHtml([variantLanguage(variant), variant.quality, variant.releaseType !== "Unknown" ? variant.releaseType : "", variant.approxSize].filter(Boolean).join(" · "))}</button>`).join("")}</span>
+          </article>
+        `).join("");
+        candidatesEl.querySelectorAll(".variant-choice").forEach((button) => {
+          button.addEventListener("click", () => selectContentVariant(Number(button.dataset.contentIndex), Number(button.dataset.variantIndex)));
+        });
+        return;
+      }
       candidatesEl.innerHTML = state.candidates.map((candidate, index) => `
         <button class="candidate poster-card ${index === state.selected ? "active" : ""}" data-index="${index}" title="${escapeHtml(candidate.title)}">
           <span class="poster-frame">
@@ -1725,6 +1786,8 @@ HTML = """<!doctype html>
       candidatesEl.querySelectorAll(".candidate").forEach((button) => {
         button.addEventListener("click", () => {
           state.selected = Number(button.dataset.index);
+          state.selectedContent = -1;
+          state.selectedVariant = -1;
           state.links = [];
           state.showLinks = false;
           state.seasonFilter = "all";
@@ -1739,6 +1802,24 @@ HTML = """<!doctype html>
           setStatus(`Selected result ${state.selected + 1}`);
         });
       });
+    }
+
+    function selectContentVariant(contentIndex, variantIndex) {
+      state.selectedContent = contentIndex;
+      state.selectedVariant = variantIndex;
+      state.selected = -1;
+      state.links = [];
+      state.showLinks = false;
+      state.seasonFilter = "all";
+      state.typeFilter = "all";
+      state.libraryDetail = null;
+      state.libraryDetailId = "";
+      linkFiltersEl.innerHTML = "";
+      linksEl.innerHTML = '<div class="empty">Find links will appear here.</div>';
+      renderLinks([]);
+      renderCandidates();
+      loadTvAvailability(selectedCandidate());
+      setStatus(`Selected ${variantLanguage(selectedVariant()) || "release"} ${selectedVariant()?.quality || ""}`.trim());
     }
 
     function linkType(item) {
@@ -2066,22 +2147,28 @@ HTML = """<!doctype html>
       try {
         const body = await api(`/api/search?q=${encodeURIComponent(query)}`, { signal: request.signal });
         if (!requestIsCurrent("search", request.id)) return;
-        state.candidates = body.candidates || [];
+        // `contents` is the primary movie search contract.  A flat candidate
+        // list is retained only for older servers during a rolling deploy.
+        state.contents = Array.isArray(body.contents) ? body.contents : [];
+        state.candidates = state.contents.length ? [] : (body.candidates || []);
         state.hasSearched = true;
         state.episodeTarget = body.episodeTarget || episodeTargetFromQuery(query);
         state.episodeFallback = false;
         state.selected = -1;
+        state.selectedContent = -1;
+        state.selectedVariant = -1;
         renderCandidates();
         const sourceCounts=(body.sources||[]).filter(source=>source.enabled).map(source=>`${source.name}: ${source.results||0}`).join(" • ");
         const adapterFailures=(body.adapterFailures||[]).map(item=>`⚠ ${item.name}: ${item.reason||"adapter failed"}`).join(" • ");
         setStatus(
-          state.candidates.length
-            ? `${state.candidates.length} results${sourceCounts?` • ${sourceCounts}`:""}${adapterFailures?` • ${adapterFailures}`:""}${body.searchedAsShow ? " • show page matched for episode" : ""}`
+          (state.contents.length || state.candidates.length)
+            ? `${state.contents.length || state.candidates.length} results${sourceCounts?` • ${sourceCounts}`:""}${adapterFailures?` • ${adapterFailures}`:""}${body.searchedAsShow ? " • show page matched for episode" : ""}`
             : `No results${adapterFailures?` • ${adapterFailures}`:""}`
         );
         stopProgress(true, "Search complete");
       } catch (error) {
         if (requestWasCancelled(error) || !requestIsCurrent("search", request.id)) return;
+        state.contents = [];
         state.candidates = [];
         state.hasSearched = true;
         state.selected = -1;
@@ -2095,7 +2182,9 @@ HTML = """<!doctype html>
 
     async function findLink() {
       const query = queryEl.value.trim();
-      const candidate = state.candidates[state.selected];
+      const content = selectedContent();
+      const variant = selectedVariant();
+      const candidate = selectedCandidate();
       if (!query || !candidate) {
         setStatus("Select a result", true);
         return;
@@ -2117,7 +2206,9 @@ HTML = """<!doctype html>
         const body = await api("/api/find", {
           method: "POST",
           signal: request.signal,
-          body: JSON.stringify({ query, candidate, quality: state.quality, episodeTarget: state.episodeTarget || episodeTargetFromQuery(query) }),
+          body: JSON.stringify(content && variant
+            ? { query, contentId: content.contentId, variantId: variant.variantId, quality: state.quality, episodeTarget: state.episodeTarget || episodeTargetFromQuery(query) }
+            : { query, candidate, quality: state.quality, episodeTarget: state.episodeTarget || episodeTargetFromQuery(query) }),
         });
         if (!requestIsCurrent("find", request.id)) return;
         state.links = body.links || [];
@@ -2153,11 +2244,14 @@ HTML = """<!doctype html>
     findBtn.addEventListener("click", findLink);
     $("clearBtn").addEventListener("click", () => {
       queryEl.value = "";
+      state.contents = [];
       state.candidates = [];
       state.hasSearched = false;
       state.links = [];
       state.showLinks = false;
       state.selected = -1;
+      state.selectedContent = -1;
+      state.selectedVariant = -1;
       state.episodeTarget = null;
       state.episodeFallback = false;
       renderCandidates();
