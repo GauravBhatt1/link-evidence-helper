@@ -21,7 +21,12 @@ class _Handler(BaseHTTPRequestHandler):
             self.send_header(key, value)
         self.end_headers()
         if self.command != "HEAD":
-            self.wfile.write(body)
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                # A timeout test may disconnect before a deliberately delayed
+                # response is sent; that is expected, not a server failure.
+                pass
 
     def do_POST(self):
         if self.path == "/ajax":

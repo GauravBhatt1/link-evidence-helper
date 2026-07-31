@@ -21,6 +21,8 @@ from typing import Any
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
 
+from network_safety import redact_url
+
 VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm", ".ts"}
 IGNORED_DIRS = {"@eadir", ".trash", "extras", "featurettes", "samples", "sample", "trailers", "trailer"}
 IGNORED_WORDS = ("sample", "trailer", ".part", ".tmp", ".crdownload", ".!qB")
@@ -52,6 +54,15 @@ def _safe_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _redact_text(value: Any) -> str:
+    """Keep diagnostic records useful without retaining signed URL secrets."""
+    return re.sub(
+        r"https?://[^\s\"'<>]+",
+        lambda match: redact_url(match.group(0)),
+        str(value or ""),
+    )
 
 
 def clean_title(value: str) -> tuple[str, int | None]:
@@ -131,6 +142,7 @@ class LibraryService:
         self.tmdb_key = tmdb_key
         self.language = os.environ.get("TMDB_LANGUAGE", "en-US")
         self._scan_lock = threading.Lock()
+        self._rename_lock = threading.Lock()
         self._jobs_lock = threading.RLock()
         self._jobs: dict[str, dict[str, Any]] = {}
         self._init_db()
@@ -609,7 +621,7 @@ class LibraryService:
         with self._connection() as db:
             db.execute(
                 "INSERT INTO admin_events(category,message,source_url,detail,created_at) VALUES(?,?,?,?,?)",
-                (category, message[:500], source_url[:2000], detail[:2000], _now()),
+                (category, _redact_text(message)[:500], redact_url(source_url)[:2000], _redact_text(detail)[:2000], _now()),
             )
             # This is diagnostic history, not an audit archive. Bound the DB growth.
             db.execute("DELETE FROM admin_events WHERE id NOT IN (SELECT id FROM admin_events ORDER BY id DESC LIMIT 500)")
@@ -709,7 +721,10 @@ class LibraryService:
             raise ValueError("No local files are available to rename")
         root = self._item_root(item)
         relative_dir = Path(str(item["relative_path"] or "."))
-        source_dir = (root / relative_dir).resolve()
+        source_dir_raw = root / relative_dir
+        if source_dir_raw.is_symlink():
+            raise ValueError("Refusing to rename a symlinked media folder")
+        source_dir = source_dir_raw.resolve()
         if source_dir != root and root not in source_dir.parents:
             raise ValueError("Invalid library item path")
         if not source_dir.is_dir():
@@ -722,7 +737,10 @@ class LibraryService:
             moves.append({"kind": "folder", "from": str(source_dir.relative_to(root)), "to": str(target_dir.relative_to(root))})
         used: set[Path] = set()
         for index, file_row in enumerate(files, start=1):
-            source = (root / str(file_row["relative_path"])).resolve()
+            source_raw = root / str(file_row["relative_path"])
+            if source_raw.is_symlink():
+                raise ValueError("Refusing to rename a symlinked media file")
+            source = source_raw.resolve()
             if root not in source.parents or not source.is_file():
                 raise ValueError("A local file changed since the library scan; refresh the item and try again")
             extension = source.suffix.lower()
@@ -747,25 +765,70 @@ class LibraryService:
         return plan
 
     def rename_matched_files(self, item_id: str) -> dict[str, Any]:
-        plan, item, root, files, source_dir, target_dir = self._rename_plan(item_id)
-        if not plan["writable"]:
-            raise ValueError("The media folder is read-only. Enable write access before renaming.")
-        folder_move = next((move for move in plan["moves"] if move["kind"] == "folder"), None)
-        if folder_move:
-            if target_dir.exists():
+        if not self._rename_lock.acquire(blocking=False):
+            raise RuntimeError("Another library rename is already in progress")
+        try:
+            plan, item, root, files, source_dir, target_dir = self._rename_plan(item_id)
+            if not plan["writable"]:
+                raise ValueError("The media folder is read-only. Enable write access before renaming.")
+            folder_move = next((move for move in plan["moves"] if move["kind"] == "folder"), None)
+            file_moves = [move for move in plan["moves"] if move["kind"] == "file"]
+            if folder_move and target_dir.exists():
                 raise ValueError("The destination folder already exists; no files were changed")
-            source_dir.rename(target_dir)
-        for move in (move for move in plan["moves"] if move["kind"] == "file"):
-            source = root / move["from"]
-            if folder_move:
-                source = target_dir / Path(move["from"]).relative_to(Path(folder_move["from"]))
-            destination = root / move["to"]
-            if source != destination:
-                source.rename(destination)
-            stat = destination.stat()
-            fingerprint = hashlib.sha1(f"{destination.relative_to(root)}|{stat.st_size}|{stat.st_mtime_ns}".encode()).hexdigest()
-            with self._connection() as db:
-                db.execute("UPDATE media_files SET relative_path=?,filename=?,size=?,modified_at=?,fingerprint=? WHERE id=?", (str(destination.relative_to(root)), destination.name, stat.st_size, datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(), fingerprint, move["fileId"]))
-        with self._connection() as db:
-            db.execute("UPDATE media_items SET relative_path=?,last_scanned_at=? WHERE id=?", (str(target_dir.relative_to(root)), _now(), item["id"]))
-        return {"renamed": len([move for move in plan["moves"] if move["kind"] == "file"]), "plan": plan}
+
+            # Revalidate the plan immediately before mutating disk.  A preview
+            # can be old, and symlinks or a newly-created destination must
+            # never turn a rename into an overwrite or a root escape.
+            if source_dir.is_symlink() or (source_dir != root and root not in source_dir.parents):
+                raise ValueError("Invalid library item path")
+            for move in file_moves:
+                original = root / move["from"]
+                if original.is_symlink() or not original.resolve().is_relative_to(root):
+                    raise ValueError("A local file changed since the library scan; no files were changed")
+                destination = root / move["to"]
+                if not destination.resolve().is_relative_to(root) or destination.is_symlink():
+                    raise ValueError("Invalid destination path; no files were changed")
+                if not folder_move and destination.exists() and destination.resolve() != original.resolve():
+                    raise ValueError("A destination file now exists; no files were changed")
+
+            moved_files: list[tuple[Path, Path]] = []
+            folder_moved = False
+            updates: list[tuple[str, str, int, str, str, str]] = []
+            try:
+                if folder_move:
+                    source_dir.rename(target_dir)
+                    folder_moved = True
+                for move in file_moves:
+                    source = root / move["from"]
+                    if folder_move:
+                        source = target_dir / Path(move["from"]).relative_to(Path(folder_move["from"]))
+                    destination = root / move["to"]
+                    if source != destination:
+                        if destination.exists() or destination.is_symlink():
+                            raise ValueError("A destination file now exists; no files were changed")
+                        source.rename(destination)
+                        moved_files.append((source, destination))
+                    stat = destination.stat()
+                    fingerprint = hashlib.sha1(f"{destination.relative_to(root)}|{stat.st_size}|{stat.st_mtime_ns}".encode()).hexdigest()
+                    updates.append((str(destination.relative_to(root)), destination.name, stat.st_size, datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(), fingerprint, move["fileId"]))
+                with self._connection() as db:
+                    for update in updates:
+                        db.execute("UPDATE media_files SET relative_path=?,filename=?,size=?,modified_at=?,fingerprint=? WHERE id=?", update)
+                    db.execute("UPDATE media_items SET relative_path=?,last_scanned_at=? WHERE id=?", (str(target_dir.relative_to(root)), _now(), item["id"]))
+            except Exception:
+                for source, destination in reversed(moved_files):
+                    try:
+                        if destination.exists() and not source.exists():
+                            destination.rename(source)
+                    except OSError:
+                        pass
+                if folder_moved:
+                    try:
+                        if target_dir.exists() and not source_dir.exists():
+                            target_dir.rename(source_dir)
+                    except OSError:
+                        pass
+                raise
+            return {"renamed": len(file_moves), "plan": plan}
+        finally:
+            self._rename_lock.release()

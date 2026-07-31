@@ -111,6 +111,11 @@ DEFAULT_MEDIA_LIBRARY_PATHS = (
 DEFAULT_JELLYFIN_API_KEY_DB = "/home/ubuntu/Config/Jellyfin/data/data/jellyfin.db"
 
 
+def safe_log_warning(event: str, exc: Exception | None = None) -> None:
+    """Log the failure class, never a URL or credential-bearing exception."""
+    LOG.warning("%s%s", event, f" ({type(exc).__name__})" if exc else "")
+
+
 def configure_analyzer_domains(value: str) -> None:
     """Load the explicit domain allowlist for internal workflow inspection.
 
@@ -2583,7 +2588,7 @@ def tmdb_poster_url(title: str, timeout: float = 4.0) -> str:
         if best and tmdb_result_score(best, query, year, is_series) >= 45:
             poster = f"{TMDB_IMAGE_BASE}{best['poster_path']}"
     except Exception as exc:
-        print(f"TMDB poster lookup failed for {title!r}: {exc}")
+        safe_log_warning("TMDB poster lookup failed", exc)
     TMDB_POSTER_CACHE[cache_key] = (now, poster)
     return poster
 
@@ -2648,7 +2653,7 @@ def tmdb_backdrop_urls(timeout: float = 4.0) -> list[str]:
             if len(images) >= 10:
                 break
     except Exception as exc:
-        print(f"TMDB backdrop lookup failed: {exc}")
+        safe_log_warning("TMDB backdrop lookup failed", exc)
     TMDB_BACKDROP_CACHE = (now, images)
     return images
 
@@ -2871,7 +2876,7 @@ def scan_jellyfin_library(timeout: float = 12.0) -> dict[str, list[dict[str, str
             for item in payload.get("Items") or []:
                 add_library_item_entry(index, item, "jellyfin")
     except Exception as exc:
-        print(f"Jellyfin library scan failed: {exc}")
+        safe_log_warning("Jellyfin library scan failed", exc)
         return {}
     JELLYFIN_LIBRARY_CACHE = (now, index)
     return index
@@ -2907,10 +2912,11 @@ def trigger_jellyfin_library_refresh(timeout: float = 12.0) -> dict[str, Any]:
         with urlopen(request, timeout=timeout):
             pass
     except Exception as exc:
+        safe_log_warning("Jellyfin refresh could not be started", exc)
         return {
             "configured": True,
             "started": False,
-            "message": f"Jellyfin refresh could not be started: {exc}",
+            "message": "Jellyfin refresh is temporarily unavailable.",
         }
     # The following library reads must not use a pre-refresh snapshot.
     JELLYFIN_LIBRARY_CACHE = (0, {})
@@ -3046,7 +3052,8 @@ def jellyfin_show_availability(jellyfin_id: str, tmdb_id: str = "", timeout: flo
         with urlopen(request, timeout=timeout) as handle:
             items = json.loads(handle.read(10_000_000).decode("utf-8", errors="replace")).get("Items") or []
     except Exception as exc:
-        return {"error": f"Jellyfin episode lookup failed: {exc}"}
+        safe_log_warning("Jellyfin episode lookup failed", exc)
+        return {"error": "Jellyfin episode details are temporarily unavailable."}
 
     available_by_season: dict[int, set[int]] = {}
     for item in items:
@@ -3072,7 +3079,7 @@ def jellyfin_show_availability(jellyfin_id: str, tmdb_id: str = "", timeout: flo
                 if isinstance(number, int) and isinstance(count, int) and number >= 1 and count >= 0:
                     expected_by_season[number] = count
         except Exception as exc:
-            print(f"TMDB episode catalog lookup failed for Jellyfin show {jellyfin_id}: {exc}")
+            safe_log_warning("TMDB episode catalog lookup failed", exc)
 
     season_numbers = sorted(set(available_by_season) | set(expected_by_season))
     seasons: list[dict[str, Any]] = []
@@ -4059,6 +4066,9 @@ def library_response(handler: BaseHTTPRequestHandler, parsed: Any, route_path: s
             response(handler, HTTPStatus.NOT_FOUND, {"ok": False, "error": "Library route not found"})
     except (ValueError, TypeError) as exc:
         response(handler, HTTPStatus.BAD_REQUEST, {"ok": False, "error": str(exc)})
+    except sqlite3.Error:
+        safe_log_warning("Library database read failed")
+        response(handler, HTTPStatus.SERVICE_UNAVAILABLE, {"ok": False, "error": "Library database is temporarily unavailable."})
     return True
 
 
@@ -4071,7 +4081,11 @@ def library_admin_dashboard_response(handler: BaseHTTPRequestHandler, parsed: An
     if LIBRARY is None:
         response(handler, HTTPStatus.SERVICE_UNAVAILABLE, {"ok": False, "error": "Library service is unavailable."})
         return True
-    response(handler, HTTPStatus.OK, {"ok": True, **LIBRARY.admin_dashboard()})
+    try:
+        response(handler, HTTPStatus.OK, {"ok": True, **LIBRARY.admin_dashboard()})
+    except sqlite3.Error:
+        safe_log_warning("Library dashboard database read failed")
+        response(handler, HTTPStatus.SERVICE_UNAVAILABLE, {"ok": False, "error": "Library database is temporarily unavailable."})
     return True
 
 
@@ -4115,7 +4129,8 @@ def admin_setup_get(handler: BaseHTTPRequestHandler, parsed: Any, route_path: st
         else:
             response(handler, HTTPStatus.OK, {"ok": True, "setup": public_setup_configuration()})
     except (ValueError, OSError, json.JSONDecodeError) as exc:
-        response(handler, HTTPStatus.BAD_GATEWAY, {"ok": False, "error": str(exc)})
+        safe_log_warning("Jellyfin setup request failed", exc)
+        response(handler, HTTPStatus.BAD_GATEWAY, {"ok": False, "error": "Jellyfin is temporarily unavailable."})
     return True
 
 
@@ -4331,6 +4346,9 @@ def admin_setup_post(handler: BaseHTTPRequestHandler, parsed: Any, route_path: s
         response(handler, status_code, {"ok": False, "status": exc.status, "error": str(exc)})
     except (ValueError, OSError, json.JSONDecodeError, LocalAIError) as exc:
         response(handler, HTTPStatus.BAD_REQUEST, {"ok": False, "error": str(exc)})
+    except sqlite3.Error:
+        safe_log_warning("Admin setup database write failed")
+        response(handler, HTTPStatus.SERVICE_UNAVAILABLE, {"ok": False, "error": "Library database is temporarily unavailable."})
     return True
 
 
@@ -4385,6 +4403,9 @@ def library_admin_post(handler: BaseHTTPRequestHandler, parsed: Any, route_path:
             response(handler, HTTPStatus.NOT_FOUND, {"ok": False, "error": "Admin library route not found"})
     except (ValueError, RuntimeError) as exc:
         response(handler, HTTPStatus.BAD_REQUEST, {"ok": False, "error": str(exc)})
+    except sqlite3.Error:
+        safe_log_warning("Library admin database write failed")
+        response(handler, HTTPStatus.SERVICE_UNAVAILABLE, {"ok": False, "error": "Library database is temporarily unavailable."})
     return True
 
 
@@ -4392,7 +4413,12 @@ class AppHandler(BaseHTTPRequestHandler):
     server_version = "EvidenceLinkWeb/1.0"
 
     def log_message(self, fmt: str, *args: Any) -> None:
-        print(f"{self.address_string()} - {fmt % args}")
+        message = fmt % args
+        message = re.sub(r"https?://[^\s\"']+", lambda match: redact_url(match.group(0)), message)
+        # HTTP request logging is useful for status diagnostics, but query
+        # strings may contain short-lived signed URLs or access tokens.
+        message = re.sub(r'("(?:GET|POST|PUT|DELETE|HEAD)\s+)([^\s?]+)\?[^\s]+', r"\1\2?[redacted]", message)
+        LOG.info("%s - %s", self.address_string(), message)
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
@@ -4500,7 +4526,8 @@ class AppHandler(BaseHTTPRequestHandler):
                 if not content_type.startswith("image/"):
                     raise ValueError("TMDB response was not an image")
             except Exception as exc:
-                response(self, HTTPStatus.BAD_GATEWAY, {"ok": False, "error": f"Poster unavailable: {exc}"})
+                safe_log_warning("TMDB image fetch failed", exc)
+                response(self, HTTPStatus.BAD_GATEWAY, {"ok": False, "error": "Poster is temporarily unavailable."})
                 return
             self.send_response(HTTPStatus.OK)
             self.send_header("content-type", content_type)
