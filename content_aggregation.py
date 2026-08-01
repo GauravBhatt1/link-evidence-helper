@@ -81,19 +81,8 @@ class Content:
 
 def _variant_fields(row: dict[str, Any]) -> dict[str, Any]:
     label = " ".join(str(row.get(key) or "") for key in ("title", "variant", "quality", "size"))
-    # Some release pages advertise every quality on one result card, e.g.
-    # ``480p | 720p | 1080p | 2160p``.  Treating the first token as the
-    # release quality lies to the user: the Find request still receives the
-    # selected target quality, but the card used to show an arbitrary 480p.
-    # Keep a single explicit quality, otherwise identify the page honestly as
-    # a multi-quality source.
-    qualities = list(dict.fromkeys(re.findall(r"\b(?:480p|720p|1080p|2160p|4k|uhd|fhd)\b", label, flags=re.I)))
-    if len(qualities) > 1:
-        quality = "Multiple"
-    elif qualities:
-        quality = qualities[0].upper().replace("4K", "4K")
-    else:
-        quality = str(row.get("quality") or "Unknown")
+    quality = _match(r"\b(480p|720p|1080p|2160p|4k|uhd|fhd)\b", label) or str(row.get("quality") or "Unknown")
+    quality = quality.upper().replace("4K", "4K")
     season_text, episode_text = _match(r"\b(?:season\s*|s)0?(\d{1,2})\b", label), _match(r"\b(?:episode\s*|ep\s*|e)0?(\d{1,3})\b", label)
     season = int(season_text) if season_text else None
     episode = int(episode_text) if episode_text else None

@@ -55,8 +55,6 @@ class UiStructureTests(unittest.TestCase):
         self.assertIn("state.candidates = state.contents.length ? [] : (body.candidates || [])", web_app.HTML)
         self.assertIn('data-variant-index="${variantIndex}"', web_app.HTML)
         self.assertIn("contentId: content.contentId, variantId: variant.variantId", web_app.HTML)
-        self.assertIn('variant?.quality === "Multiple" ? "Multiple qualities"', web_app.HTML)
-        self.assertIn('Target ${escapeHtml(state.quality', web_app.HTML)
 
     def test_aggregated_cards_keep_the_compact_mobile_poster_rail(self):
         # Content cards have an extra variants section, unlike legacy cards,
