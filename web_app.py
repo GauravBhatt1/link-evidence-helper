@@ -434,6 +434,8 @@ HTML = """<!doctype html>
       grid-column: 1;
     }
 
+    .links-panel-home { display: contents; }
+
     .panel.is-hidden { display: none; }
 
     .search-panel .panel-body {
@@ -743,6 +745,10 @@ HTML = """<!doctype html>
     .variant-choice.active { border-color: var(--accent); background: rgba(49, 139, 184, .24); }
     .variant-helper { margin: 0; color: var(--muted); font-size: 12px; }
     .find-release { width: 100%; }
+    .delivery-links-slot { display: grid; }
+    .release-workspace .links-panel { margin-top: 2px; border-radius: 8px; box-shadow: none; }
+    .release-workspace .links-panel .panel-head { min-height: 44px; padding: 10px 12px; }
+    .release-workspace .links-panel .link-list { max-height: min(56vh, 540px); }
 
     .link-list {
       display: grid;
@@ -1293,15 +1299,17 @@ HTML = """<!doctype html>
         </div>
       </div>
 
-      <div class="panel links-panel is-hidden" id="linksPanel">
-        <div class="panel-head">
-          <h2>Delivery Links</h2>
-          <span class="head-note">Copy, open, or send</span>
-        </div>
-        <div class="panel-body">
-          <div class="filters" id="linkFilters"></div>
-          <div class="link-list" id="links">
-            <div class="empty">Choose a release, then retrieve the available links.</div>
+      <div class="links-panel-home" id="linksPanelHome">
+        <div class="panel links-panel is-hidden" id="linksPanel">
+          <div class="panel-head">
+            <h2>Delivery Links</h2>
+            <span class="head-note">Copy, open, or send</span>
+          </div>
+          <div class="panel-body">
+            <div class="filters" id="linkFilters"></div>
+            <div class="link-list" id="links">
+              <div class="empty">Choose a release, then retrieve the available links.</div>
+            </div>
           </div>
         </div>
       </div>
@@ -1365,6 +1373,7 @@ HTML = """<!doctype html>
     const posterPanelEl = $("posterPanel");
     const welcomePanelEl = $("welcomePanel");
     const linksPanelEl = $("linksPanel");
+    const linksPanelHomeEl = $("linksPanelHome");
     const wallpaperEl = $("wallpaperBg");
     const toastEl = $("toast");
     let toastTimer = null;
@@ -1382,6 +1391,36 @@ HTML = """<!doctype html>
       toastTimer = setTimeout(() => {
         toastEl.classList.remove("active");
       }, 2800);
+    }
+
+    function parkDeliveryLinks() {
+      if (linksPanelHomeEl && linksPanelEl.parentElement !== linksPanelHomeEl) {
+        linksPanelHomeEl.appendChild(linksPanelEl);
+      }
+    }
+
+    function placeDeliveryLinks() {
+      const slot = state.showLinks
+        ? candidatesEl.querySelector("[data-delivery-links-slot]")
+        : null;
+      const visible = Boolean(slot && state.links.length);
+      const destination = visible ? slot : linksPanelHomeEl;
+      if (destination && linksPanelEl.parentElement !== destination) {
+        destination.appendChild(linksPanelEl);
+      }
+      linksPanelEl.classList.toggle("is-hidden", !visible);
+      return visible;
+    }
+
+    function focusDeliveryLinks() {
+      if (linksPanelEl.classList.contains("is-hidden")) return;
+      const target = linksPanelEl;
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      requestAnimationFrame(() => target.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "start",
+        inline: "nearest",
+      }));
     }
 
     function setBusy(value) {
@@ -1663,6 +1702,9 @@ HTML = """<!doctype html>
     }
 
     function renderCandidates() {
+      // The active card owns its links. Park the reusable panel before
+      // rebuilding card markup so it cannot be detached with stale content.
+      parkDeliveryLinks();
       const hasContents = state.contents.length > 0;
       candidatesEl.classList.toggle("content-results", hasContents);
       if (!hasContents && !state.candidates.length) {
@@ -1671,6 +1713,7 @@ HTML = """<!doctype html>
         if (state.hasSearched) {
           welcomePanelEl.innerHTML = `<div class="welcome-copy"><h2>No matching releases.</h2><p>Try a shorter title, a different spelling, or choose another source.</p></div><div class="workflow-steps"><div class="workflow-step"><b>↗</b><span><strong>Try another query</strong><br>Remove year, language, or extra words.</span></div><div class="workflow-step"><b>⌘</b><span><strong>Change source</strong><br>Some titles are only available on one source.</span></div></div>`;
         }
+        placeDeliveryLinks();
         return;
       }
       welcomePanelEl.classList.add("is-hidden");
@@ -1684,7 +1727,7 @@ HTML = """<!doctype html>
                 : `<span class="poster empty-poster">NO IMG</span>`}
             </span>
             <button class="content-summary content-select" data-content-index="${contentIndex}" aria-expanded="${contentIndex === state.selectedContent ? "true" : "false"}"><strong class="content-title">${escapeHtml(content.title || "Untitled result")}</strong><span class="content-meta"><span>${escapeHtml(content.year || "Year unknown")}</span><span>${escapeHtml(content.mediaType === "tv" ? "TV Show" : "Movie")}</span><span>${escapeHtml((content.languages || []).join(" · ") || "Language unknown")}</span><span>${content.releaseVariants?.length || 0} release variants</span><span>${content.totalSources || 0} sources</span>${(() => { const status = content.releaseVariants?.[0]?.sources?.[0]?.workflowMetadata?.candidate?.library_status; return status === "available" ? '<span class="available">In Jellyfin</span>' : status === "missing" ? '<span class="missing">Not in Jellyfin</span>' : '<span>Jellyfin unknown</span>'; })()}</span></button>
-            ${contentIndex === state.selectedContent ? `<div class="release-workspace"><div class="release-variants">${(content.releaseVariants || []).map((variant, variantIndex) => `<button class="variant-choice ${variantIndex === state.selectedVariant ? "active" : ""}" data-content-index="${contentIndex}" data-variant-index="${variantIndex}">${escapeHtml([variantLanguage(variant), variant.releaseType !== "Unknown" ? variant.releaseType : "Release", variant.quality === "Multiple" ? "Multiple qualities" : variant.quality, `${variant.sources?.length || 0} sources`].filter(Boolean).join(" · "))}</button>`).join("")}</div>${state.selectedVariant < 0 ? '<p class="variant-helper">Select a release to continue.</p>' : ""}<button class="btn find-release" data-find-content="${contentIndex}" ${state.busy || state.selectedVariant < 0 ? "disabled" : ""}>${state.episodeTarget ? "Find Episode Link" : "Find Links"}</button></div>` : ""}
+            ${contentIndex === state.selectedContent ? `<div class="release-workspace"><div class="release-variants">${(content.releaseVariants || []).map((variant, variantIndex) => `<button class="variant-choice ${variantIndex === state.selectedVariant ? "active" : ""}" data-content-index="${contentIndex}" data-variant-index="${variantIndex}">${escapeHtml([variantLanguage(variant), variant.releaseType !== "Unknown" ? variant.releaseType : "Release", variant.quality === "Multiple" ? "Multiple qualities" : variant.quality, `${variant.sources?.length || 0} sources`].filter(Boolean).join(" · "))}</button>`).join("")}</div>${state.selectedVariant < 0 ? '<p class="variant-helper">Select a release to continue.</p>' : ""}<button class="btn find-release" data-find-content="${contentIndex}" ${state.busy || state.selectedVariant < 0 ? "disabled" : ""}>${state.episodeTarget ? "Find Episode Link" : "Find Links"}</button>${state.showLinks && state.links.length ? '<div class="delivery-links-slot" data-delivery-links-slot aria-live="polite"></div>' : ""}</div>` : ""}
           </article>
         `).join("");
         candidatesEl.querySelectorAll(".content-select").forEach((button) => {
@@ -1694,6 +1737,7 @@ HTML = """<!doctype html>
           button.addEventListener("click", () => selectContentVariant(Number(button.dataset.contentIndex), Number(button.dataset.variantIndex)));
         });
         candidatesEl.querySelectorAll(".find-release").forEach((button) => button.addEventListener("click", findLink));
+        placeDeliveryLinks();
         return;
       }
       candidatesEl.innerHTML = state.candidates.map((candidate, index) => `
@@ -1727,6 +1771,7 @@ HTML = """<!doctype html>
           setStatus(`Selected result ${state.selected + 1}`);
         });
       });
+      placeDeliveryLinks();
     }
 
     function selectContent(contentIndex) {
@@ -1811,8 +1856,7 @@ HTML = """<!doctype html>
     }
 
     function renderLinks(items) {
-      linksPanelEl.classList.toggle("is-hidden", !state.showLinks);
-      if (!state.showLinks) return;
+      if (!placeDeliveryLinks()) return;
       renderLinkFilters(items);
       const visibleItems = filteredLinks(items);
       if (!items.length) {
@@ -2127,10 +2171,11 @@ HTML = """<!doctype html>
       setStatus("Verifying sources...");
       startProgress("Finding verified delivery link", 10);
       state.links = [];
-      state.showLinks = true;
+      state.showLinks = false;
+      state.linkMessage = "";
       linkFiltersEl.innerHTML = "";
       linksEl.innerHTML = '<div class="empty">Scanning...</div>';
-      linksPanelEl.classList.remove("is-hidden");
+      renderLinks([]);
       try {
         const body = await api("/api/find", {
           method: "POST",
@@ -2144,7 +2189,10 @@ HTML = """<!doctype html>
         state.episodeFallback = Boolean(body.episodeFallback);
         state.seasonFilter = "all";
         state.typeFilter = "all";
+        state.showLinks = Boolean(state.links.length);
+        renderCandidates();
         renderLinks(state.links);
+        if (state.showLinks) focusDeliveryLinks();
         setStatus((body.links || []).length ? (body.cached ? "Done (cached)" : "Done") : "No final link");
         stopProgress(true, (body.links || []).length ? (body.cached ? "Links ready from cache" : "Links ready") : "No final link");
       } catch (error) {

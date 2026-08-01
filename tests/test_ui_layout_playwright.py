@@ -1,11 +1,13 @@
-"""Rendered layout checks for aggregated result cards.
+"""Rendered layout checks for aggregated result cards and delivery-link placement.
 
 The Docker image includes Chromium.  Local developer environments without
 Playwright skip this module, while the deployment check runs it in-container.
 """
 from __future__ import annotations
 
+import json
 import unittest
+from urllib.parse import urlparse
 
 import web_app
 
@@ -106,3 +108,125 @@ class AggregatedContentCardLayoutTests(unittest.TestCase):
         self.assertAlmostEqual(layout["posterWidth"], 76, delta=1)
         self.assertLessEqual(layout["resultsScrollWidth"], layout["resultsWidth"] + 1)
         self.assertTrue(all(width >= layout["resultsWidth"] - 2 for width in layout["cardWidths"]))
+
+    def test_delivery_links_open_inside_a_later_active_card_on_desktop_and_mobile(self):
+        for width, height in ((1280, 900), (390, 844)):
+            with self.subTest(viewport=f"{width}x{height}"):
+                page = self.browser.new_page(viewport={"width": width, "height": height})
+                self.addCleanup(page.close)
+                find_requests = []
+
+                def route_request(route):
+                    path = urlparse(route.request.url).path
+                    if path == "/index/":
+                        route.fulfill(status=200, content_type="text/html", body=web_app.HTML)
+                        return
+                    if path == "/index/api/wallpapers":
+                        route.fulfill(
+                            status=200,
+                            content_type="application/json",
+                            body=json.dumps({"ok": True, "images": []}),
+                        )
+                        return
+                    if path == "/index/api/find":
+                        find_requests.append(json.loads(route.request.post_data or "{}"))
+                        route.fulfill(
+                            status=200,
+                            content_type="application/json",
+                            body=json.dumps({
+                                "ok": True,
+                                "links": [{
+                                    "quality": "1080p",
+                                    "size": "1.2 GB",
+                                    "url": "https://files.example/fixture.mkv",
+                                    "source_name": "Fixture source",
+                                    "kind": "Video file",
+                                }],
+                            }),
+                        )
+                        return
+                    route.fulfill(status=404, content_type="text/plain", body="Not found")
+
+                page.route("**/*", route_request)
+                page.goto("http://fixture.test/index/", wait_until="domcontentloaded")
+                page.evaluate(
+                    """
+                    () => {
+                      state.contents = Array.from({ length: 15 }, (_, index) => ({
+                        contentId: `fixture-${index}`,
+                        title: `Fixture title ${index + 1}`,
+                        year: "2024",
+                        mediaType: index % 2 ? "tv" : "movie",
+                        languages: ["Hindi", "English"],
+                        totalSources: 3,
+                        poster: "",
+                        releaseVariants: [{
+                          variantId: `fixture-variant-${index}`,
+                          language: "Hindi",
+                          releaseType: "WEB-DL",
+                          quality: "1080p",
+                          sources: [{}, {}, {}],
+                        }],
+                      }));
+                      state.candidates = [];
+                      state.links = [];
+                      state.showLinks = false;
+                      state.selectedContent = 14;
+                      state.selectedVariant = 0;
+                      state.hasSearched = true;
+                      renderCandidates();
+                      window.scrollTo(0, 0);
+                    }
+                    """
+                )
+                self.assertTrue(page.evaluate(
+                    """() => {
+                      const panel = document.querySelector("#linksPanel");
+                      return panel.classList.contains("is-hidden")
+                        && panel.parentElement?.id === "linksPanelHome";
+                    }"""
+                ))
+
+                page.locator(".find-release").click()
+                page.wait_for_selector("#linksPanel:not(.is-hidden) .link-card")
+                page.wait_for_function(
+                    """() => {
+                      const link = document.querySelector("#linksPanel .link-card");
+                      if (!link) return false;
+                      const rect = link.getBoundingClientRect();
+                      return rect.top >= 0 && rect.bottom <= window.innerHeight;
+                    }"""
+                )
+                layout = page.evaluate(
+                    """() => {
+                      const panel = document.querySelector("#linksPanel");
+                      const active = document.querySelector(".content-card.active");
+                      const find = active.querySelector(".find-release");
+                      const next = active.nextElementSibling;
+                      const panelRect = panel.getBoundingClientRect();
+                      const findRect = find.getBoundingClientRect();
+                      const linkRect = panel.querySelector(".link-card").getBoundingClientRect();
+                      return {
+                        visible: !panel.classList.contains("is-hidden"),
+                        inActiveCard: active.contains(panel),
+                        inDeliverySlot: panel.parentElement?.matches("[data-delivery-links-slot]"),
+                        linkCount: document.querySelectorAll(".link-card").length,
+                        linkTop: linkRect.top,
+                        linkBottom: linkRect.bottom,
+                        viewportHeight: window.innerHeight,
+                        followsFindButton: panelRect.top >= findRect.bottom - 1,
+                        beforeNextCard: !next || Boolean(
+                          panel.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING
+                        ),
+                      };
+                    }"""
+                )
+                self.assertEqual(find_requests, [{"contentId": "fixture-14", "variantId": "fixture-variant-14"}])
+                self.assertTrue(layout["visible"])
+                self.assertTrue(layout["inActiveCard"])
+                self.assertTrue(layout["inDeliverySlot"])
+                self.assertEqual(layout["linkCount"], 1)
+                self.assertGreaterEqual(layout["linkTop"], 0)
+                self.assertLessEqual(layout["linkBottom"], layout["viewportHeight"])
+                self.assertTrue(layout["followsFindButton"])
+                self.assertTrue(layout["beforeNextCard"])
