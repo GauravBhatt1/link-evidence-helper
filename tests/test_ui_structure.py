@@ -38,7 +38,8 @@ class UiStructureTests(unittest.TestCase):
         desktop_views = {button["data-view"] for button in self.page.buttons if button.get("data-view")}
         self.assertEqual(more.get("aria-controls"), mobile_menu.get("id"))
         self.assertEqual(more.get("aria-expanded"), "false")
-        self.assertTrue({"search", "movies", "tv", "missing", "recent", "admin", "sources"} <= desktop_views)
+        self.assertTrue({"search", "movies", "tv", "missing", "recent", "admin"} <= desktop_views)
+        self.assertNotIn("sources", desktop_views)
 
     def test_dynamic_regions_are_announced_and_modal_is_a_dialog(self):
         self.assertEqual(self.page.by_id["toast"].get("role"), "status")
@@ -54,3 +55,16 @@ class UiStructureTests(unittest.TestCase):
         self.assertIn("state.candidates = state.contents.length ? [] : (body.candidates || [])", web_app.HTML)
         self.assertIn('data-variant-index="${variantIndex}"', web_app.HTML)
         self.assertIn("contentId: content.contentId, variantId: variant.variantId", web_app.HTML)
+
+    def test_admin_lock_does_not_persist_plain_password_and_uses_existing_header(self):
+        self.assertIn("let adminPassword = \"\"", web_app.HTML)
+        self.assertNotIn('sessionStorage.getItem("adminPassword")', web_app.HTML)
+        self.assertNotIn('sessionStorage.setItem("adminPassword"', web_app.HTML)
+        self.assertIn("Incorrect password", web_app.HTML)
+        self.assertIn('"x-admin-password": adminPassword', web_app.HTML)
+
+    def test_admin_contains_root_folder_picker_and_sources_are_not_public(self):
+        self.assertIn("Add Root Folder", web_app.HTML)
+        self.assertIn("Use This Folder", web_app.HTML)
+        self.assertIn("Remove from library configuration", web_app.HTML)
+        self.assertNotIn('<button data-view="sources">Sources</button>', web_app.HTML)

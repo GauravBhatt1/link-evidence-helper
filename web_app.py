@@ -26,7 +26,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, quote_plus, urlencode, urljoin, urlparse
+from urllib.parse import parse_qs, quote_plus, unquote, urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 from custom_authorized_source import (detect_selectors, parse_html as parse_authorized_sample,
                                       preview_selectors, search_authorized_source,
@@ -1121,6 +1121,13 @@ HTML = """<!doctype html>
     .admin-row strong,.admin-row small { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .admin-row small { color:var(--muted); margin-top:3px; }
     .admin-kpi { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:12px; }
+    .admin-tabs { display:flex; gap:6px; overflow-x:auto; padding:0 0 10px; margin-bottom:12px; border-bottom:1px solid var(--line); }
+    .admin-tabs button { flex:0 0 auto; min-height:38px; border:1px solid var(--line); border-radius:6px; padding:7px 10px; background:#17212b; color:var(--muted); }
+    .admin-tabs button.active { background:#294a72; color:#fff; border-color:#4f87b8; }
+    .admin-lock { width:min(440px,100%); margin:44px auto; padding:22px; border:1px solid var(--line); border-radius:10px; background:#121b23; }
+    .admin-lock .actions { margin-top:12px; }.admin-error { color:#ffc4c8; min-height:20px; margin-top:8px; }
+    .root-list { display:grid; gap:7px; }.root-row { display:flex; gap:8px; align-items:center; justify-content:space-between; padding:9px; border:1px solid var(--line); border-radius:6px; background:#17212b; }.root-row small { color:var(--muted); display:block; }
+    .folder-picker { position:fixed; inset:0; z-index:110; display:grid; place-items:center; padding:18px; background:rgba(3,7,11,.86); }.folder-picker[hidden] { display:none; }.folder-picker-sheet { width:min(720px,100%); max-height:calc(100vh - 36px); overflow:auto; padding:16px; border:1px solid var(--line); border-radius:9px; background:#121b23; }.folder-path,.folder-breadcrumbs { display:flex; gap:5px; flex-wrap:wrap; margin:8px 0; }.folder-path code { overflow-wrap:anywhere; }.folder-rows { display:grid; gap:4px; max-height:45vh; overflow:auto; }.folder-row { width:100%; min-height:40px; border:1px solid var(--line); border-radius:5px; background:#17212b; color:var(--text); text-align:left; padding:7px 9px; }.folder-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
     .admin-kpi span { padding:10px; border:1px solid var(--line); border-radius:7px; background:rgba(21,29,38,.94); color:var(--muted); font-size:12px; }
     .admin-kpi b { display:block; color:var(--text); font-size:20px; margin-top:2px; }
     .library-stats { display:flex; gap:7px; flex-wrap:wrap; color:var(--muted); font-size:12px; }
@@ -1264,7 +1271,7 @@ HTML = """<!doctype html>
     </div>
 
     <nav class="app-nav" aria-label="Main navigation" id="appNav">
-      <button data-view="search" class="active">Search</button><button data-view="movies">Movies</button><button data-view="tv">TV Shows</button><button data-view="missing">Missing</button><button data-view="recent">Recently Added</button><button data-view="admin">Admin</button><button data-view="sources">Sources</button>
+      <button data-view="search" class="active">Search</button><button data-view="movies">Movies</button><button data-view="tv">TV Shows</button><button data-view="missing">Missing</button><button data-view="recent">Recently Added</button><button data-view="admin">Admin</button>
     </nav>
 
     <section class="layout search-workspace" id="searchWorkspace">
@@ -1346,7 +1353,7 @@ HTML = """<!doctype html>
   </main>
   <div class="library-detail" id="libraryDetail" aria-modal="true" role="dialog"></div>
   <button class="back-to-top" id="backToTop" aria-label="Back to top">↑</button>
-  <div class="mobile-more-menu" id="mobileMoreMenu" hidden><button data-view="recent">Recently Added</button><button data-view="admin">Admin</button><button data-view="sources">Sources</button></div>
+  <div class="mobile-more-menu" id="mobileMoreMenu" hidden><button data-view="recent">Recently Added</button><button data-view="admin">Admin</button></div>
 
   <script>
     const state = {
@@ -1519,7 +1526,9 @@ HTML = """<!doctype html>
 
     const accessToken = new URLSearchParams(location.search).get("token") || localStorage.getItem("accessToken") || "";
     if (accessToken) localStorage.setItem("accessToken", accessToken);
-    let adminPassword = sessionStorage.getItem("adminPassword") || "";
+    // Password stays only in this JavaScript runtime.  It is never persisted
+    // in local/session storage; a refresh simply returns to the lock screen.
+    let adminPassword = "";
 
     class ApiError extends Error {
       constructor(message, status = 0, code = "request_failed") {
@@ -2271,8 +2280,8 @@ HTML = """<!doctype html>
     const bytes = (size) => { const n=Number(size||0); if(!n) return "—"; const units=["B","KB","MB","GB","TB"]; const i=Math.min(units.length-1,Math.floor(Math.log(n)/Math.log(1024))); return `${(n/1024**i).toFixed(i?1:0)} ${units[i]}`; };
     const statusBadge = (value) => { const text=String(value||"NEEDS MATCH").toUpperCase(); const key=text.toLowerCase().replace("needs match","match"); return `<span class="status-badge ${escapeHtml(key)}">${escapeHtml(text)}</span>`; };
     const isLibraryRoute = () => location.pathname.includes("/library/") || /\/admin(?:\/sources)?$/.test(location.pathname);
-    function libraryRoute(view) { return { search: "/index/", movies:"/index/library/movies", tv:"/index/library/tv", missing:"/index/library/missing", recent:"/index/library/recent", admin:"/index/admin", sources:"/index/admin/sources" }[view] || "/index/"; }
-    function libraryViewFromPath() { const parts=location.pathname.split("/").filter(Boolean); return parts.at(-1)==="sources"?"sources":({movies:"movies",tv:"tv",missing:"missing",recent:"recent",admin:"admin"})[parts.at(-1)] || "search"; }
+    function libraryRoute(view) { return { search: "/index/", movies:"/index/library/movies", tv:"/index/library/tv", missing:"/index/library/missing", recent:"/index/library/recent", admin:`/index/admin${adminState?.section==="sources"?"/sources":""}` }[view] || "/index/"; }
+    function libraryViewFromPath() { const parts=location.pathname.split("/").filter(Boolean); if(parts.at(-1)==="sources"){adminState.section="sources";return "admin";} return ({movies:"movies",tv:"tv",missing:"missing",recent:"recent",admin:"admin"})[parts.at(-1)] || "search"; }
     function libraryDetailFromUrl() { const params=new URLSearchParams(location.search), id=params.get("item"), kind=params.get("kind"), season=Number(params.get("season")); return id && (kind==="movie" || kind==="tv") ? {id,kind,season:Number.isFinite(season)&&season>0?season:null} : null; }
     function libraryDetailUrl(kind,id,season=null) { const params=new URLSearchParams({item:id,kind}); if(season) params.set("season",String(season)); return `${libraryRoute(kind==="movie"?"movies":"tv")}?${params}`; }
     function saveLibraryScroll() { try { sessionStorage.setItem(`jobinfo:library-scroll:${location.pathname}${location.search}`, String(window.scrollY)); } catch (_) {} }
@@ -2297,7 +2306,7 @@ HTML = """<!doctype html>
       libraryViewEl.innerHTML=""; window.scrollTo({top:0,behavior:"instant"}); return Promise.resolve();
     }
     async function libraryStats(request) { try { const stats=await api("/api/library/stats",request?{signal:request.signal}:{}); if(libraryRenderIsCurrent(request)) libraryState.stats=stats; return stats; } catch(error) { if(requestWasCancelled(error)) throw error; return {movies:{count:0,available:0,totalSize:0},tv:{count:0,available:0,totalSize:0},configurationErrors:[{error:error.message}]}; } }
-    function libraryToolbar(title, stats, admin=true) { const errors=(stats.configurationErrors||[]).map(e=>e.error).filter(Boolean); return `<div class="library-toolbar"><h2>${title}</h2><div class="library-stats"><span class="library-stat">${stats.count||0} items</span><span class="library-stat">${stats.available||0} available</span><span class="library-stat">${bytes(stats.totalSize)}</span></div>${admin?'<button class="btn secondary" id="scanLibrary">Scan Library</button>':''}</div>${errors.length?`<div class="pending-note">${escapeHtml(errors[0])} Configure MOVIES_PATHS / TV_SHOWS_PATHS on the server, then scan.</div>`:""}`; }
+    function libraryToolbar(title, stats, admin=false) { const errors=(stats.configurationErrors||[]).map(e=>e.error).filter(Boolean); return `<div class="library-toolbar"><h2>${title}</h2><div class="library-stats"><span class="library-stat">${stats.count||0} items</span><span class="library-stat">${stats.available||0} available</span><span class="library-stat">${bytes(stats.totalSize)}</span></div>${admin?'<button class="btn secondary" id="scanLibrary">Scan Library</button>':''}</div>${errors.length?`<div class="pending-note">${escapeHtml(errors[0])} Configure media roots in Admin, then scan.</div>`:""}`; }
     function card(item, kind) { const status=item.needsMatch?"NEEDS MATCH":(item.available?"AVAILABLE":"MISSING"); const title=escapeHtml(item.title); const poster=libraryImage(item.posterUrl); const tvMeta=kind==="tv"?(item.totalEpisodes?`${item.availableSeasons||0}/${item.totalSeasons||"?"} seasons · ${item.availableEpisodes||0}/${item.totalEpisodes} episodes${item.progress!=null?` · ${item.progress}%`:""}`:`${item.total_files||0} files`):bytes(item.total_size); const posterMarkup=`<span class="library-poster"><span class="library-placeholder" aria-hidden="true">No poster</span>${poster?`<img src="${escapeHtml(poster)}" loading="lazy" alt="" onerror="this.hidden=true">`:""}</span>`; return `<button class="library-card" data-item="${escapeHtml(item.id)}" data-kind="${kind}">${posterMarkup}<span class="library-card-copy"><span class="library-card-title">${title}</span><span class="library-card-meta"><span>${escapeHtml(item.year||"—")}</span><span>${escapeHtml((item.local_languages||[]).join(" · ")||item.original_language||"Unknown")}</span></span><span class="library-card-meta">${statusBadge(status)} <span>${escapeHtml((item.qualities||[]).join(" "))}</span><span>${tvMeta}</span></span></span></button>`; }
     async function renderCollection(kind, request) {
       const statsAll=await libraryStats(request), stats=kind==="movie"?statsAll.movies:statsAll.tv;
@@ -2329,13 +2338,43 @@ HTML = """<!doctype html>
       libraryViewEl.querySelectorAll(".source-edit").forEach(button=>button.onclick=()=>setStatus("Edit uses the Add New Source guided flow; existing runtime settings are preserved until saved."));
       libraryViewEl.querySelectorAll(".source-advanced").forEach(button=>button.onclick=()=>{const box=panel(),row=rows.find(item=>item.id===button.dataset.id&&item.kind===button.dataset.kind);box.hidden=false;box.innerHTML=`<h3>Advanced Diagnostics</h3><p class="pending-note">Enter a page URL to run a read-only workflow check.</p><div class="field"><input id="diagPage" placeholder="https://example.com/title"></div><button class="btn" id="diagRun">Run diagnostics</button><pre id="diagOutput"></pre>`;$("diagRun").onclick=async()=>{$("diagOutput").textContent=JSON.stringify(await api("/api/admin/workflow-analyzer",{method:"POST",body:JSON.stringify({siteUrl:`https://${row.domain}`,movieUrl:$("diagPage").value})}),null,2);};});
     }catch(error){libraryError(error);}};
+    const adminState = { unlocked:false, section:"overview" };
+    const adminSections = [["overview","Overview"],["sources","Sources"],["library","Library Management"],["integrations","Integrations"],["settings","Settings"]];
+    const adminTabs = () => `<div class="admin-tabs" role="tablist">${adminSections.map(([id,label])=>`<button role="tab" class="${adminState.section===id?"active":""}" data-admin-section="${id}">${label}</button>`).join("")}</div>`;
+    function bindAdminTabs() { libraryViewEl.querySelectorAll("[data-admin-section]").forEach(button=>button.onclick=()=>{adminState.section=button.dataset.adminSection;history.replaceState({view:"admin"},"",`${APP_BASE_PATH}/admin${adminState.section==="sources"?"/sources":""}`);renderAdmin();}); }
+    async function renderRootFolders() {
+      const body=await api("/api/admin/library/roots"), rows=body.items||[];
+      libraryViewEl.innerHTML=`${adminTabs()}<section class="admin-panel"><div class="library-toolbar"><h2>Library Management</h2><button class="btn secondary" id="scanLibrary">Scan all folders</button></div><h3>Root Folders</h3><p class="pending-note">Only folders mounted inside this Docker container can be selected. This changes library configuration only; it never deletes folders or files.</p><div class="root-list">${rows.map(row=>`<div class="root-row"><span><strong>${escapeHtml(row.path)}</strong><small>${row.mediaType==="movie"?"Movies":"TV Shows"} · ${row.exists?row.readable?"Exists and readable":"Exists but inaccessible":"Missing"}</small></span><span class="episode-row-actions"><button class="btn secondary root-scan" data-path="${escapeHtml(row.path)}">Scan</button><button class="btn secondary root-remove" data-path="${escapeHtml(row.path)}" data-type="${row.mediaType}">Remove from library configuration</button></span></div>`).join("")||'<div class="pending-note">No root folders are configured.</div>'}</div><div class="folder-actions"><button class="btn" id="addRootFolder">Add Root Folder</button></div></section><div class="folder-picker" id="folderPicker" hidden></div>`;
+      $("scanLibrary").onclick=startLibraryScan;
+      libraryViewEl.querySelectorAll(".root-scan").forEach(button=>button.onclick=startLibraryScan);
+      libraryViewEl.querySelectorAll(".root-remove").forEach(button=>button.onclick=async()=>{if(!confirm("Remove from library configuration? Files will not be deleted."))return;await api("/api/admin/library/roots/remove",{method:"POST",body:JSON.stringify({path:button.dataset.path,mediaType:button.dataset.type})});renderRootFolders();});
+      $("addRootFolder").onclick=()=>openFolderPicker();
+    }
+    async function openFolderPicker(path="") {
+      const dialog=$("folderPicker"); if(!dialog)return;
+      dialog.hidden=false; dialog.innerHTML='<div class="folder-picker-sheet"><h2>Add Root Folder</h2><div class="pending-note">Loading mounted folders…</div></div>';
+      try { const body=await api(`/api/admin/library/folders${path?`?path=${encodeURIComponent(path)}`:""}`); if(body.empty){dialog.innerHTML='<div class="folder-picker-sheet"><h2>Add Root Folder</h2><p>No mounted media folders are available. Add a Docker volume mount first.</p><button class="btn secondary" id="folderCancel">Cancel</button></div>'; $("folderCancel").onclick=()=>dialog.hidden=true;return;}
+        const crumbs=(body.breadcrumbs||[]).map(item=>`<button class="btn secondary folder-crumb" data-path="${escapeHtml(item.path)}">${escapeHtml(item.name)}</button>`).join("");
+        dialog.innerHTML=`<div class="folder-picker-sheet"><h2>Add Root Folder</h2><div class="folder-breadcrumbs">${crumbs}</div><div class="folder-path"><code>${escapeHtml(body.path)}</code></div><div class="folder-actions">${body.parent?`<button class="btn secondary" id="folderParent">Parent folder</button>`:""}</div><div class="folder-rows">${(body.directories||[]).map(item=>`<button class="folder-row folder-open" data-path="${escapeHtml(item.path)}">📁 ${escapeHtml(item.name)}</button>`).join("")||'<div class="pending-note">No subfolders.</div>'}</div><div class="field"><label>Library type</label><select id="rootMediaType"><option value="movie">Movies</option><option value="tv">TV Shows</option></select></div><div class="folder-actions"><button class="btn" id="folderUse">Use This Folder</button><button class="btn secondary" id="folderCancel">Cancel</button></div></div>`;
+        dialog.querySelectorAll(".folder-open,.folder-crumb").forEach(button=>button.onclick=()=>openFolderPicker(button.dataset.path)); $("folderParent")?.addEventListener("click",()=>openFolderPicker(body.parent)); $("folderCancel").onclick=()=>dialog.hidden=true;
+        $("folderUse").onclick=async()=>{const type=$("rootMediaType").value; await api("/api/admin/library/roots/add",{method:"POST",body:JSON.stringify({path:body.path,mediaType:type})}); dialog.hidden=true; renderRootFolders();};
+      } catch(error) { dialog.innerHTML=`<div class="folder-picker-sheet"><h2>Add Root Folder</h2><p>${escapeHtml(error.message)}</p><button class="btn secondary" id="folderCancel">Cancel</button></div>`; $("folderCancel").onclick=()=>dialog.hidden=true; }
+    }
+    const renderAdminOverview = renderAdmin;
+    renderAdmin = async function() {
+      if (!adminState.unlocked) { libraryViewEl.innerHTML=`<section class="admin-lock"><h2>Admin locked</h2><p>Enter the admin password to access maintenance and configuration tools.</p><div class="field"><label for="adminUnlockPassword">Admin password</label><input id="adminUnlockPassword" type="password" autocomplete="current-password"></div><button class="btn" id="unlockAdmin">Unlock Admin</button><div class="admin-error" id="adminUnlockError"></div></section>`; $("unlockAdmin").onclick=async()=>{const password=$("adminUnlockPassword").value;adminPassword=password;try{await api("/api/admin/library/dashboard");adminState.unlocked=true;renderAdmin();}catch(_){adminPassword="";$("adminUnlockError").textContent="Incorrect password";}};return; }
+      if(adminState.section==="sources") { await renderSources(); libraryViewEl.insertAdjacentHTML("afterbegin",adminTabs()+`<div class="library-toolbar"><span class="library-stat">Admin → Sources</span><button class="btn secondary" id="lockAdmin">Lock Admin</button></div>`); bindAdminTabs(); $("lockAdmin").onclick=()=>{adminPassword="";adminState.unlocked=false;renderAdmin();}; return; }
+      if(adminState.section==="library") { await renderRootFolders(); bindAdminTabs(); return; }
+      if(adminState.section==="integrations"||adminState.section==="settings") { await renderSetup(); libraryViewEl.insertAdjacentHTML("afterbegin",adminTabs()); bindAdminTabs(); return; }
+      await renderAdminOverview(); libraryViewEl.insertAdjacentHTML("afterbegin",adminTabs()+`<div class="library-toolbar"><span class="library-stat">Admin unlocked</span><button class="btn secondary" id="lockAdmin">Lock Admin</button></div>`); bindAdminTabs(); $("lockAdmin").onclick=()=>{adminPassword="";adminState.unlocked=false;renderAdmin();};
+    };
     const linesValue=(value)=>Array.isArray(value)?value.join("\\n"):String(value||"");
     const splitLines=(value)=>String(value||"").split(/\\n|,/).map(x=>x.trim()).filter(Boolean);
     async function renderSetup() {
       try {
         const body=await api("/api/admin/setup"), setup=body.setup||{};
         const sources=setup.sources||[];
-        setTimeout(()=>{const grid=libraryViewEl.querySelector('.admin-grid');if(!grid||$('setupAdminPassword'))return;grid.insertAdjacentHTML('afterbegin',`<section class='admin-panel'><h3>Admin access</h3><div class='panel-body'><div class='field'><label>Admin password</label><input id='setupAdminPassword' type='password' placeholder='${setup.adminPasswordConfigured?"Enter a new password to replace it":"Create a password (minimum 10 characters)"}'></div><button class='btn secondary' id='saveAdminPassword'>Save admin password</button><div class='pending-note'>The password is stored as a secure hash and protects future setup changes.</div></div></section>`);$('saveAdminPassword').onclick=async()=>{const password=$('setupAdminPassword').value;try{await api('/api/admin/setup/security',{method:'POST',body:JSON.stringify({password})});adminPassword=password;sessionStorage.setItem('adminPassword',password);showToast('Admin password saved');renderSetup();}catch(e){setStatus(e.message,true);}};},0);
+        setTimeout(()=>{const grid=libraryViewEl.querySelector('.admin-grid');if(!grid||$('setupAdminPassword'))return;grid.insertAdjacentHTML('afterbegin',`<section class='admin-panel'><h3>Admin access</h3><div class='panel-body'><div class='field'><label>Admin password</label><input id='setupAdminPassword' type='password' placeholder='${setup.adminPasswordConfigured?"Enter a new password to replace it":"Create a password (minimum 10 characters)"}'></div><button class='btn secondary' id='saveAdminPassword'>Save admin password</button><div class='pending-note'>The password is stored as a secure hash and protects future setup changes.</div></div></section>`);$('saveAdminPassword').onclick=async()=>{const password=$('setupAdminPassword').value;try{await api('/api/admin/setup/security',{method:'POST',body:JSON.stringify({password})});adminPassword=password;showToast('Admin password saved');renderSetup();}catch(e){setStatus(e.message,true);}};},0);
         const sourceRows=sources.map(s=>`<div class="file-row"><span><b>${escapeHtml(s.name)}</b><small>${escapeHtml(s.base_url)} · ${escapeHtml(s.last_status||"unknown")}</small></span><span class="episode-row-actions"><button class="btn secondary source-test" data-id="${escapeHtml(s.id)}">Test</button><button class="btn secondary source-toggle" data-id="${escapeHtml(s.id)}" data-enabled="${s.enabled?"0":"1"}">${s.enabled?"Disable":"Enable"}</button><button class="btn secondary source-delete" data-id="${escapeHtml(s.id)}">Remove</button></span></div>`).join("")||'<div class="pending-note">No sources configured yet.</div>';
         libraryViewEl.innerHTML=`<div class="library-toolbar"><h2>Admin Setup</h2><span class="library-stat">Changes apply immediately</span></div><div class="admin-grid"><section class="admin-panel"><h3>1. Jellyfin connection</h3><div class="panel-body"><div class="field"><label>Jellyfin URL</label><input id="setupJellyfinUrl" value="${escapeHtml(setup.jellyfinUrl||"")}" placeholder="http://server:8096"></div><div class="field"><label>Jellyfin API key</label><input id="setupJellyfinKey" type="password" placeholder="${setup.jellyfinApiKeyConfigured?"Configured — enter only to replace":"Paste API key"}"></div><div class="actions"><button class="btn secondary" id="testJellyfin">Test connection</button><button class="btn secondary" id="loadJellyfinLibraries">Load libraries</button></div><div id="jellyfinSetupResult" class="pending-note"></div><div id="jellyfinLibraries"></div></div></section><section class="admin-panel"><h3>2. Local library paths</h3><div class="panel-body"><div class="field"><label>Movie folders — one per line</label><textarea id="setupMoviePaths" rows="4">${escapeHtml(linesValue(setup.moviePaths))}</textarea></div><div class="field"><label>TV / Anime folders — one per line</label><textarea id="setupTvPaths" rows="4">${escapeHtml(linesValue(setup.tvPaths))}</textarea></div><div class="field"><label>Minimum video file size (MB)</label><input id="setupMinSize" type="number" min="0" value="${escapeHtml(setup.minFileSizeMb||30)}"></div><button class="btn secondary" id="validatePaths">Validate paths</button><div id="pathResult" class="pending-note"></div></div></section><section class="admin-panel"><h3>3. Metadata & sync</h3><div class="panel-body"><div class="field"><label>TMDB API key</label><input id="setupTmdbKey" type="password" placeholder="${setup.tmdbApiKeyConfigured?"Configured — enter only to replace":"Optional, for posters and metadata"}"></div><div class="field"><label>Automatic sync interval (minutes, 0 = manual)</label><input id="setupAutoSync" type="number" min="0" max="10080" value="${escapeHtml(setup.autoSyncMinutes||0)}"></div><button class="btn" id="saveSetup">Save setup</button><div class="pending-note">Saving does not expose stored API keys in this browser.</div></div></section><section class="admin-panel"><h3>4. Content sources</h3><div class="panel-body"><div id="sourceRows">${sourceRows}</div><div class="field"><label>Source name</label><input id="sourceName" placeholder="My compatible source"></div><div class="field"><label>Source URL</label><input id="sourceUrl" placeholder="https://example.com"></div><div class="field"><label>Priority (lower runs first)</label><input id="sourcePriority" type="number" value="100"></div><button class="btn secondary" id="saveSource">Add source</button><div class="pending-note">Only sources using the compatible search layout work without a custom adapter.</div></div></section></div>`;
         const renderLibraryChoices=(items)=>{const selected=new Set(setup.jellyfinLibraryIds||[]); const mappings=setup.pathMappings||[]; $("jellyfinLibraries").innerHTML=items.length?`<div class="episode-list">${items.map(i=>{const mapped=mappings.find(m=>m.libraryId===i.id)||{}; const type=/movie/i.test(i.type||"")?"movie":"tv"; return `<div class="file-row"><span><label><input type="checkbox" class="jellyfin-library-choice" value="${escapeHtml(i.id)}" ${selected.has(i.id)?"checked":""}> <b>${escapeHtml(i.name)}</b></label><small>${escapeHtml(i.type||"other")} · ${(i.paths||[]).map(escapeHtml).join(", ")}</small><input class="path-mapping" data-library-id="${escapeHtml(i.id)}" data-jellyfin-path="${escapeHtml((i.paths||[])[0]||"")}" data-media-type="${type}" value="${escapeHtml(mapped.localPath||"")}" placeholder="App/server path for this library"></span></div>`;}).join("")}</div>`:'<div class="pending-note">No selectable Jellyfin libraries found.</div>';};
@@ -2347,7 +2386,7 @@ HTML = """<!doctype html>
         libraryViewEl.querySelectorAll(".source-test").forEach(b=>b.onclick=async()=>{b.disabled=true;b.textContent="Testing…";try{const r=await api("/api/admin/setup/sources/test",{method:"POST",body:JSON.stringify({id:b.dataset.id})});showToast(`Source ${r.status||"Working"}`);const panel=$("customPreview");if(panel&&r.diagnostics)panel.textContent=JSON.stringify({status:r.status,diagnostics:r.diagnostics},null,2);b.textContent=r.status||"Test";b.disabled=false;}catch(e){setStatus(e.message,true);b.disabled=false;b.textContent="Test";}});
         libraryViewEl.querySelectorAll(".source-toggle").forEach(b=>b.onclick=async()=>{const source=sources.find(s=>s.id===b.dataset.id);if(!source)return;try{await api("/api/admin/setup/sources/save",{method:"POST",body:JSON.stringify({id:source.id,name:source.name,baseUrl:source.base_url,priority:source.priority,enabled:b.dataset.enabled==="1"})});renderSetup();}catch(e){setStatus(e.message,true);}});
         libraryViewEl.querySelectorAll(".source-delete").forEach(b=>b.onclick=async()=>{try{await api("/api/admin/setup/sources/delete",{method:"POST",body:JSON.stringify({id:b.dataset.id})});renderSetup();}catch(e){setStatus(e.message,true);}});
-      } catch(error) { if(/Admin authorization required/i.test(error.message||"")){const password=window.prompt("Enter admin password");if(password){adminPassword=password;sessionStorage.setItem("adminPassword",password);return renderSetup();}} libraryError(error); }
+      } catch(error) { libraryError(error); }
     }
     async function renderAdapterMaker() { libraryViewEl.innerHTML=`<div class="library-toolbar"><h2>Adapter Maker</h2><span class="library-stat">Simple guided setup</span></div><div class="admin-grid"><section class="admin-panel"><div class="panel-body"><div class="field"><label>Site name</label><input id="adapterName" placeholder="Example Site"></div><div class="field"><label>Main site URL</label><input id="adapterMain" type="url" placeholder="https://example.com"></div><div class="field"><label>Example content/page URL</label><input id="adapterPage" type="url" placeholder="https://example.com/title/example"></div><div class="field"><label>Optional search query</label><input id="adapterQuery" placeholder="Example title"></div><div class="field"><label>Optional expected quality</label><select id="adapterQuality"><option value="">Any quality</option><option>480p</option><option>720p</option><option>1080p</option><option value="2160p">4K / 2160p</option></select></div><div class="field"><label>Optional example final URL</label><input id="adapterFinal" type="url" placeholder="https://host.example/file"></div><div class="actions"><button class="btn" id="adapterAnalyze">Analyze Site</button><button class="btn secondary" id="adapterTest" disabled>Test Adapter</button><button class="btn secondary" id="adapterSave" disabled>Save Adapter</button></div><label class="pending-note" id="adapterOverrideWrap" hidden><input id="adapterOverride" type="checkbox"> I understand this adapter needs review, but save it anyway.</label><div id="adapterResult" class="pending-note">Enter the two website URLs, then choose Analyze Site.</div></div></section><section class="admin-panel"><h3>Adapter result</h3><div id="adapterCards" class="admin-list">The status cards will appear here.</div><details class="pending-note"><summary>Advanced Debug</summary><pre id="adapterDebug"></pre></details><details class="pending-note"><summary>Generated adapter JSON</summary><pre id="adapterPreview"></pre></details></section></div>`;let result=null;const payload=()=>({siteName:$("adapterName").value,mainSiteUrl:$("adapterMain").value,examplePageUrl:$("adapterPage").value,searchQuery:$("adapterQuery").value,expectedQuality:$("adapterQuality").value,exampleFinalUrl:$("adapterFinal").value});const scoreLabel=n=>n>=95?"🟢 Excellent":n>=80?"🟢 Good":n>=60?"🟡 Needs Review":"🔴 Failed";const simpleReason=(checks,js)=>js?"❌ This site needs a browser-based adapter.":!checks.search_working?"❌ Search not detected":!checks.quality_detected?"❌ Quality not found":!checks.download_button_detected?"❌ Download button not found":!checks.redirect_chain_working?"❌ Redirect chain not working":!checks.final_link_detected?"❌ Final link could not be identified":"❌ Adapter needs review";const show=r=>{const report=r.report||{},checks=report.simple_checks||{};const names={main_site_reachable:"Main site reachable",search_working:"Search working",example_page_valid:"Example page valid",quality_detected:"Quality detected",download_button_detected:"Download button detected",redirect_chain_working:"Redirect chain working",final_link_detected:"Final link detected"};$("adapterCards").innerHTML=Object.entries(names).map(([key,label])=>`<div class="admin-row"><strong>${checks[key]?"🟢":"🔴"} ${label}</strong><small>${checks[key]?"Working":"Not found"}</small></div>`).join("");const ready=Boolean(report.ready_to_save);$("adapterResult").innerHTML=`<strong>${ready?"✅ READY TO USE":"❌ NOT READY"}</strong><br>${ready?"Your adapter passed all automatic checks.":simpleReason(checks,report.javascript_required)}<br><br>Adapter Confidence: <strong>${Number(report.adapter_confidence||0)}% — ${scoreLabel(Number(report.adapter_confidence||0))}</strong>`;$("adapterPreview").textContent=JSON.stringify(r.adapter,null,2);$("adapterDebug").textContent=JSON.stringify({report:r.report,selector_candidates:r.selector_candidates,debug:r.debug},null,2);$("adapterTest").disabled=false;$("adapterOverrideWrap").hidden=ready;$("adapterSave").disabled=!ready&&!$("adapterOverride").checked;};$("adapterOverride").onchange=()=>{$("adapterSave").disabled=!result||!(result.report?.ready_to_save||$("adapterOverride").checked)};$("adapterAnalyze").onclick=async()=>{const b=$("adapterAnalyze");b.disabled=true;$("adapterResult").textContent="Checking the website…";try{result=await api("/api/adapters/analyze",{method:"POST",body:JSON.stringify(payload())});show(result)}catch(e){$("adapterResult").textContent=`❌ ${e.message}`}finally{b.disabled=false}};$("adapterTest").onclick=async()=>{if(!result)return;$("adapterResult").textContent="Testing the adapter…";try{result=await api("/api/adapters/test",{method:"POST",body:JSON.stringify({adapter:result.adapter,examplePageUrl:$("adapterPage").value,expectedQuality:$("adapterQuality").value})});show(result)}catch(e){$("adapterResult").textContent=`❌ ${e.message}`}};$("adapterSave").onclick=async()=>{if(!result)return;try{const r=await api("/api/adapters/save",{method:"POST",body:JSON.stringify({adapter:result.adapter})});showToast(`Adapter ${r.adapter.id} saved`)}catch(e){$("adapterResult").textContent=`❌ ${e.message}`}}; }
     async function enhanceAdminAdapters(){try{const body=await api("/api/adapters");const grid=libraryViewEl.querySelector(".admin-grid");if(!grid||$("savedAdapters"))return;grid.insertAdjacentHTML("beforeend",`<section class="admin-panel" id="savedAdapters"><h3>Adapters</h3><div class="admin-list">${(body.adapters||[]).map(a=>`<div class="admin-row"><strong>${escapeHtml(a.name)} · ${a.enabled?(a.health?.status==="Working"?"🟢 Working":"🟡 Needs retest"):"⚪ Disabled"}</strong><small>${escapeHtml(a.health?.last_tested_at||"Never tested")}</small><span class="episode-row-actions"><button class="btn secondary adapter-toggle" data-id="${escapeHtml(a.id)}" data-enabled="${a.enabled?"0":"1"}">${a.enabled?"Disable":"Enable"}</button><button class="btn secondary adapter-retest" data-id="${escapeHtml(a.id)}">Retest</button><button class="btn secondary adapter-delete" data-id="${escapeHtml(a.id)}">Delete</button></span></div>`).join("")||"No saved adapters."}</div></section>`);grid.querySelectorAll(".adapter-toggle").forEach(b=>b.onclick=async()=>{await api("/api/adapters/toggle",{method:"POST",body:JSON.stringify({adapterId:b.dataset.id,enabled:b.dataset.enabled==="1"})});renderAdmin()});grid.querySelectorAll(".adapter-retest").forEach(b=>b.onclick=async()=>{const a=(body.adapters||[]).find(x=>x.id===b.dataset.id);if(!a)return;await api("/api/adapters/retest",{method:"POST",body:JSON.stringify({adapterId:a.id,adapter:a,examplePageUrl:`https://${a.domains[0]}`})});renderAdmin()});grid.querySelectorAll(".adapter-delete").forEach(b=>b.onclick=async()=>{if(!confirm("Delete this adapter?"))return;await api("/api/adapters/delete",{method:"POST",body:JSON.stringify({adapterId:b.dataset.id})});renderAdmin()});}catch(_){}}
@@ -2357,7 +2396,6 @@ HTML = """<!doctype html>
       if(libraryState.view==="movies") return renderCollection("movie",request);
       if(libraryState.view==="tv") return renderCollection("tv",request);
       if(libraryState.view==="missing") return renderMissing(request);
-      if(libraryState.view==="sources") return renderSources();
       if(libraryState.view==="admin") {
         return renderAdmin();
       }
@@ -2902,6 +2940,83 @@ def public_setup_configuration() -> dict[str, Any]:
         "adminPasswordConfigured": bool(settings.get("admin_password_hash")),
         "sources": LIBRARY.list_sources(),
     }
+
+
+def media_browser_roots() -> list[Path]:
+    """Return canonical, mounted roots that an administrator may browse.
+
+    This deliberately is not a container file browser.  Docker mounts are
+    supplied by deployment configuration; the UI may only descend from the
+    explicit MEDIA_BROWSER_ROOTS list (or the established Cloud media mount).
+    """
+    configured = _config_list(os.environ.get("MEDIA_BROWSER_ROOTS", ""))
+    if not configured and Path("/home/ubuntu/Cloud").is_dir():
+        configured = ["/home/ubuntu/Cloud"]
+    roots: list[Path] = []
+    for raw in configured:
+        try:
+            root = Path(raw).resolve(strict=True)
+        except OSError:
+            continue
+        if root.is_dir() and root not in roots:
+            roots.append(root)
+    return roots
+
+
+def resolve_media_browser_path(value: str | None) -> Path:
+    """Resolve one allowed directory without permitting traversal or escapes."""
+    raw = unquote(str(value or "").strip())
+    if not raw or "%" in raw or any(part == ".." for part in Path(raw).parts):
+        raise ValueError("Invalid folder path")
+    roots = media_browser_roots()
+    if not roots:
+        raise ValueError("No mounted media folders are available. Add a Docker volume mount first.")
+    try:
+        path = Path(raw).resolve(strict=True)
+    except OSError:
+        raise ValueError("Folder is unavailable") from None
+    if not path.is_dir() or not any(path == root or root in path.parents for root in roots):
+        raise ValueError("Folder is outside configured mounted media roots")
+    return path
+
+
+def media_browser_listing(value: str | None = None) -> dict[str, Any]:
+    roots = media_browser_roots()
+    if not roots:
+        return {"roots": [], "path": "", "breadcrumbs": [], "directories": [], "empty": True}
+    path = resolve_media_browser_path(value or str(roots[0]))
+    directories = []
+    try:
+        for child in sorted(path.iterdir(), key=lambda item: item.name.casefold()):
+            # resolve() makes symlink escapes fail the same containment check.
+            try:
+                resolved = child.resolve(strict=True)
+            except OSError:
+                continue
+            if child.is_dir() and any(resolved == root or root in resolved.parents for root in roots):
+                directories.append({"name": child.name, "path": str(resolved)})
+    except OSError as exc:
+        raise ValueError("Folder is not readable") from exc
+    root = next(root for root in roots if path == root or root in path.parents)
+    # Reconstruct a predictable clickable path rather than exposing arbitrary
+    # filesystem parents.
+    breadcrumbs = [{"name": root.name or str(root), "path": str(root)}]
+    current = root
+    for part in path.relative_to(root).parts:
+        current /= part
+        breadcrumbs.append({"name": part, "path": str(current)})
+    parent = str(path.parent) if path != root else ""
+    return {"roots": [str(item) for item in roots], "path": str(path), "parent": parent, "breadcrumbs": breadcrumbs, "directories": directories, "empty": False}
+
+
+def configured_media_roots() -> list[dict[str, Any]]:
+    setup = public_setup_configuration()
+    rows: list[dict[str, Any]] = []
+    for media_type, paths in (("movie", setup.get("moviePaths") or []), ("tv", setup.get("tvPaths") or [])):
+        for raw in paths:
+            path = Path(str(raw)).expanduser()
+            rows.append({"path": str(path), "mediaType": media_type, "exists": path.is_dir(), "readable": path.is_dir() and os.access(path, os.R_OK)})
+    return rows
 
 
 def add_media_index_entry(index: dict[str, list[dict[str, str]]], title: str, year: str, path: Path, root: Path) -> None:
@@ -4236,6 +4351,24 @@ def library_admin_dashboard_response(handler: BaseHTTPRequestHandler, parsed: An
     return True
 
 
+def library_root_folder_response(handler: BaseHTTPRequestHandler, parsed: Any, route_path: str) -> bool:
+    """Admin-only read access for the mounted-media folder picker."""
+    if route_path not in {"/api/admin/library/roots", "/api/admin/library/folders"}:
+        return False
+    if not is_admin(handler, parsed):
+        response(handler, HTTPStatus.FORBIDDEN, {"ok": False, "error": "Admin authorization required"})
+        return True
+    try:
+        if route_path.endswith("/roots"):
+            response(handler, HTTPStatus.OK, {"ok": True, "items": configured_media_roots(), "browserRoots": [str(root) for root in media_browser_roots()]})
+        else:
+            requested = query_params(parsed).get("path", "")
+            response(handler, HTTPStatus.OK, {"ok": True, **media_browser_listing(requested)})
+    except ValueError as exc:
+        response(handler, HTTPStatus.BAD_REQUEST, {"ok": False, "error": str(exc)})
+    return True
+
+
 def jellyfin_connection_data(base_url: str, api_key: str, endpoint: str) -> dict[str, Any]:
     base_url = base_url.strip().rstrip("/")
     if not base_url.startswith(("http://", "https://")) or not urlparse(base_url).hostname:
@@ -4509,7 +4642,28 @@ def library_admin_post(handler: BaseHTTPRequestHandler, parsed: Any, route_path:
         response(handler, HTTPStatus.SERVICE_UNAVAILABLE, {"ok": False, "error": "Library service is unavailable."})
         return True
     try:
-        if route_path == "/api/admin/library/scan":
+        if route_path in {"/api/admin/library/roots/add", "/api/admin/library/roots/remove"}:
+            raw_path = str(payload.get("path") or "")
+            media_type = str(payload.get("mediaType") or "").lower()
+            if media_type not in {"movie", "tv"}:
+                raise ValueError("Choose Movies or TV Shows for this root folder")
+            settings = LIBRARY.settings()
+            movie_paths = _config_list(settings.get("movie_paths"))
+            tv_paths = _config_list(settings.get("tv_paths"))
+            if route_path.endswith("/add"):
+                target = str(resolve_media_browser_path(raw_path))
+                if target in {*movie_paths, *tv_paths}:
+                    raise ValueError("This root folder is already configured")
+                (movie_paths if media_type == "movie" else tv_paths).append(target)
+            else:
+                # This only removes the path from the existing configuration;
+                # it never deletes or edits a real folder or its files.
+                movie_paths = [item for item in movie_paths if item != raw_path]
+                tv_paths = [item for item in tv_paths if item != raw_path]
+            LIBRARY.update_settings({"movie_paths": movie_paths, "tv_paths": tv_paths})
+            apply_persisted_configuration()
+            response(handler, HTTPStatus.OK, {"ok": True, "items": configured_media_roots()})
+        elif route_path == "/api/admin/library/scan":
             kind = str(payload.get("kind") or "full")
             if kind not in {"full", "quick"}: raise ValueError("Invalid scan type")
             job_id = LIBRARY.start_scan(kind)
@@ -4678,6 +4832,8 @@ class AppHandler(BaseHTTPRequestHandler):
         if library_response(self, parsed, route_path):
             return
         if library_admin_dashboard_response(self, parsed, route_path):
+            return
+        if library_root_folder_response(self, parsed, route_path):
             return
         if admin_setup_get(self, parsed, route_path):
             return
