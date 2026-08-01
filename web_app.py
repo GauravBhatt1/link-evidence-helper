@@ -3408,6 +3408,10 @@ def candidate_for_content_variant(content_id: str, variant_id: str) -> dict[str,
         "variantId": variant_id,
         "sourceId": variant.sources[0].sourceId,
         "failoverSourceIds": [source.sourceId for source in variant.sources],
+        "failoverCandidates": [
+            dict(source.workflowMetadata["candidate"])
+            for source in variant.sources[1:]
+        ],
         # The selected release, rather than a separate frontend quality
         # control, owns the quality decision. Multi-quality releases retain
         # their existing all-quality behaviour.
@@ -5361,9 +5365,59 @@ class AppHandler(BaseHTTPRequestHandler):
                         continue
                     links_by_key[link_key] = item
         except Exception as exc:
-            response(self, HTTPStatus.BAD_GATEWAY, {"ok": False, "error": str(exc)})
-            return
+            # A source failure is not a user decision.  Keep its diagnostic
+            # server-side and continue with the next aggregated source below.
+            debug.append({"source": delivery_source_url, "error": str(exc)})
         links = list(links_by_key.values())
+        # Content/variant is the only client-side choice. If the primary
+        # generic source cannot produce a verified file, automatically try
+        # the remaining sources in their aggregation priority order.
+        for fallback_payload in candidate_payload.get("failoverCandidates") or []:
+            if links:
+                break
+            fallback_url = str(fallback_payload.get("url") or "").strip()
+            fallback_title = str(fallback_payload.get("title") or title).strip()
+            if not fallback_url.startswith("http"):
+                continue
+            fallback_source_url = str(fallback_payload.get("source") or "").strip().rstrip("/")
+            fallback_candidate = Candidate(title=fallback_title, url=fallback_url, source=fallback_source_url)
+            if is_series_candidate(fallback_candidate):
+                continue
+            try:
+                for item_quality in qualities:
+                    options = fast_listing_options(fallback_candidate, item_quality, timeout=6, max_options=3)
+                    if options:
+                        for item in options:
+                            item["source"] = fallback_source_url or fallback_url
+                            links_by_key[item["url"]] = item
+                        continue
+                    rows = build_evidence(
+                        query=query, candidate=fallback_candidate, quality=item_quality,
+                        timeout=5, max_hops=8, max_html_bytes=2_000_000,
+                        max_direct_links=3, max_listing_workers=8,
+                    )
+                    debug.extend(asdict(row) for row in rows)
+                    for row in rows:
+                        best = find_best_link(row)
+                        if not best or is_intermediate_url(best):
+                            continue
+                        item = {
+                            "quality": item_quality,
+                            "size": best_size_label(row, item_quality, best),
+                            "url": best,
+                            "source": fallback_source_url or fallback_url,
+                            "listing": row.listing_link,
+                            "variant": link_variant_label(row),
+                            "episode_exact": is_exact_episode_link(series_meta(row), requested_episode),
+                            **series_meta(row),
+                        }
+                        links_by_key[best] = item
+            except Exception as exc:
+                debug.append({"source": fallback_source_url or fallback_url, "error": str(exc)})
+            links = list(links_by_key.values())
+            if links:
+                delivery_source_url = fallback_source_url or fallback_url
+                delivery_source_name = source_name_for_url(delivery_source_url)
         for item in links:
             # Do not use the final file host (for example Google Drive) here:
             # this badge identifies the content source selected before Find
