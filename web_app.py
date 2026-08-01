@@ -1241,27 +1241,28 @@ HTML = """<!doctype html>
       .source-actions { justify-content: flex-start; }
       .source-actions .btn { min-height: 44px; }
 
-      /* Keep normalized results in the same compact, swipeable poster-card
-         layout as the original search screen.  Aggregation adds release
-         choices inside a card; it must not turn the result rail into a
-         full-width list. */
+      /* Aggregated results contain a poster, summary, and one or more
+         release-variant controls.  They cannot safely share the old compact
+         horizontal poster carousel used by legacy one-line candidates. */
+      .results { display: grid; grid-template-columns: minmax(0, 1fr); overflow: visible; padding: 0; }
       .content-card {
-        flex: 0 0 136px;
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto auto;
-        gap: 0;
-        padding: 0 0 7px;
+        grid-template-columns: 76px minmax(0, 1fr);
+        grid-template-rows: auto auto;
+        align-items: start;
+        gap: 6px 9px;
+        padding: 8px;
       }
       .content-card .poster-frame {
-        width: 100%;
+        grid-row: 1 / -1;
+        width: 76px;
         min-height: 0;
-        height: auto;
-        aspect-ratio: 2 / 3;
+        height: 114px;
+        aspect-ratio: auto;
       }
       .content-card .content-summary,
-      .content-card .release-variants { padding: 6px 7px 0; min-width: 0; }
-      .content-card .release-variants { grid-template-columns: 1fr; }
-      .content-card .variant-choice { min-height: 30px; }
+      .content-card .release-variants { padding: 0; min-width: 0; }
+      .content-card .release-variants { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); }
+      .content-card .variant-choice { min-height: 34px; }
     }
   </style>
 </head>

@@ -56,12 +56,13 @@ class UiStructureTests(unittest.TestCase):
         self.assertIn('data-variant-index="${variantIndex}"', web_app.HTML)
         self.assertIn("contentId: content.contentId, variantId: variant.variantId", web_app.HTML)
 
-    def test_aggregated_cards_keep_the_compact_mobile_poster_rail(self):
-        # Content cards have an extra variants section, unlike legacy cards,
-        # but they remain compact cards in the same swipeable results rail.
+    def test_aggregated_cards_use_a_non_stretching_mobile_layout(self):
+        # Content cards have an extra variants section, unlike legacy cards.
+        # Keep their poster constrained and render the content as one readable
+        # row per result on small screens.
         self.assertIn(".content-card .poster-frame", web_app.HTML)
-        self.assertIn("flex: 0 0 136px", web_app.HTML)
-        self.assertIn("aspect-ratio: 2 / 3", web_app.HTML)
+        self.assertIn("height: 114px", web_app.HTML)
+        self.assertIn("grid-template-columns: minmax(0, 1fr); overflow: visible", web_app.HTML)
 
     def test_admin_lock_does_not_persist_plain_password_and_uses_existing_header(self):
         self.assertIn("let adminPassword = \"\"", web_app.HTML)
