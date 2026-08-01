@@ -27,10 +27,8 @@ class UiStructureTests(unittest.TestCase):
     def test_search_controls_have_labels_and_usable_targets(self):
         query = self.page.by_id["query"]
         search = self.page.by_id["searchBtn"]
-        qualities = [button for button in self.page.buttons if button.get("data-quality")]
         self.assertEqual(query.get("aria-label"), "Search title")
         self.assertEqual(search["tag"], "button")
-        self.assertEqual({button["data-quality"] for button in qualities}, {"480p", "720p", "1080p", "2160p", "all"})
 
     def test_navigation_and_mobile_menu_are_connected_accessibly(self):
         mobile_menu = self.page.by_id["mobileMoreMenu"]
@@ -48,22 +46,21 @@ class UiStructureTests(unittest.TestCase):
         self.assertEqual(detail.get("role"), "dialog")
         self.assertEqual(detail.get("aria-modal"), "true")
 
-    def test_movie_results_prefer_normalized_contents_and_find_by_variant_identity(self):
-        # The flat candidate projection remains only as a rolling-deploy
-        # fallback; normal movie rendering and Get Link use the aggregate API.
+    def test_movie_results_use_the_content_card_as_the_only_workspace(self):
         self.assertIn("state.contents = Array.isArray(body.contents) ? body.contents : []", web_app.HTML)
         self.assertIn("state.candidates = state.contents.length ? [] : (body.candidates || [])", web_app.HTML)
         self.assertIn('data-variant-index="${variantIndex}"', web_app.HTML)
         self.assertIn("contentId: content.contentId, variantId: variant.variantId", web_app.HTML)
-        self.assertIn('variant?.quality === "Multiple" ? "Multiple qualities"', web_app.HTML)
-        self.assertIn('Target ${escapeHtml(state.quality', web_app.HTML)
+        self.assertIn('body: JSON.stringify({ contentId: content.contentId, variantId: variant.variantId })', web_app.HTML)
+        self.assertIn("Select a release to continue.", web_app.HTML)
+        self.assertNotIn('id="selectedResult"', web_app.HTML)
+        self.assertNotIn("Selected result ${content", web_app.HTML)
 
-    def test_aggregated_cards_keep_the_compact_mobile_poster_rail(self):
-        # Content cards have an extra variants section, unlike legacy cards,
-        # but they remain compact cards in the same swipeable results rail.
+    def test_aggregated_cards_progressively_disclose_releases_on_mobile(self):
         self.assertIn(".content-card .poster-frame", web_app.HTML)
-        self.assertIn("flex: 0 0 136px", web_app.HTML)
-        self.assertIn("aspect-ratio: 2 / 3", web_app.HTML)
+        self.assertIn(".release-workspace", web_app.HTML)
+        self.assertIn('aria-expanded="${contentIndex === state.selectedContent ? "true" : "false"}"', web_app.HTML)
+        self.assertIn("min-height: 44px", web_app.HTML)
 
     def test_admin_lock_does_not_persist_plain_password_and_uses_existing_header(self):
         self.assertIn("let adminPassword = \"\"", web_app.HTML)

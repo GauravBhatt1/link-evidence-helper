@@ -691,63 +691,6 @@ HTML = """<!doctype html>
       background: rgba(116, 73, 12, 0.72);
     }
 
-    .selected-result {
-      display: none;
-      margin-bottom: 12px;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      background: linear-gradient(135deg, rgba(31, 53, 68, 0.98), rgba(18, 28, 37, 0.98));
-      padding: 13px;
-    }
-
-    .selected-result.active {
-      display: grid;
-      gap: 10px;
-    }
-
-    .selected-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-    .result-eyebrow { display: block; margin-bottom: 2px; color: var(--accent-2); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-    .result-title { display: block; font-size: 17px !important; line-height: 1.25; }
-    .result-meta { display: flex; flex-wrap: wrap; gap: 6px; }
-    .meta-chip, .selected-library-note { display: inline-flex; align-items: center; width: fit-content; border: 1px solid var(--line); border-radius: 999px; padding: 4px 8px; background: rgba(9, 9, 18, .56); color: var(--muted); font-size: 12px; line-height: 1.2; }
-    .selected-library-note.available { border-color: rgba(31, 214, 132, .42); color: #b8ffd9; background: rgba(22, 109, 67, .22); }
-    .selected-library-note.missing { border-color: rgba(255, 180, 72, .42); color: #ffe0a6; background: rgba(116, 73, 12, .22); }
-
-    .tv-availability { border-top: 1px solid var(--line); padding-top: 10px; }
-    .tv-availability summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; list-style: none; color: var(--text); font-size: 13px; font-weight: 750; }
-    .tv-availability summary::-webkit-details-marker { display: none; }
-    .tv-availability summary::after { content: "+"; flex: 0 0 auto; color: var(--accent-2); font-size: 20px; font-weight: 400; line-height: 1; }
-    .tv-availability[open] summary::after { content: "−"; }
-    .tv-summary-stats { color: var(--muted); font-size: 12px; font-weight: 600; text-align: right; }
-    .season-list { display: grid; gap: 7px; margin: 10px 0 0; padding: 0; list-style: none; }
-    .season-row { border: 1px solid var(--line); border-radius: 9px; padding: 9px; background: rgba(9, 9, 18, .34); }
-    .season-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-    .season-head strong { font-size: 13px; }
-    .season-state { border-radius: 999px; padding: 2px 6px; font-size: 11px; font-weight: 750; white-space: nowrap; }
-    .season-state.complete { color: #b8ffd9; background: rgba(22, 109, 67, .35); }
-    .season-state.partial { color: #ffe0a6; background: rgba(116, 73, 12, .35); }
-    .season-state.unavailable { color: #d5cfeb; background: rgba(91, 83, 121, .35); }
-    .episode-summary { display: grid; gap: 3px; margin-top: 7px; color: var(--muted); font-size: 12px; }
-    .episode-summary b { color: #dcd7ec; font-weight: 650; }
-
-    .selected-actions {
-      display: grid;
-      margin-bottom: 12px;
-    }
-
-    .selected-actions.is-hidden { display: none; }
-
-    .selected-result strong {
-      font-size: 14px;
-      overflow-wrap: anywhere;
-    }
-
-    .selected-result span {
-      color: var(--muted);
-      font-size: 12px;
-      overflow-wrap: anywhere;
-    }
-
     .candidate strong {
       display: block;
       font-size: 14px;
@@ -776,19 +719,21 @@ HTML = """<!doctype html>
       font-size: 12px;
     }
 
-    .content-card {
-      display: grid;
-      gap: 7px;
-      padding-bottom: 8px;
-    }
-
-    .content-card .poster-frame { min-height: 156px; }
-    .content-summary { display: grid; gap: 3px; padding: 0 7px; }
-    .content-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
-    .content-counts { color: var(--muted); font-size: 11px; }
-    .release-variants { display: grid; gap: 4px; padding: 0 7px; }
-    .variant-choice { width: 100%; border: 1px solid var(--line); border-radius: 4px; padding: 5px 6px; background: #17232d; color: var(--text); cursor: pointer; font: inherit; font-size: 11px; text-align: left; }
+    .content-card { grid-column: 1 / -1; display: grid; grid-template-columns: 106px minmax(0, 1fr); gap: 0; padding: 0; overflow: hidden; }
+    .content-card.active { border-color: var(--accent-2); }
+    .content-card .poster-frame { min-height: 100%; }
+    .content-summary { display: grid; align-content: start; gap: 7px; padding: 11px; text-align: left; cursor: pointer; background: transparent; border: 0; color: inherit; font: inherit; }
+    .content-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 800; }
+    .content-meta { display: flex; flex-wrap: wrap; gap: 5px; }
+    .content-meta span { border: 1px solid var(--line); border-radius: 999px; padding: 3px 6px; color: var(--muted); font-size: 11px; line-height: 1.15; }
+    .content-meta .available { border-color: rgba(31, 214, 132, .42); color: #b8ffd9; }
+    .content-meta .missing { border-color: rgba(255, 180, 72, .42); color: #ffe0a6; }
+    .release-workspace { grid-column: 1 / -1; display: grid; gap: 8px; padding: 10px; border-top: 1px solid var(--line); background: rgba(9, 17, 24, .38); }
+    .release-variants { display: grid; gap: 6px; }
+    .variant-choice { width: 100%; min-height: 42px; border: 1px solid var(--line); border-radius: 7px; padding: 8px 9px; background: #17232d; color: var(--text); cursor: pointer; font: inherit; font-size: 12px; text-align: left; }
     .variant-choice.active { border-color: var(--accent); background: rgba(49, 139, 184, .24); }
+    .variant-helper { margin: 0; color: var(--muted); font-size: 12px; }
+    .find-release { width: 100%; }
 
     .link-list {
       display: grid;
@@ -1241,27 +1186,19 @@ HTML = """<!doctype html>
       .source-actions { justify-content: flex-start; }
       .source-actions .btn { min-height: 44px; }
 
-      /* Keep normalized results in the same compact, swipeable poster-card
-         layout as the original search screen.  Aggregation adds release
-         choices inside a card; it must not turn the result rail into a
-         full-width list. */
       .content-card {
-        flex: 0 0 136px;
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto auto;
-        gap: 0;
-        padding: 0 0 7px;
+        grid-template-columns: 76px minmax(0, 1fr);
+        width: 100%;
       }
       .content-card .poster-frame {
-        width: 100%;
-        min-height: 0;
-        height: auto;
-        aspect-ratio: 2 / 3;
+        width: 76px;
+        min-height: 114px;
+        height: 114px;
+        aspect-ratio: auto;
       }
-      .content-card .content-summary,
-      .content-card .release-variants { padding: 6px 7px 0; min-width: 0; }
+      .content-card .content-summary { padding: 9px; min-width: 0; }
       .content-card .release-variants { grid-template-columns: 1fr; }
-      .content-card .variant-choice { min-height: 30px; }
+      .content-card .variant-choice { min-height: 44px; }
     }
   </style>
 </head>
@@ -1320,17 +1257,6 @@ HTML = """<!doctype html>
             <button class="btn" id="searchBtn">Search</button>
           </div>
 
-          <div class="field">
-            <label class="quality-label">Quality <em>Preferred: <span id="selectedQualityLabel">1080p</span></em></label>
-            <div class="quality-grid" id="qualityGrid">
-              <button class="quality" data-quality="480p">480p</button>
-              <button class="quality" data-quality="720p">720p</button>
-              <button class="quality active" data-quality="1080p">1080p</button>
-              <button class="quality" data-quality="2160p">4K</button>
-              <button class="quality" data-quality="all">All</button>
-            </div>
-          </div>
-
           <div class="actions">
             <button class="btn secondary" id="clearBtn">Clear</button>
           </div>
@@ -1340,13 +1266,9 @@ HTML = """<!doctype html>
       <div class="panel poster-panel is-hidden" id="posterPanel">
         <div class="panel-head">
           <h2>Matches</h2>
-          <span class="head-note">Target <span id="selectedQuality">1080p</span></span>
+          <span class="head-note">Choose a title</span>
         </div>
         <div class="panel-body">
-          <div class="selected-result" id="selectedResult"></div>
-          <div class="selected-actions is-hidden">
-            <button class="btn" id="findBtn" disabled>Find Links</button>
-          </div>
           <div class="results" id="candidates">
             <div class="empty">Search for a title to load matching releases.</div>
           </div>
@@ -1415,19 +1337,16 @@ HTML = """<!doctype html>
     const statusEl = $("status");
     const queryEl = $("query");
     const candidatesEl = $("candidates");
-    const selectedResultEl = $("selectedResult");
     const linksEl = $("links");
     const linkFiltersEl = $("linkFilters");
     const progressWrapEl = $("progressWrap");
     const progressBarEl = $("progressBar");
     const progressLabelEl = $("progressLabel");
     const progressMetaEl = $("progressMeta");
-    const findBtn = $("findBtn");
     const searchBtn = $("searchBtn");
     const posterPanelEl = $("posterPanel");
     const welcomePanelEl = $("welcomePanel");
     const linksPanelEl = $("linksPanel");
-    const selectedActionsEl = findBtn.closest(".selected-actions");
     const wallpaperEl = $("wallpaperBg");
     const toastEl = $("toast");
     let toastTimer = null;
@@ -1450,7 +1369,7 @@ HTML = """<!doctype html>
     function setBusy(value) {
       state.busy = value;
       searchBtn.disabled = value;
-      findBtn.disabled = value || !hasSelection();
+      renderCandidates();
     }
 
     function renderProgress(percent, label, meta) {
@@ -1725,61 +1644,7 @@ HTML = """<!doctype html>
       return `<details class="tv-availability"><summary><span>Episode availability</span><span class="tv-summary-stats">${escapeHtml(seasonText)} · ${escapeHtml(episodeText)}</span></summary>${seasons ? `<ul class="season-list">${seasons}</ul>` : "<span>No season data found.</span>"}</details>`;
     }
 
-    async function loadTvAvailability(candidate) {
-      const jellyfinId = String(candidate?.jellyfin_id || "");
-      if (candidate?.library_status !== "available" || !jellyfinId) return;
-      state.libraryDetailId = jellyfinId;
-      state.libraryDetail = { loading: true };
-      renderSelectedCandidate();
-      try {
-        const body = await api(`/api/library-details?id=${encodeURIComponent(jellyfinId)}`);
-        if (state.libraryDetailId !== jellyfinId) return;
-        state.libraryDetail = body.detail || { error: "TV availability unavailable." };
-      } catch (error) {
-        if (state.libraryDetailId !== jellyfinId) return;
-        state.libraryDetail = { error: error.message || "TV availability unavailable." };
-      }
-      renderSelectedCandidate();
-    }
-
-    function renderSelectedCandidate() {
-      const content = selectedContent();
-      const variant = selectedVariant();
-      const candidate = selectedCandidate();
-      if (!candidate) {
-        selectedResultEl.classList.remove("active");
-        selectedResultEl.innerHTML = "";
-        selectedActionsEl.classList.add("is-hidden");
-        return;
-      }
-      selectedResultEl.classList.add("active");
-      selectedActionsEl.classList.remove("is-hidden");
-      const libraryLabel = candidate.library_status === "available"
-        ? "Available in Jellyfin"
-        : candidate.library_status === "missing"
-          ? "Not in Jellyfin"
-          : "";
-      const isTvCandidate = candidate.library_type === "Series" || /\\b(season|web\\s*series|series|episode|s\\d{1,2})\\b/i.test(candidate.title || "");
-      const tvDetail = isTvCandidate ? tvAvailabilityMarkup(state.libraryDetail) : "";
-      selectedResultEl.innerHTML = `
-        <article class="media-hero">
-          ${candidate.poster_url
-            ? `<img class="media-hero-poster" src="${escapeHtml(candidate.poster_url)}" alt="">`
-            : `<div class="media-hero-poster" aria-hidden="true"></div>`}
-          <div class="media-hero-copy">
-            <div><span class="result-eyebrow">Selected result ${content ? state.selectedContent + 1 : state.selected + 1}</span><strong class="result-title">${escapeHtml(content?.title || candidate.title || "Untitled result")}</strong></div>
-            <div class="result-meta"><span class="meta-chip">${escapeHtml(variantLanguage(variant) || candidateLanguage(candidate))}</span><span class="meta-chip">${escapeHtml(variant?.quality === "Multiple" ? "Multiple qualities" : (variant?.quality || candidate.quality || "Quality unknown"))}</span><span class="meta-chip">Target ${escapeHtml(state.quality === "all" ? "all qualities" : state.quality)}</span><span class="meta-chip">${escapeHtml(variant?.sources?.length ? `${variant.sources.length} source${variant.sources.length === 1 ? "" : "s"}` : candidate.source_name || "Existing Site")}</span>${isTvCandidate ? '<span class="meta-chip">TV Series</span>' : '<span class="meta-chip">Movie</span>'}</div>
-            ${libraryLabel ? `<span class="selected-library-note ${escapeHtml(candidate.library_status)}">${escapeHtml(libraryLabel)}</span>` : ""}
-          </div>
-        </article>
-        ${tvDetail}
-      `;
-    }
-
     function renderCandidates() {
-      findBtn.disabled = state.busy || !hasSelection();
-      findBtn.textContent = state.episodeTarget ? "Find Episode Link" : "Find Links";
-      renderSelectedCandidate();
       const hasContents = state.contents.length > 0;
       if (!hasContents && !state.candidates.length) {
         posterPanelEl.classList.add("is-hidden");
@@ -1793,20 +1658,23 @@ HTML = """<!doctype html>
       posterPanelEl.classList.remove("is-hidden");
       if (hasContents) {
         candidatesEl.innerHTML = state.contents.map((content, contentIndex) => `
-          <article class="candidate poster-card content-card" data-content-index="${contentIndex}" title="${escapeHtml(content.title)}">
+          <article class="candidate content-card ${contentIndex === state.selectedContent ? "active" : ""}" data-content-index="${contentIndex}" title="${escapeHtml(content.title)}">
             <span class="poster-frame">
               ${content.poster
                 ? `<img class="poster" src="${escapeHtml(content.poster)}" alt="" loading="lazy">`
                 : `<span class="poster empty-poster">NO IMG</span>`}
-              <span class="poster-badge">${contentIndex + 1}</span>
             </span>
-            <span class="content-summary"><strong class="content-title">${escapeHtml(content.title || "Untitled result")}</strong><small class="content-counts">${content.releaseVariants?.length || 0} variants · ${content.totalSources || 0} sources</small></span>
-            <span class="release-variants">${(content.releaseVariants || []).map((variant, variantIndex) => `<button class="variant-choice ${contentIndex === state.selectedContent && variantIndex === state.selectedVariant ? "active" : ""}" data-content-index="${contentIndex}" data-variant-index="${variantIndex}">${escapeHtml([variantLanguage(variant), variant.quality === "Multiple" ? "Multiple qualities" : variant.quality, variant.releaseType !== "Unknown" ? variant.releaseType : "", variant.approxSize].filter(Boolean).join(" · "))}</button>`).join("")}</span>
+            <button class="content-summary content-select" data-content-index="${contentIndex}" aria-expanded="${contentIndex === state.selectedContent ? "true" : "false"}"><strong class="content-title">${escapeHtml(content.title || "Untitled result")}</strong><span class="content-meta"><span>${escapeHtml(content.year || "Year unknown")}</span><span>${escapeHtml(content.mediaType === "tv" ? "TV Show" : "Movie")}</span><span>${escapeHtml((content.languages || []).join(" · ") || "Language unknown")}</span><span>${content.releaseVariants?.length || 0} release variants</span><span>${content.totalSources || 0} sources</span>${(() => { const status = content.releaseVariants?.[0]?.sources?.[0]?.workflowMetadata?.candidate?.library_status; return status === "available" ? '<span class="available">In Jellyfin</span>' : status === "missing" ? '<span class="missing">Not in Jellyfin</span>' : '<span>Jellyfin unknown</span>'; })()}</span></button>
+            ${contentIndex === state.selectedContent ? `<div class="release-workspace"><div class="release-variants">${(content.releaseVariants || []).map((variant, variantIndex) => `<button class="variant-choice ${variantIndex === state.selectedVariant ? "active" : ""}" data-content-index="${contentIndex}" data-variant-index="${variantIndex}">${escapeHtml([variantLanguage(variant), variant.releaseType !== "Unknown" ? variant.releaseType : "Release", variant.quality === "Multiple" ? "Multiple qualities" : variant.quality, `${variant.sources?.length || 0} sources`].filter(Boolean).join(" · "))}</button>`).join("")}</div>${state.selectedVariant < 0 ? '<p class="variant-helper">Select a release to continue.</p>' : ""}<button class="btn find-release" data-find-content="${contentIndex}" ${state.busy || state.selectedVariant < 0 ? "disabled" : ""}>${state.episodeTarget ? "Find Episode Link" : "Find Links"}</button></div>` : ""}
           </article>
         `).join("");
+        candidatesEl.querySelectorAll(".content-select").forEach((button) => {
+          button.addEventListener("click", () => selectContent(Number(button.dataset.contentIndex)));
+        });
         candidatesEl.querySelectorAll(".variant-choice").forEach((button) => {
           button.addEventListener("click", () => selectContentVariant(Number(button.dataset.contentIndex), Number(button.dataset.variantIndex)));
         });
+        candidatesEl.querySelectorAll(".find-release").forEach((button) => button.addEventListener("click", findLink));
         return;
       }
       candidatesEl.innerHTML = state.candidates.map((candidate, index) => `
@@ -1837,27 +1705,37 @@ HTML = """<!doctype html>
           linksEl.innerHTML = '<div class="empty">Find links will appear here.</div>';
           renderLinks([]);
           renderCandidates();
-          loadTvAvailability(state.candidates[state.selected]);
           setStatus(`Selected result ${state.selected + 1}`);
         });
       });
+    }
+
+    function selectContent(contentIndex) {
+      const changed = state.selectedContent !== contentIndex;
+      state.selectedContent = contentIndex;
+      state.selectedVariant = -1;
+      state.selected = -1;
+      if (changed) resetLinkResults();
+      renderCandidates();
+      setStatus("Select a release to continue.");
+    }
+
+    function resetLinkResults() {
+      state.links = [];
+      state.showLinks = false;
+      state.seasonFilter = "all";
+      state.typeFilter = "all";
+      linkFiltersEl.innerHTML = "";
+      linksEl.innerHTML = '<div class="empty">Find links will appear here.</div>';
+      renderLinks([]);
     }
 
     function selectContentVariant(contentIndex, variantIndex) {
       state.selectedContent = contentIndex;
       state.selectedVariant = variantIndex;
       state.selected = -1;
-      state.links = [];
-      state.showLinks = false;
-      state.seasonFilter = "all";
-      state.typeFilter = "all";
-      state.libraryDetail = null;
-      state.libraryDetailId = "";
-      linkFiltersEl.innerHTML = "";
-      linksEl.innerHTML = '<div class="empty">Find links will appear here.</div>';
-      renderLinks([]);
+      resetLinkResults();
       renderCandidates();
-      loadTvAvailability(selectedCandidate());
       setStatus(`Selected ${variantLanguage(selectedVariant()) || "release"} ${selectedVariant()?.quality || ""}`.trim());
     }
 
@@ -2220,22 +2098,15 @@ HTML = """<!doctype html>
     }
 
     async function findLink() {
-      const query = queryEl.value.trim();
       const content = selectedContent();
       const variant = selectedVariant();
-      const candidate = selectedCandidate();
-      if (!query || !candidate) {
-        setStatus("Select a result", true);
+      if (!content || !variant) {
+        setStatus("Select a release to continue.", true);
         return;
       }
       const request = beginRequest("find");
-      setStatus(state.quality === "all" ? "Scanning qualities..." : `Scanning ${state.quality}...`);
-      const isSeries = /\\b(season|web\\s*series|series|episode|s\\d{1,2})\\b/i.test(candidate.title || "");
-      const estimateSeconds = state.quality === "all" ? (isSeries ? 12 : 30) : (isSeries ? 4 : 8);
-      startProgress(
-        state.quality === "all" ? "Finding links across qualities" : `Finding ${state.quality} links`,
-        estimateSeconds
-      );
+      setStatus("Verifying sources...");
+      startProgress("Finding verified delivery link", 10);
       state.links = [];
       state.showLinks = true;
       linkFiltersEl.innerHTML = "";
@@ -2245,9 +2116,7 @@ HTML = """<!doctype html>
         const body = await api("/api/find", {
           method: "POST",
           signal: request.signal,
-          body: JSON.stringify(content && variant
-            ? { query, contentId: content.contentId, variantId: variant.variantId, quality: state.quality, episodeTarget: state.episodeTarget || episodeTargetFromQuery(query) }
-            : { query, candidate, quality: state.quality, episodeTarget: state.episodeTarget || episodeTargetFromQuery(query) }),
+          body: JSON.stringify({ contentId: content.contentId, variantId: variant.variantId }),
         });
         if (!requestIsCurrent("find", request.id)) return;
         state.links = body.links || [];
@@ -2269,18 +2138,7 @@ HTML = """<!doctype html>
       }
     }
 
-    $("qualityGrid").querySelectorAll(".quality").forEach((button) => {
-      button.addEventListener("click", () => {
-        state.quality = button.dataset.quality;
-        $("qualityGrid").querySelectorAll(".quality").forEach((item) => item.classList.remove("active"));
-        button.classList.add("active");
-        $("selectedQuality").textContent = button.textContent;
-        $("selectedQualityLabel").textContent = button.textContent;
-      });
-    });
-
     searchBtn.addEventListener("click", search);
-    findBtn.addEventListener("click", findLink);
     $("clearBtn").addEventListener("click", () => {
       queryEl.value = "";
       state.contents = [];
@@ -3550,6 +3408,10 @@ def candidate_for_content_variant(content_id: str, variant_id: str) -> dict[str,
         "variantId": variant_id,
         "sourceId": variant.sources[0].sourceId,
         "failoverSourceIds": [source.sourceId for source in variant.sources],
+        # The selected release, rather than a separate frontend quality
+        # control, owns the quality decision. Multi-quality releases retain
+        # their existing all-quality behaviour.
+        "selected_quality": "all" if variant.quality == "Multiple" else variant.quality,
     })
     return selected
 
@@ -5211,7 +5073,6 @@ class AppHandler(BaseHTTPRequestHandler):
         content_id = str(payload.get("contentId") or "").strip()
         variant_id = str(payload.get("variantId") or "").strip()
         query = str(payload.get("query") or "").strip()
-        quality = str(payload.get("quality") or "1080p").strip()
         requested_episode = payload.get("episodeTarget") or episode_target_from_query(query)
         requested_season = payload.get("seasonTarget")
         if not isinstance(requested_episode, dict):
@@ -5241,6 +5102,7 @@ class AppHandler(BaseHTTPRequestHandler):
             if not candidate_payload:
                 response(self, HTTPStatus.NOT_FOUND, {"ok": False, "error": "Content variant has expired; search again"})
                 return
+        quality = str(payload.get("quality") or candidate_payload.get("selected_quality") or "1080p").strip()
         title = str(candidate_payload.get("title") or "").strip()
         url = str(candidate_payload.get("url") or "").strip()
         # New callers identify a normalized content/variant; the legacy UI
