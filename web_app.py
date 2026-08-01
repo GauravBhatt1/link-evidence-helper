@@ -90,17 +90,12 @@ RESOLVED_SIZE_CACHE: BoundedCache[str, str] = BoundedCache(1024)
 FIND_RESULT_CACHE: BoundedCache[str, tuple[float, dict[str, Any]]] = BoundedCache(256)
 CONTENT_VARIANT_CACHE: BoundedCache[str, tuple[float, list[Any]]] = BoundedCache(128)
 WORKFLOW_PREFETCH_CACHE: BoundedCache[str, tuple[float, dict[str, Any]]] = BoundedCache(128)
-SEARCH_ADAPTER_FAILURE_UNTIL: BoundedCache[str, float] = BoundedCache(128)
 WORKFLOW_PREFETCH_INFLIGHT: set[str] = set()
 WORKFLOW_PREFETCH_LOCK = threading.Lock()
 WORKFLOW_PREFETCH_SLOTS = threading.BoundedSemaphore(4)
 WORKFLOW_PREFETCH_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="workflow-prefetch")
 MEDIA_LIBRARY_CACHE: tuple[float, dict[str, list[dict[str, str]]]] = (0, {})
 JELLYFIN_LIBRARY_CACHE: tuple[float, dict[str, list[dict[str, str]]]] = (0, {})
-# An unavailable optional integration must not make every public search wait
-# for a fresh connection timeout.  Unlike a successful index this stores no
-# media data; it is only a short retry-backoff marker.
-JELLYFIN_LIBRARY_FAILURE_UNTIL = 0.0
 JELLYFIN_SHOW_DETAIL_CACHE: BoundedCache[str, tuple[float, dict[str, Any]]] = BoundedCache(256)
 AUTO_SYNC_LAST_RUN = 0.0
 TMDB_CACHE_SECONDS = 86400
@@ -109,9 +104,6 @@ FIND_CACHE_SECONDS = 3600
 CONTENT_VARIANT_CACHE_SECONDS = 900
 WORKFLOW_PREFETCH_CACHE_SECONDS = 1800
 MEDIA_LIBRARY_CACHE_SECONDS = 300
-JELLYFIN_FAILURE_BACKOFF_SECONDS = 60
-SEARCH_ADAPTER_TIMEOUT_SECONDS = 5
-SEARCH_ADAPTER_FAILURE_BACKOFF_SECONDS = 60
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w154"
 TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w1280"
 VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".m4v", ".webm", ".ts"}
@@ -3101,15 +3093,13 @@ def add_library_item_entry(index: dict[str, list[dict[str, str]]], item: dict[st
 
 
 def scan_jellyfin_library(timeout: float = 12.0) -> dict[str, list[dict[str, str]]]:
-    global JELLYFIN_LIBRARY_CACHE, JELLYFIN_LIBRARY_FAILURE_UNTIL
+    global JELLYFIN_LIBRARY_CACHE
     if not JELLYFIN_URL or not JELLYFIN_API_KEY:
         return {}
     now = time.time()
     cached_at, cached_index = JELLYFIN_LIBRARY_CACHE
     if cached_index and now - cached_at < MEDIA_LIBRARY_CACHE_SECONDS:
         return cached_index
-    if now < JELLYFIN_LIBRARY_FAILURE_UNTIL:
-        return {}
 
     base_url = JELLYFIN_URL.rstrip("/")
     index: dict[str, list[dict[str, str]]] = {}
@@ -3138,9 +3128,7 @@ def scan_jellyfin_library(timeout: float = 12.0) -> dict[str, list[dict[str, str
                 add_library_item_entry(index, item, "jellyfin")
     except Exception as exc:
         safe_log_warning("Jellyfin library scan failed", exc)
-        JELLYFIN_LIBRARY_FAILURE_UNTIL = now + JELLYFIN_FAILURE_BACKOFF_SECONDS
         return {}
-    JELLYFIN_LIBRARY_FAILURE_UNTIL = 0.0
     JELLYFIN_LIBRARY_CACHE = (now, index)
     return index
 
@@ -3153,7 +3141,7 @@ def trigger_jellyfin_library_refresh(timeout: float = 12.0) -> dict[str, Any]:
     finish indexing.  Local-library scanning deliberately remains independent
     so a temporary Jellyfin outage never blocks the dashboard's scan.
     """
-    global JELLYFIN_LIBRARY_CACHE, JELLYFIN_LIBRARY_FAILURE_UNTIL, JELLYFIN_SHOW_DETAIL_CACHE
+    global JELLYFIN_LIBRARY_CACHE, JELLYFIN_SHOW_DETAIL_CACHE
     configured = bool(JELLYFIN_URL and JELLYFIN_API_KEY)
     if not configured:
         return {
@@ -3183,7 +3171,6 @@ def trigger_jellyfin_library_refresh(timeout: float = 12.0) -> dict[str, Any]:
         }
     # The following library reads must not use a pre-refresh snapshot.
     JELLYFIN_LIBRARY_CACHE = (0, {})
-    JELLYFIN_LIBRARY_FAILURE_UNTIL = 0.0
     JELLYFIN_SHOW_DETAIL_CACHE.clear()
     return {
         "configured": True,
@@ -3456,37 +3443,15 @@ def enabled_saved_adapters() -> list[dict[str, Any]]:
 def saved_adapter_search(query: str) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     adapters = enabled_saved_adapters()
     rows: list[dict[str, Any]] = []; failures: list[dict[str, str]] = []
-    now = time.time()
-    eligible = [
-        adapter for adapter in adapters
-        if now >= float(SEARCH_ADAPTER_FAILURE_UNTIL.get(str(adapter["id"]), 0.0))
-    ]
-    for adapter in adapters:
-        retry_at = float(SEARCH_ADAPTER_FAILURE_UNTIL.get(str(adapter["id"]), 0.0))
-        if retry_at > now:
-            failures.append({"id": adapter["id"], "name": adapter["name"], "error": "Temporarily paused after a timeout", "reason": "Temporarily paused after a timeout"})
-    if not eligible:
-        return rows, failures
-
-    # Public search is fail-open: one upstream site may be unavailable, but it
-    # must not make the whole search spinner wait for its network timeout.
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(eligible)))
-    futures = {executor.submit(SiteAdapter(adapter).search, query): adapter for adapter in eligible}
-    done, pending = concurrent.futures.wait(futures, timeout=SEARCH_ADAPTER_TIMEOUT_SECONDS)
-    for future, adapter in futures.items():
-        if future in pending:
-            future.cancel()
-            SEARCH_ADAPTER_FAILURE_UNTIL[str(adapter["id"])] = now + SEARCH_ADAPTER_FAILURE_BACKOFF_SECONDS
-            failures.append({"id": adapter["id"], "name": adapter["name"], "error": "Search timed out", "reason": "Search timed out"})
-            continue
-        try:
-            for candidate in future.result():
-                rows.append({"title": candidate["title"], "url": candidate["url"], "source": f"adapter:{adapter['id']}", "source_id": adapter["id"], "source_name": adapter["name"], "adapter_type": "generated-adapter"})
-        except Exception as exc:
-            failures.append({"id": adapter["id"], "name": adapter["name"], "error": str(exc)[:160], "reason": str(exc)[:160] or "Adapter failed"})
-    # Do not wait for a timed-out third-party request. Its result is discarded,
-    # while the short per-adapter backoff prevents repeated requests piling up.
-    executor.shutdown(wait=False, cancel_futures=True)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(4, len(adapters)))) as executor:
+        futures = {executor.submit(SiteAdapter(adapter).search, query): adapter for adapter in adapters}
+        for future in concurrent.futures.as_completed(futures, timeout=25 if futures else None):
+            adapter = futures[future]
+            try:
+                for candidate in future.result(timeout=12):
+                    rows.append({"title": candidate["title"], "url": candidate["url"], "source": f"adapter:{adapter['id']}", "source_id": adapter["id"], "source_name": adapter["name"], "adapter_type": "generated-adapter"})
+            except Exception as exc:
+                failures.append({"id": adapter["id"], "name": adapter["name"], "error": str(exc)[:160], "reason": str(exc)[:160] or "Adapter failed"})
     return rows, failures
 
 

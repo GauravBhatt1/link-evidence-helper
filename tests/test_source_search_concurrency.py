@@ -1,5 +1,4 @@
 import threading
-import time
 import unittest
 from unittest.mock import patch
 
@@ -30,41 +29,6 @@ class SourceSearchConcurrencyTests(unittest.TestCase):
         self.assertEqual(rows, ["legacy", "custom", "adapter"])
         self.assertEqual(diagnostics, {"custom": {}})
         self.assertEqual(failures, [])
-
-    def test_slow_adapter_does_not_hold_up_all_search_results_and_is_backed_off(self):
-        adapter = {
-            "id": "slow", "name": "Slow source", "enabled": True,
-            "domains": ["slow.example"], "search": {"url_template": "https://slow.example/?q={query}"},
-            "health": {"last_test_status": "passed"},
-        }
-
-        class SlowAdapter:
-            def __init__(self, _config):
-                pass
-
-            def search(self, _query):
-                time.sleep(0.2)
-                return []
-
-        original_backoff = dict(web_app.SEARCH_ADAPTER_FAILURE_UNTIL)
-        web_app.SEARCH_ADAPTER_FAILURE_UNTIL.clear()
-        try:
-            with (
-                patch.object(web_app, "enabled_saved_adapters", return_value=[adapter]),
-                patch.object(web_app, "SiteAdapter", SlowAdapter),
-                patch.object(web_app, "SEARCH_ADAPTER_TIMEOUT_SECONDS", 0.01),
-            ):
-                started = time.monotonic()
-                rows, failures = web_app.saved_adapter_search("test")
-                elapsed = time.monotonic() - started
-                _, backed_off_failures = web_app.saved_adapter_search("test")
-            self.assertEqual(rows, [])
-            self.assertLess(elapsed, 0.1)
-            self.assertEqual(failures[0]["reason"], "Search timed out")
-            self.assertEqual(backed_off_failures[0]["reason"], "Temporarily paused after a timeout")
-        finally:
-            web_app.SEARCH_ADAPTER_FAILURE_UNTIL.clear()
-            web_app.SEARCH_ADAPTER_FAILURE_UNTIL.update(original_backoff)
 
 
 if __name__ == "__main__":

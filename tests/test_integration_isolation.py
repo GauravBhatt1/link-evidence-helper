@@ -8,27 +8,14 @@ class IntegrationIsolationTests(unittest.TestCase):
     def setUp(self):
         self.jellyfin_url = web_app.JELLYFIN_URL
         self.jellyfin_key = web_app.JELLYFIN_API_KEY
-        self.jellyfin_cache = web_app.JELLYFIN_LIBRARY_CACHE
-        self.jellyfin_failure_until = web_app.JELLYFIN_LIBRARY_FAILURE_UNTIL
         web_app.JELLYFIN_URL = "https://jellyfin.invalid"
         web_app.JELLYFIN_API_KEY = "never-log-this-key"
-        web_app.JELLYFIN_LIBRARY_CACHE = (0, {})
-        web_app.JELLYFIN_LIBRARY_FAILURE_UNTIL = 0.0
         web_app.JELLYFIN_SHOW_DETAIL_CACHE.clear()
 
     def tearDown(self):
         web_app.JELLYFIN_URL = self.jellyfin_url
         web_app.JELLYFIN_API_KEY = self.jellyfin_key
-        web_app.JELLYFIN_LIBRARY_CACHE = self.jellyfin_cache
-        web_app.JELLYFIN_LIBRARY_FAILURE_UNTIL = self.jellyfin_failure_until
         web_app.JELLYFIN_SHOW_DETAIL_CACHE.clear()
-
-    def test_jellyfin_failure_is_backed_off_so_search_rows_do_not_repeat_timeout(self):
-        with patch.object(web_app, "urlopen", side_effect=OSError("offline")) as open_mock:
-            self.assertEqual(web_app.scan_jellyfin_library(), {})
-            self.assertEqual(web_app.scan_jellyfin_library(), {})
-        self.assertEqual(open_mock.call_count, 1)
-        self.assertGreater(web_app.JELLYFIN_LIBRARY_FAILURE_UNTIL, 0)
 
     def test_jellyfin_outage_returns_a_generic_detail_error(self):
         with patch.object(web_app, "urlopen", side_effect=OSError("https://jellyfin.invalid/Items?api_key=leak")):
