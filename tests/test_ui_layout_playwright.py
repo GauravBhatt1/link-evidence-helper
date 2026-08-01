@@ -221,7 +221,7 @@ class AggregatedContentCardLayoutTests(unittest.TestCase):
                       };
                     }"""
                 )
-                self.assertEqual(find_requests, [{"contentId": "fixture-14", "variantId": "fixture-variant-14"}])
+                self.assertEqual(find_requests, [{"contentId": "fixture-14", "variantId": "fixture-variant-14", "quality": "1080p"}])
                 self.assertTrue(layout["visible"])
                 self.assertTrue(layout["inActiveCard"])
                 self.assertTrue(layout["inDeliverySlot"])
@@ -230,3 +230,108 @@ class AggregatedContentCardLayoutTests(unittest.TestCase):
                 self.assertLessEqual(layout["linkBottom"], layout["viewportHeight"])
                 self.assertTrue(layout["followsFindButton"])
                 self.assertTrue(layout["beforeNextCard"])
+
+    def test_multi_quality_release_requires_one_quality_and_posts_only_that_choice(self):
+        for width, height in ((1280, 900), (390, 844)):
+            with self.subTest(viewport=f"{width}x{height}"):
+                page = self.browser.new_page(viewport={"width": width, "height": height})
+                self.addCleanup(page.close)
+                find_requests = []
+
+                def route_request(route):
+                    path = urlparse(route.request.url).path
+                    if path == "/index/":
+                        route.fulfill(status=200, content_type="text/html", body=web_app.HTML)
+                        return
+                    if path == "/index/api/wallpapers":
+                        route.fulfill(status=200, content_type="application/json", body=json.dumps({"ok": True, "images": []}))
+                        return
+                    if path == "/index/api/find":
+                        find_requests.append(json.loads(route.request.post_data or "{}"))
+                        route.fulfill(
+                            status=200,
+                            content_type="application/json",
+                            body=json.dumps({
+                                "ok": True,
+                                "links": [{
+                                    "quality": "1080p",
+                                    "size": "1.2 GB",
+                                    "url": "https://files.example/focused-quality.mkv",
+                                    "source_name": "Fixture source",
+                                    "kind": "Video file",
+                                }],
+                            }),
+                        )
+                        return
+                    route.fulfill(status=404, content_type="text/plain", body="Not found")
+
+                page.route("**/*", route_request)
+                page.goto("http://fixture.test/index/", wait_until="domcontentloaded")
+                page.evaluate(
+                    """
+                    () => {
+                      state.contents = [{
+                        contentId: "quality-fixture",
+                        title: "Quality fixture",
+                        year: "2024",
+                        mediaType: "movie",
+                        languages: ["Hindi"],
+                        totalSources: 2,
+                        poster: "",
+                        releaseVariants: [{
+                          variantId: "quality-fixture-variant",
+                          language: "Hindi",
+                          releaseType: "WEB-DL",
+                          quality: "Multiple",
+                          availableQualities: ["720p", "1080p"],
+                          sources: [{}, {}],
+                        }],
+                      }];
+                      state.candidates = [];
+                      state.selectedContent = -1;
+                      state.selectedVariant = -1;
+                      state.selectedVariantQuality = "";
+                      state.hasSearched = true;
+                      renderCandidates();
+                    }
+                    """
+                )
+
+                page.locator(".content-select").click()
+                page.locator(".variant-choice").click()
+                page.wait_for_selector(".variant-quality-choice")
+                self.assertTrue(page.locator(".find-release").is_disabled())
+                self.assertEqual(page.locator(".variant-helper").inner_text(), "Select a quality to continue.")
+
+                quality_layout = page.evaluate(
+                    """() => {
+                      const card = document.querySelector(".content-card.active");
+                      const options = [...card.querySelectorAll(".variant-quality-choice")];
+                      return {
+                        cardWidth: card.getBoundingClientRect().width,
+                        cardScrollWidth: card.scrollWidth,
+                        optionHeights: options.map((button) => button.getBoundingClientRect().height),
+                      };
+                    }"""
+                )
+                self.assertLessEqual(quality_layout["cardScrollWidth"], quality_layout["cardWidth"] + 1)
+                self.assertTrue(all(height >= 40 for height in quality_layout["optionHeights"]))
+                if width <= 390:
+                    self.assertTrue(all(height >= 44 for height in quality_layout["optionHeights"]))
+
+                page.locator('.variant-quality-choice[data-quality="1080p"]').click()
+                self.assertTrue(page.locator(".find-release").is_enabled())
+                page.locator(".find-release").click()
+                page.wait_for_selector("#linksPanel:not(.is-hidden) .link-card")
+                page.wait_for_function(
+                    """() => {
+                      const panel = document.querySelector("#linksPanel");
+                      const rect = panel?.getBoundingClientRect();
+                      return Boolean(rect && rect.top >= 0 && rect.top < window.innerHeight);
+                    }"""
+                )
+                self.assertEqual(find_requests, [{
+                    "contentId": "quality-fixture",
+                    "variantId": "quality-fixture-variant",
+                    "quality": "1080p",
+                }])

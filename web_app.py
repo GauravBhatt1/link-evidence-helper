@@ -52,9 +52,64 @@ from runtime_support import BoundedCache
 
 
 DEFAULT_QUALITIES = ("480p", "720p", "1080p", "2160p", "4k")
+_QUALITY_ALIASES = {"fhd": "1080p", "4k": "2160p", "uhd": "2160p"}
 DIRECT_HOST_MARKERS = (
     "video-downloads.googleusercontent.com",
 )
+
+
+def normalize_quality_choice(value: Any) -> str:
+    """Normalize quality aliases before they reach a focused content lookup."""
+    normalized = str(value or "").strip().lower()
+    return _QUALITY_ALIASES.get(normalized, normalized)
+
+
+def variant_available_qualities(variant: Any) -> tuple[str, ...]:
+    """Expose one stable quality spelling for a normalized release variant."""
+    choices: list[str] = []
+    for value in getattr(variant, "availableQualities", []) or []:
+        quality = normalize_quality_choice(value)
+        if quality and quality not in choices:
+            choices.append(quality)
+    if choices:
+        return tuple(choices)
+    fallback = normalize_quality_choice(getattr(variant, "quality", ""))
+    if fallback and fallback not in {"multiple", "unknown", "all", "*"}:
+        return (fallback,)
+    return ()
+
+
+def preferred_variant_quality(variant: Any) -> str:
+    """Keep older identity-only callers focused on one deterministic quality."""
+    choices = variant_available_qualities(variant)
+    if "1080p" in choices:
+        return "1080p"
+    return choices[0] if choices else "1080p"
+
+
+def selected_content_variant_quality(value: Any, candidate_payload: dict[str, Any]) -> str:
+    """Validate a quality selected within the normalized content workspace."""
+    requested = normalize_quality_choice(value)
+    if requested in {"all", "*"}:
+        raise ValueError("Select one quality to continue.")
+    available = tuple(
+        quality
+        for quality in (normalize_quality_choice(item) for item in (candidate_payload.get("availableQualities") or []))
+        if quality
+    )
+    if requested:
+        if available and requested not in available:
+            raise ValueError("Select a quality available for this release.")
+        return requested
+    fallback = normalize_quality_choice(candidate_payload.get("selected_quality"))
+    return fallback if fallback and fallback not in {"all", "*", "multiple", "unknown"} else "1080p"
+
+
+def quality_targets(quality: str) -> tuple[str, ...]:
+    """Preserve legacy multi-quality requests while focused content calls stay single."""
+    return DEFAULT_QUALITIES if str(quality or "").strip().lower() in {"all", "*"} else (quality,)
+
+
 COPYABLE_HOST_MARKERS = DIRECT_HOST_MARKERS + (
     "cloud-dl.",
     "quick.cloudpaglu",
@@ -743,6 +798,11 @@ HTML = """<!doctype html>
     .release-variants { display: grid; gap: 6px; }
     .variant-choice { width: 100%; min-height: 42px; border: 1px solid var(--line); border-radius: 7px; padding: 8px 9px; background: #17232d; color: var(--text); cursor: pointer; font: inherit; font-size: 12px; text-align: left; }
     .variant-choice.active { border-color: var(--accent); background: rgba(49, 139, 184, .24); }
+    .variant-quality-picker { display: grid; gap: 6px; }
+    .variant-quality-label { color: var(--muted); font-size: 12px; }
+    .variant-quality-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 6px; }
+    .variant-quality-choice { min-height: 40px; border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px; background: #17232d; color: var(--text); cursor: pointer; font: inherit; font-size: 12px; }
+    .variant-quality-choice.active { border-color: var(--accent); background: rgba(49, 139, 184, .24); color: #d9f4ff; }
     .variant-helper { margin: 0; color: var(--muted); font-size: 12px; }
     .find-release { width: 100%; }
     .delivery-links-slot { display: grid; }
@@ -1223,6 +1283,7 @@ HTML = """<!doctype html>
       .content-card .content-summary { padding: 9px; min-width: 0; }
       .content-card .release-variants { grid-template-columns: 1fr; }
       .content-card .variant-choice { min-height: 44px; }
+      .content-card .variant-quality-choice { min-height: 44px; }
     }
   </style>
 </head>
@@ -1272,7 +1333,7 @@ HTML = """<!doctype html>
           <span class="head-note">New lookup</span>
         </div>
         <div class="panel-body">
-          <p class="search-intro">Find a title, choose its <strong>exact release</strong>, then retrieve the final link.</p>
+          <p class="search-intro">Find a title, choose its <strong>release and quality</strong>, then retrieve the final link.</p>
           <div class="row">
             <div class="field">
               <label for="query">Name</label>
@@ -1317,11 +1378,11 @@ HTML = """<!doctype html>
       <section class="welcome-panel" id="welcomePanel" aria-labelledby="welcomeTitle">
         <div class="welcome-copy">
           <h2 id="welcomeTitle">Find the right release, quickly.</h2>
-          <p>Search across your configured sources, choose the exact title, then retrieve available links. Your preferred quality is already selected.</p>
+          <p>Search across your configured sources, choose the exact title and quality, then retrieve available links.</p>
         </div>
         <div class="workflow-steps" aria-label="How search works">
           <div class="workflow-step"><b>1</b><span><strong>Search</strong><br>Start with a movie or series title.</span></div>
-          <div class="workflow-step"><b>2</b><span><strong>Choose</strong><br>Confirm the language and release.</span></div>
+          <div class="workflow-step"><b>2</b><span><strong>Choose</strong><br>Confirm the release and quality.</span></div>
           <div class="workflow-step"><b>3</b><span><strong>Retrieve</strong><br>Get the verified links that are available.</span></div>
         </div>
       </section>
@@ -1343,6 +1404,7 @@ HTML = """<!doctype html>
       selected: -1,
       selectedContent: -1,
       selectedVariant: -1,
+      selectedVariantQuality: "",
       busy: false,
       seasonFilter: "all",
       typeFilter: "all",
@@ -1642,6 +1704,56 @@ HTML = """<!doctype html>
       return content?.releaseVariants?.[state.selectedVariant] || null;
     }
 
+    function normalizeVariantQuality(value) {
+      const quality = String(value || "").trim().toLowerCase();
+      return ({ fhd: "1080p", "4k": "2160p", uhd: "2160p" })[quality] || quality;
+    }
+
+    function formatVariantQuality(value) {
+      return normalizeVariantQuality(value) || "Quality";
+    }
+
+    function variantQualityOptions(variant) {
+      const listed = Array.isArray(variant?.availableQualities)
+        ? variant.availableQualities.map(normalizeVariantQuality).filter(Boolean)
+        : [];
+      const unique = [...new Set(listed)];
+      if (unique.length) return unique;
+      const fallback = normalizeVariantQuality(variant?.quality);
+      if (fallback && !["multiple", "unknown", "all", "*"].includes(fallback)) return [fallback];
+      // A source can omit quality labels entirely. Asking once here still
+      // keeps its lookup focused rather than falling back to every quality.
+      return ["480p", "720p", "1080p", "2160p"];
+    }
+
+    function chosenVariantQuality() {
+      const options = variantQualityOptions(selectedVariant());
+      return state.selectedVariantQuality || (options.length === 1 ? options[0] : "");
+    }
+
+    function variantQualitySummary(variant) {
+      return variantQualityOptions(variant).map(formatVariantQuality).join(" / ");
+    }
+
+    function variantQualityPicker(variant, contentIndex, variantIndex) {
+      const options = variantQualityOptions(variant);
+      if (options.length <= 1) return "";
+      const selectedQuality = chosenVariantQuality();
+      return `<div class="variant-quality-picker"><span class="variant-quality-label">Choose quality</span><div class="variant-quality-options">${options.map((quality) => `<button class="variant-quality-choice ${quality === selectedQuality ? "active" : ""}" data-content-index="${contentIndex}" data-variant-index="${variantIndex}" data-quality="${escapeHtml(quality)}" aria-pressed="${quality === selectedQuality ? "true" : "false"}">${escapeHtml(formatVariantQuality(quality))}</button>`).join("")}</div></div>`;
+    }
+
+    function releaseWorkspaceMarkup(content, contentIndex) {
+      const variant = selectedVariant();
+      const selectedQuality = chosenVariantQuality();
+      const helper = !variant
+        ? "Select a release to continue."
+        : !selectedQuality
+          ? "Select a quality to continue."
+          : "";
+      const findDisabled = state.busy || !variant || !selectedQuality;
+      return `<div class="release-workspace"><div class="release-variants">${(content.releaseVariants || []).map((item, variantIndex) => `<button class="variant-choice ${variantIndex === state.selectedVariant ? "active" : ""}" data-content-index="${contentIndex}" data-variant-index="${variantIndex}">${escapeHtml([variantLanguage(item), item.releaseType !== "Unknown" ? item.releaseType : "Release", variantQualitySummary(item), `${item.sources?.length || 0} sources`].filter(Boolean).join(" · "))}</button>`).join("")}</div>${variant ? variantQualityPicker(variant, contentIndex, state.selectedVariant) : ""}${helper ? `<p class="variant-helper">${helper}</p>` : ""}<button class="btn find-release" data-find-content="${contentIndex}" ${findDisabled ? "disabled" : ""}>${state.episodeTarget ? "Find Episode Link" : "Find Links"}</button>${state.showLinks && state.links.length ? '<div class="delivery-links-slot" data-delivery-links-slot aria-live="polite"></div>' : ""}</div>`;
+    }
+
     function selectedCandidate() {
       const variant = selectedVariant();
       return variant?.sources?.[0]?.workflowMetadata?.candidate || state.candidates[state.selected] || null;
@@ -1727,7 +1839,7 @@ HTML = """<!doctype html>
                 : `<span class="poster empty-poster">NO IMG</span>`}
             </span>
             <button class="content-summary content-select" data-content-index="${contentIndex}" aria-expanded="${contentIndex === state.selectedContent ? "true" : "false"}"><strong class="content-title">${escapeHtml(content.title || "Untitled result")}</strong><span class="content-meta"><span>${escapeHtml(content.year || "Year unknown")}</span><span>${escapeHtml(content.mediaType === "tv" ? "TV Show" : "Movie")}</span><span>${escapeHtml((content.languages || []).join(" · ") || "Language unknown")}</span><span>${content.releaseVariants?.length || 0} release variants</span><span>${content.totalSources || 0} sources</span>${(() => { const status = content.releaseVariants?.[0]?.sources?.[0]?.workflowMetadata?.candidate?.library_status; return status === "available" ? '<span class="available">In Jellyfin</span>' : status === "missing" ? '<span class="missing">Not in Jellyfin</span>' : '<span>Jellyfin unknown</span>'; })()}</span></button>
-            ${contentIndex === state.selectedContent ? `<div class="release-workspace"><div class="release-variants">${(content.releaseVariants || []).map((variant, variantIndex) => `<button class="variant-choice ${variantIndex === state.selectedVariant ? "active" : ""}" data-content-index="${contentIndex}" data-variant-index="${variantIndex}">${escapeHtml([variantLanguage(variant), variant.releaseType !== "Unknown" ? variant.releaseType : "Release", variant.quality === "Multiple" ? "Multiple qualities" : variant.quality, `${variant.sources?.length || 0} sources`].filter(Boolean).join(" · "))}</button>`).join("")}</div>${state.selectedVariant < 0 ? '<p class="variant-helper">Select a release to continue.</p>' : ""}<button class="btn find-release" data-find-content="${contentIndex}" ${state.busy || state.selectedVariant < 0 ? "disabled" : ""}>${state.episodeTarget ? "Find Episode Link" : "Find Links"}</button>${state.showLinks && state.links.length ? '<div class="delivery-links-slot" data-delivery-links-slot aria-live="polite"></div>' : ""}</div>` : ""}
+            ${contentIndex === state.selectedContent ? releaseWorkspaceMarkup(content, contentIndex) : ""}
           </article>
         `).join("");
         candidatesEl.querySelectorAll(".content-select").forEach((button) => {
@@ -1735,6 +1847,9 @@ HTML = """<!doctype html>
         });
         candidatesEl.querySelectorAll(".variant-choice").forEach((button) => {
           button.addEventListener("click", () => selectContentVariant(Number(button.dataset.contentIndex), Number(button.dataset.variantIndex)));
+        });
+        candidatesEl.querySelectorAll(".variant-quality-choice").forEach((button) => {
+          button.addEventListener("click", () => selectContentVariantQuality(Number(button.dataset.contentIndex), Number(button.dataset.variantIndex), button.dataset.quality || ""));
         });
         candidatesEl.querySelectorAll(".find-release").forEach((button) => button.addEventListener("click", findLink));
         placeDeliveryLinks();
@@ -1758,6 +1873,7 @@ HTML = """<!doctype html>
           state.selected = Number(button.dataset.index);
           state.selectedContent = -1;
           state.selectedVariant = -1;
+          state.selectedVariantQuality = "";
           state.links = [];
           state.showLinks = false;
           state.seasonFilter = "all";
@@ -1778,6 +1894,7 @@ HTML = """<!doctype html>
       const changed = state.selectedContent !== contentIndex;
       state.selectedContent = contentIndex;
       state.selectedVariant = -1;
+      state.selectedVariantQuality = "";
       state.selected = -1;
       if (changed) resetLinkResults();
       renderCandidates();
@@ -1798,9 +1915,27 @@ HTML = """<!doctype html>
       state.selectedContent = contentIndex;
       state.selectedVariant = variantIndex;
       state.selected = -1;
+      const options = variantQualityOptions(selectedVariant());
+      state.selectedVariantQuality = options.length === 1 ? options[0] : "";
       resetLinkResults();
       renderCandidates();
-      setStatus(`Selected ${variantLanguage(selectedVariant()) || "release"} ${selectedVariant()?.quality || ""}`.trim());
+      if (!chosenVariantQuality()) {
+        setStatus("Select a quality to continue.");
+        return;
+      }
+      setStatus(`Selected ${variantLanguage(selectedVariant()) || "release"} ${formatVariantQuality(chosenVariantQuality())}`.trim());
+    }
+
+    function selectContentVariantQuality(contentIndex, variantIndex, quality) {
+      state.selectedContent = contentIndex;
+      state.selectedVariant = variantIndex;
+      state.selected = -1;
+      const selectedQuality = normalizeVariantQuality(quality);
+      if (!variantQualityOptions(selectedVariant()).includes(selectedQuality)) return;
+      state.selectedVariantQuality = selectedQuality;
+      resetLinkResults();
+      renderCandidates();
+      setStatus(`${formatVariantQuality(selectedQuality)} selected. Find Links is ready.`);
     }
 
     function linkType(item) {
@@ -2137,6 +2272,7 @@ HTML = """<!doctype html>
         state.selected = -1;
         state.selectedContent = -1;
         state.selectedVariant = -1;
+        state.selectedVariantQuality = "";
         renderCandidates();
         const sourceCounts=(body.sources||[]).filter(source=>source.enabled).map(source=>`${source.name}: ${source.results||0}`).join(" • ");
         const adapterFailures=(body.adapterFailures||[]).map(item=>`⚠ ${item.name}: ${item.reason||"adapter failed"}`).join(" • ");
@@ -2152,6 +2288,9 @@ HTML = """<!doctype html>
         state.candidates = [];
         state.hasSearched = true;
         state.selected = -1;
+        state.selectedContent = -1;
+        state.selectedVariant = -1;
+        state.selectedVariantQuality = "";
         renderCandidates();
         setStatus(error.message, true);
         failProgress("Search failed");
@@ -2167,9 +2306,14 @@ HTML = """<!doctype html>
         setStatus("Select a release to continue.", true);
         return;
       }
+      const selectedQuality = chosenVariantQuality();
+      if (!selectedQuality) {
+        setStatus("Select a quality to continue.", true);
+        return;
+      }
       const request = beginRequest("find");
-      setStatus("Verifying sources...");
-      startProgress("Finding verified delivery link", 10);
+      setStatus(`Verifying ${formatVariantQuality(selectedQuality)} sources...`);
+      startProgress(`Finding ${formatVariantQuality(selectedQuality)} verified delivery link`, 8);
       state.links = [];
       state.showLinks = false;
       state.linkMessage = "";
@@ -2180,7 +2324,7 @@ HTML = """<!doctype html>
         const body = await api("/api/find", {
           method: "POST",
           signal: request.signal,
-          body: JSON.stringify({ contentId: content.contentId, variantId: variant.variantId }),
+          body: JSON.stringify({ contentId: content.contentId, variantId: variant.variantId, quality: selectedQuality }),
         });
         if (!requestIsCurrent("find", request.id)) return;
         state.links = body.links || [];
@@ -2216,6 +2360,7 @@ HTML = """<!doctype html>
       state.selected = -1;
       state.selectedContent = -1;
       state.selectedVariant = -1;
+      state.selectedVariantQuality = "";
       state.episodeTarget = null;
       state.episodeFallback = false;
       renderCandidates();
@@ -3470,6 +3615,7 @@ def candidate_for_content_variant(content_id: str, variant_id: str) -> dict[str,
     # The current resolver accepts the pre-aggregation candidate shape.  Keep
     # that adapter here rather than leaking it back into the frontend.
     selected = dict(variant.sources[0].workflowMetadata["candidate"])
+    available_qualities = variant_available_qualities(variant)
     selected.update({
         "contentId": content_id,
         "variantId": variant_id,
@@ -3479,10 +3625,11 @@ def candidate_for_content_variant(content_id: str, variant_id: str) -> dict[str,
             dict(source.workflowMetadata["candidate"])
             for source in variant.sources[1:]
         ],
-        # The selected release, rather than a separate frontend quality
-        # control, owns the quality decision. Multi-quality releases retain
-        # their existing all-quality behaviour.
-        "selected_quality": "all" if variant.quality == "Multiple" else variant.quality,
+        # Identity-only callers remain compatible, but never trigger an
+        # all-quality scan. The current workspace supplies an explicit choice
+        # whenever this variant contains more than one quality.
+        "availableQualities": list(available_qualities),
+        "selected_quality": preferred_variant_quality(variant),
     })
     return selected
 
@@ -4920,14 +5067,9 @@ class AppHandler(BaseHTTPRequestHandler):
                 for source in source_rows
             ]
             source_summary.extend([{"id": adapter["id"], "name": adapter["name"], "url": "https://"+adapter["domains"][0], "enabled": adapter["enabled"], "results": sum(1 for candidate in candidates if isinstance(candidate, dict) and candidate.get("source_id") == adapter["id"]), "health": adapter.get("health", {}).get("status", "Working")} for adapter in ENABLED_ADAPTERS])
-            # hdmovie2r's public host needs several seconds to generate its
-            # visible Direct link. Start its normal, already-authorized
-            # 1080p workflow while the user is reviewing the search cards.
-            # The result is only cached after the final response is verified.
-            candidate = next((item for item in candidates if isinstance(item, dict) and item.get("source_id") == "hdmovie2r_ltd"), None)
-            adapter = next((item for item in enabled_saved_adapters() if item["id"] == "hdmovie2r_ltd"), None)
-            if candidate and adapter:
-                prefetch_adapter_workflow(adapter, str(candidate["url"]), "1080p")
+            # Quality is now chosen within a release card. Do not start a
+            # speculative 1080p workflow while the user may choose another
+            # quality; it would compete with the focused lookup.
             contents, legacy_candidates = aggregate_search_response(candidates, query)
             response(
                 self,
@@ -5165,7 +5307,8 @@ class AppHandler(BaseHTTPRequestHandler):
             except (TypeError, ValueError):
                 requested_season = None
         candidate_payload = payload.get("candidate") or {}
-        if content_id or variant_id:
+        content_variant_request = bool(content_id or variant_id)
+        if content_variant_request:
             if not content_id or not variant_id:
                 response(self, HTTPStatus.BAD_REQUEST, {"ok": False, "error": "contentId and variantId are required together"})
                 return
@@ -5173,7 +5316,14 @@ class AppHandler(BaseHTTPRequestHandler):
             if not candidate_payload:
                 response(self, HTTPStatus.NOT_FOUND, {"ok": False, "error": "Content variant has expired; search again"})
                 return
-        quality = str(payload.get("quality") or candidate_payload.get("selected_quality") or "1080p").strip()
+        if content_variant_request:
+            try:
+                quality = selected_content_variant_quality(payload.get("quality"), candidate_payload)
+            except ValueError as exc:
+                response(self, HTTPStatus.BAD_REQUEST, {"ok": False, "error": str(exc)})
+                return
+        else:
+            quality = str(payload.get("quality") or candidate_payload.get("selected_quality") or "1080p").strip()
         title = str(candidate_payload.get("title") or "").strip()
         url = str(candidate_payload.get("url") or "").strip()
         # New callers identify a normalized content/variant; the legacy UI
@@ -5294,7 +5444,7 @@ class AppHandler(BaseHTTPRequestHandler):
             response(self, HTTPStatus.OK, payload)
             return
 
-        qualities = DEFAULT_QUALITIES if quality.lower() in {"all", "*"} else (quality,)
+        qualities = quality_targets(quality)
         links_by_key: dict[str, dict[str, str]] = {}
         debug: list[dict[str, str]] = []
         # ``candidate.source`` is the configured index site, while ``url`` is

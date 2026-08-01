@@ -20,7 +20,7 @@ from network_safety import REDIRECT_CODES, SafeSession, redact_url, validate_pub
 from playwright_renderer import PlaywrightRenderer, RendererUnavailable
 from challenge_detection import visible_document_text
 
-QUALITY_RE = re.compile(r"\b(?:2160|1440|1080|720|480)p\b|\b4k\b", re.I)
+QUALITY_RE = re.compile(r"\b(?:2160|1440|1080|720|480)p\b|\b(?:4k|uhd|fhd)\b", re.I)
 DOWNLOAD_RE = re.compile(r"\b(?:download|direct|instant|mirror|server|drive|gdf[l]?ix|vcloud|fast\s*cloud|zipdisk|cloud\s*resume|quick\s*download|get\s*(?:link|file)|continue)\b", re.I)
 NAVIGATION_RE = re.compile(r"\b(?:home|menu|privacy|terms|contact|telegram|trailer|login|sign\s*in|download\s*tips|tips)\b", re.I)
 # HubDrive pages expose the same narrow, visible Direct/Instant Download
@@ -144,6 +144,18 @@ def _parse(url: str, body: str) -> list[Action]:
 
 def _is_download(action: Action) -> bool:
     return bool(DOWNLOAD_RE.search(" ".join((action.label, action.url, action.reason))))
+
+
+def _canonical_quality(value: str) -> str:
+    normalized = str(value or "").strip().lower()
+    return {"4k": "2160p", "uhd": "2160p", "fhd": "1080p"}.get(normalized, normalized)
+
+
+def _quality_matches(value: str, selected_quality: str | None) -> bool:
+    """Treat visible quality aliases as one requested branch."""
+    if not selected_quality or str(selected_quality).lower() in {"all", "*"}:
+        return True
+    return _canonical_quality(value) == _canonical_quality(selected_quality)
 
 
 def _pick(actions: list[Action], predicate: Any, maximum: int) -> list[Action]:
@@ -468,14 +480,21 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
     else:
         # Headings can make unrelated navigation links inherit a quality label.
         # A root quality branch must be both quality-tagged and download-like.
-        quality_actions = _pick(movie_actions, lambda action: bool(action.quality) and not NAVIGATION_RE.search(action.label) and (not selected_quality or selected_quality.lower() in {"all", "*"} or action.quality.lower() == selected_quality.lower()), MAX_QUALITY_LINKS)
+        quality_actions = _pick(movie_actions, lambda action: bool(action.quality) and not NAVIGATION_RE.search(action.label) and _quality_matches(action.quality, selected_quality), MAX_QUALITY_LINKS)
         if not quality_actions:
-            quality_actions = _pick(movie_actions, _is_download, MAX_QUALITY_LINKS)
+            # Keep an unlabeled public download path as a fallback, but never
+            # quietly jump from the user's chosen branch to another labelled
+            # quality just because the requested label was absent.
+            quality_actions = _pick(
+                movie_actions,
+                lambda action: _is_download(action) and (not action.quality or _quality_matches(action.quality, selected_quality)),
+                MAX_QUALITY_LINKS,
+            )
 
     # A global queue makes this a bounded graph traversal: each download
     # branch is inspected once, rather than stopping after the first landing
     # page or the first quality that happens to be encountered.
-    queue: list[tuple[Action, int, str]] = [(action, 0, action.quality or "Unknown quality") for action in quality_actions]
+    queue: list[tuple[Action, int, str]] = [(action, 0, action.quality or selected_quality or "Unknown quality") for action in quality_actions]
     visited: set[tuple[str, str, str, str]] = set()
     timed_out = False
     while queue and len(visited) < MAX_WORKFLOW_NODES:
@@ -590,8 +609,7 @@ def _analyze_movie_workflow(site_url: str, movie_url: str, selected_quality: str
         next_actions = hubcloud_actions if hubcloud_actions is not None else _branch_actions(server_actions)
         next_actions = [item for item in next_actions if not _same_resource(item.url, action.url)]
         if selected_quality and selected_quality.lower() not in {"all", "*"}:
-            wanted = selected_quality.lower()
-            next_actions = [item for item in next_actions if not item.quality or item.quality.lower() == wanted]
+            next_actions = [item for item in next_actions if not item.quality or _quality_matches(item.quality, selected_quality)]
         if not next_actions:
             row["extracted_action"], row["next_step"] = "No actionable download elements", "Stopped at HTML landing page"
             results.append(base); continue

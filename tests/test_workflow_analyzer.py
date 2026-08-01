@@ -45,6 +45,33 @@ class WorkflowAnalyzerTests(TestCase):
         self.assertEqual(requested, ["https://site.example/movie", "https://cdn.example/movie.mkv"])
         self.assertEqual(result["execution_log"][0]["next_step"], "Same-origin homepage request skipped")
 
+    def test_selected_quality_does_not_fall_back_to_a_different_labelled_branch(self):
+        requested: list[str] = []
+
+        class Session:
+            def __init__(self, *args, **kwargs): pass
+
+            def fetch_html_once(self, url, referer=""):
+                requested.append(url)
+                if url == "https://site.example/movie":
+                    return (
+                        '<a href="https://wrong.example/1080">1080p Download</a>'
+                        '<a href="https://right.example/fallback">Download</a>',
+                        SimpleNamespace(url=url, status=200, location=None, content_type="text/html", content_length="", headers={}),
+                        None,
+                    )
+                if url == "https://wrong.example/1080":
+                    raise AssertionError("A 720p request must not inspect the labelled 1080p branch")
+                if url == "https://right.example/fallback":
+                    return "", SimpleNamespace(url=url, status=200, location=None, content_type="video/x-matroska", content_length="", headers={}), None
+                raise AssertionError(f"Unexpected URL: {url}")
+
+        with patch.object(workflow_analyzer, "SafeSession", Session), patch.object(workflow_analyzer, "validate_public_url", lambda url: url):
+            result = workflow_analyzer.analyze_movie_workflow("https://site.example/", "https://site.example/movie", "720p")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(requested, ["https://site.example/movie", "https://right.example/fallback"])
+        self.assertEqual(result["results"][0]["quality"], "720p")
+
     def test_generic_sign_in_copy_is_not_treated_as_a_login_wall(self):
         self.assertIsNone(workflow_analyzer._blocked_html('<div class="login-modal">Sign in</div>'))
         self.assertIsNone(workflow_analyzer._blocked_html('<!-- <script src="https://example.test/recaptcha.js"></script> -->'))

@@ -50,11 +50,19 @@ class UiStructureTests(unittest.TestCase):
         self.assertIn("state.contents = Array.isArray(body.contents) ? body.contents : []", web_app.HTML)
         self.assertIn("state.candidates = state.contents.length ? [] : (body.candidates || [])", web_app.HTML)
         self.assertIn('data-variant-index="${variantIndex}"', web_app.HTML)
-        self.assertIn("contentId: content.contentId, variantId: variant.variantId", web_app.HTML)
-        self.assertIn('body: JSON.stringify({ contentId: content.contentId, variantId: variant.variantId })', web_app.HTML)
+        self.assertIn("contentId: content.contentId, variantId: variant.variantId, quality: selectedQuality", web_app.HTML)
+        self.assertIn('body: JSON.stringify({ contentId: content.contentId, variantId: variant.variantId, quality: selectedQuality })', web_app.HTML)
         self.assertIn("Select a release to continue.", web_app.HTML)
+        self.assertIn("Select a quality to continue.", web_app.HTML)
         self.assertNotIn('id="selectedResult"', web_app.HTML)
         self.assertNotIn("Selected result ${content", web_app.HTML)
+
+    def test_multi_quality_releases_offer_one_inline_quality_choice(self):
+        self.assertIn("availableQualities", web_app.HTML)
+        self.assertIn("selectedVariantQuality", web_app.HTML)
+        self.assertIn("variant-quality-picker", web_app.HTML)
+        self.assertIn("variant-quality-choice", web_app.HTML)
+        self.assertIn("const findDisabled = state.busy || !variant || !selectedQuality", web_app.HTML)
 
     def test_aggregated_cards_progressively_disclose_releases_on_mobile(self):
         self.assertIn(".content-card .poster-frame", web_app.HTML)

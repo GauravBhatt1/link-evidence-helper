@@ -44,6 +44,30 @@ class ContentAggregationTests(unittest.TestCase):
             "source_name": "One",
         }])
         self.assertEqual(contents[0].releaseVariants[0].quality, "Multiple")
+        self.assertEqual(
+            contents[0].releaseVariants[0].availableQualities,
+            ["480p", "720p", "1080p", "2160p"],
+        )
+
+    def test_multi_quality_variants_union_source_options_and_normalize_aliases(self):
+        contents = aggregate_candidates([
+            {
+                "title": "Example Film 2024 Hindi 480p | 720p BluRay",
+                "url": "https://one.example/example-film",
+                "source_id": "one",
+                "source_name": "One",
+            },
+            {
+                "title": "Example Film 2024 Hindi FHD | UHD BluRay",
+                "url": "https://two.example/example-film",
+                "source_id": "two",
+                "source_name": "Two",
+            },
+        ])
+        variant = contents[0].releaseVariants[0]
+        self.assertEqual(variant.quality, "Multiple")
+        self.assertEqual(variant.availableQualities, ["480p", "720p", "1080p", "2160p"])
+        self.assertEqual([source.adapterName for source in variant.sources], ["one", "two"])
 
     def test_failover_uses_next_source_after_verification_failure(self):
         variant = aggregate_candidates(self.rows())[0].releaseVariants[0]

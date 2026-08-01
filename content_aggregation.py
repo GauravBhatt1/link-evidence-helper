@@ -63,6 +63,11 @@ class ReleaseVariant:
     season: int | None
     episode: int | None
     approxSize: str
+    # This is intentionally separate from the display ``quality``.  A single
+    # release page can publish several quality branches, while ``quality``
+    # remains ``Multiple`` so older API consumers are not told it is only the
+    # first branch found in the label.
+    availableQualities: list[str] = field(default_factory=list)
     sources: list[SourceCandidate] = field(default_factory=list)
 
 
@@ -79,6 +84,25 @@ class Content:
     totalSources: int
 
 
+_QUALITY_TOKEN_PATTERN = re.compile(r"\b(?:480p|720p|1080p|2160p|4k|uhd|fhd)\b", flags=re.I)
+_QUALITY_ALIASES = {"fhd": "1080p", "4k": "2160p", "uhd": "2160p"}
+_QUALITY_ORDER = ("480p", "720p", "1080p", "2160p")
+
+
+def _canonical_quality(value: str) -> str:
+    """Return one UI/API quality spelling for aliases found in source labels."""
+    normalized = str(value or "").strip().lower()
+    return _QUALITY_ALIASES.get(normalized, normalized)
+
+
+def _available_qualities(label: str) -> list[str]:
+    detected = {
+        _canonical_quality(token)
+        for token in _QUALITY_TOKEN_PATTERN.findall(label)
+    }
+    return [quality for quality in _QUALITY_ORDER if quality in detected]
+
+
 def _variant_fields(row: dict[str, Any]) -> dict[str, Any]:
     label = " ".join(str(row.get(key) or "") for key in ("title", "variant", "quality", "size"))
     # Some release pages advertise every quality on one result card, e.g.
@@ -87,11 +111,12 @@ def _variant_fields(row: dict[str, Any]) -> dict[str, Any]:
     # selected target quality, but the card used to show an arbitrary 480p.
     # Keep a single explicit quality, otherwise identify the page honestly as
     # a multi-quality source.
-    qualities = list(dict.fromkeys(re.findall(r"\b(?:480p|720p|1080p|2160p|4k|uhd|fhd)\b", label, flags=re.I)))
-    if len(qualities) > 1:
+    detected_tokens = list(dict.fromkeys(_QUALITY_TOKEN_PATTERN.findall(label)))
+    available_qualities = _available_qualities(label)
+    if len(available_qualities) > 1:
         quality = "Multiple"
-    elif qualities:
-        quality = qualities[0].upper().replace("4K", "4K")
+    elif detected_tokens:
+        quality = detected_tokens[0].upper().replace("4K", "4K")
     else:
         quality = str(row.get("quality") or "Unknown")
     season_text, episode_text = _match(r"\b(?:season\s*|s)0?(\d{1,2})\b", label), _match(r"\b(?:episode\s*|ep\s*|e)0?(\d{1,3})\b", label)
@@ -102,7 +127,8 @@ def _variant_fields(row: dict[str, Any]) -> dict[str, Any]:
     languages = _languages(label)
     return {
         "language": "/".join(languages), "audioVariant": "Dual Audio" if re.search(r"\bdual\b", label, re.I) else "Multi Audio" if re.search(r"\bmulti\b", label, re.I) else languages[0],
-        "quality": quality, "releaseType": release, "packType": pack, "season": season, "episode": episode,
+        "quality": quality, "availableQualities": available_qualities,
+        "releaseType": release, "packType": pack, "season": season, "episode": episode,
         "approxSize": _match(r"\b(\d+(?:\.\d+)?\s*(?:KB|MB|GB|TB))\b", label),
     }
 
@@ -134,6 +160,10 @@ def aggregate_candidates(rows: Iterable[dict[str, Any]]) -> list[Content]:
             variant = ReleaseVariant(_id("variant", content.contentId, *variant_key), **fields)
             variants[(content.contentId, variant_key)] = variant
             content.releaseVariants.append(variant)
+        else:
+            for quality in fields["availableQualities"]:
+                if quality not in variant.availableQualities:
+                    variant.availableQualities.append(quality)
         adapter_name = str(row.get("source_id") or row.get("adapter_type") or row.get("source") or "legacy")
         display_name = str(row.get("source_name") or adapter_name)
         source = SourceCandidate(_id("source", adapter_name, row.get("url")), adapter_name, display_name, {"candidate": row}, priority)
