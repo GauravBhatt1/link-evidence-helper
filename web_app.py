@@ -576,6 +576,14 @@ HTML = """<!doctype html>
       padding-right: 2px;
     }
 
+    /* Aggregated content cards are a workspace, not poster-carousel items. */
+    .results.content-results {
+      grid-template-columns: minmax(0, 1fr);
+      max-height: none;
+      overflow: visible;
+      padding-right: 0;
+    }
+
     .candidate {
       width: 100%;
       text-align: left;
@@ -691,13 +699,14 @@ HTML = """<!doctype html>
       background: rgba(116, 73, 12, 0.72);
     }
 
-    .candidate strong {
+    /* These compact labels belong only to the legacy poster-card fallback. */
+    .poster-card strong {
       display: block;
       font-size: 14px;
       overflow-wrap: anywhere;
     }
 
-    .candidate span {
+    .poster-card span {
       display: block;
       margin-top: 5px;
       color: var(--muted);
@@ -721,7 +730,7 @@ HTML = """<!doctype html>
 
     .content-card { grid-column: 1 / -1; display: grid; grid-template-columns: 106px minmax(0, 1fr); gap: 0; padding: 0; overflow: hidden; }
     .content-card.active { border-color: var(--accent-2); }
-    .content-card .poster-frame { min-height: 100%; }
+    .content-card .poster-frame { width: 106px; min-width: 0; min-height: 0; aspect-ratio: auto; align-self: stretch; }
     .content-summary { display: grid; align-content: start; gap: 7px; padding: 11px; text-align: left; cursor: pointer; background: transparent; border: 0; color: inherit; font: inherit; }
     .content-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 800; }
     .content-meta { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -1186,14 +1195,23 @@ HTML = """<!doctype html>
       .source-actions { justify-content: flex-start; }
       .source-actions .btn { min-height: 44px; }
 
+      /* Keep full content cards out of the legacy horizontal poster strip. */
+      .results.content-results {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        overflow: visible;
+        padding: 0;
+        scroll-snap-type: none;
+      }
       .content-card {
         grid-template-columns: 76px minmax(0, 1fr);
         width: 100%;
+        min-width: 0;
       }
       .content-card .poster-frame {
         width: 76px;
+        min-width: 0;
         min-height: 114px;
-        height: 114px;
         aspect-ratio: auto;
       }
       .content-card .content-summary { padding: 9px; min-width: 0; }
@@ -1646,6 +1664,7 @@ HTML = """<!doctype html>
 
     function renderCandidates() {
       const hasContents = state.contents.length > 0;
+      candidatesEl.classList.toggle("content-results", hasContents);
       if (!hasContents && !state.candidates.length) {
         posterPanelEl.classList.add("is-hidden");
         welcomePanelEl.classList.remove("is-hidden");

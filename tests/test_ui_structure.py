@@ -62,6 +62,14 @@ class UiStructureTests(unittest.TestCase):
         self.assertIn('aria-expanded="${contentIndex === state.selectedContent ? "true" : "false"}"', web_app.HTML)
         self.assertIn("min-height: 44px", web_app.HTML)
 
+    def test_aggregated_cards_do_not_inherit_the_legacy_poster_carousel(self):
+        self.assertIn('candidatesEl.classList.toggle("content-results", hasContents)', web_app.HTML)
+        self.assertIn(".results.content-results", web_app.HTML)
+        self.assertIn("grid-template-columns: minmax(0, 1fr);", web_app.HTML)
+        self.assertIn(".content-card .poster-frame { width: 106px; min-width: 0; min-height: 0; aspect-ratio: auto;", web_app.HTML)
+        self.assertIn(".poster-card span", web_app.HTML)
+        self.assertNotIn(".candidate span", web_app.HTML)
+
     def test_admin_lock_does_not_persist_plain_password_and_uses_existing_header(self):
         self.assertIn("let adminPassword = \"\"", web_app.HTML)
         self.assertNotIn('sessionStorage.getItem("adminPassword")', web_app.HTML)
