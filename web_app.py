@@ -1232,6 +1232,29 @@ HTML = """<!doctype html>
       .source-card { grid-template-columns: 1fr; gap: 12px; padding: 14px; }
       .source-actions { justify-content: flex-start; }
       .source-actions .btn { min-height: 44px; }
+
+      /* Aggregated results contain a poster, summary, and one or more
+         release-variant controls.  They cannot safely share the old compact
+         horizontal poster carousel used by legacy one-line candidates. */
+      .results { display: grid; grid-template-columns: minmax(0, 1fr); overflow: visible; padding: 0; }
+      .content-card {
+        grid-template-columns: 76px minmax(0, 1fr);
+        grid-template-rows: auto auto;
+        align-items: start;
+        gap: 6px 9px;
+        padding: 8px;
+      }
+      .content-card .poster-frame {
+        grid-row: 1 / -1;
+        width: 76px;
+        min-height: 0;
+        height: 114px;
+        aspect-ratio: auto;
+      }
+      .content-card .content-summary,
+      .content-card .release-variants { padding: 0; min-width: 0; }
+      .content-card .release-variants { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); }
+      .content-card .variant-choice { min-height: 34px; }
     }
   </style>
 </head>
