@@ -1,0 +1,45 @@
+name: React shell checks
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/web-shell.yml"
+  push:
+    branches:
+      - "restructure/milestone-2-react-shell"
+    paths:
+      - "apps/web/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/web-shell.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  web-shell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: "pnpm"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10.18.3"
+          run_install: false
+      - name: Install pinned dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck frontend
+        run: pnpm --filter @link-evidence/web typecheck
+      - name: Test frontend components
+        run: pnpm --filter @link-evidence/web test
+      - name: Install Playwright Chromium
+        run: pnpm --filter @link-evidence/web exec playwright install --with-deps chromium
+      - name: Test frontend shell in Chromium
+        run: pnpm --filter @link-evidence/web test:browser

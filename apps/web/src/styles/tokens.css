@@ -1,0 +1,20 @@
+:root {
+  color-scheme: dark;
+  --color-bg: #0b1018;
+  --color-panel: #111923;
+  --color-panel-raised: #192434;
+  --color-border: #27364a;
+  --color-text: #edf3fb;
+  --color-muted: #9babc0;
+  --color-accent: #3b82f6;
+  --color-accent-bright: #60a5fa;
+  --color-focus: #93c5fd;
+  --shadow-panel: 0 18px 55px rgb(0 0 0 / 28%);
+  --radius-sm: 0.65rem;
+  --radius-md: 0.9rem;
+  --radius-lg: 1.2rem;
+  --sidebar-width: 15rem;
+  --mobile-header-height: 4rem;
+  --mobile-nav-height: 4.75rem;
+  --content-max: 78rem;
+}

@@ -135,3 +135,15 @@ python3 packages/testing/python/export_contract_fixtures.py --check
 pnpm typecheck
 pnpm test:contracts
 ```
+
+## Milestone 2 React shell development
+
+The isolated React shell is a development-only placeholder application. It
+makes no API or external requests and does not replace the Python application.
+
+```bash
+corepack pnpm@10.18.3 --filter @link-evidence/web dev
+```
+
+Vite binds only to `127.0.0.1:5173`. Production remains the Python service on
+port `8765`; no proxy, Docker, Compose, Caddy, or traffic change is involved.

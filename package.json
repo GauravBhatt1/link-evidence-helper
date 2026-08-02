@@ -8,6 +8,9 @@
   },
   "scripts": {
     "typecheck": "corepack pnpm@10.18.3 --recursive typecheck",
-    "test:contracts": "corepack pnpm@10.18.3 --filter @link-evidence/contracts test"
+    "test:contracts": "corepack pnpm@10.18.3 --filter @link-evidence/contracts test",
+    "dev:web": "corepack pnpm@10.18.3 --filter @link-evidence/web dev",
+    "test:web": "corepack pnpm@10.18.3 --filter @link-evidence/web test",
+    "test:web:browser": "corepack pnpm@10.18.3 --filter @link-evidence/web test:browser"
   }
 }
