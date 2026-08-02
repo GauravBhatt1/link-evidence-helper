@@ -1,0 +1,48 @@
+name: link-evidence-helper-milestone1
+
+# Development-only dependency scaffold. This file is never loaded by the
+# production `docker compose up` command and binds no host ports.
+services:
+  milestone1-redis:
+    image: redis:7.4.2-alpine
+    labels:
+      app.milestone: "1-scaffold-development-only"
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: "no"
+    networks: [milestone1-private]
+    volumes:
+      - milestone1-redis-data:/data
+
+  milestone1-postgres:
+    image: postgres:17.6-alpine
+    labels:
+      app.milestone: "1-scaffold-development-only"
+    environment:
+      POSTGRES_DB: milestone1_dev
+      POSTGRES_USER: milestone1_dev
+      POSTGRES_PASSWORD: milestone1_dev_only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U milestone1_dev -d milestone1_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: "no"
+    networks: [milestone1-private]
+    volumes:
+      - milestone1-postgres-data:/var/lib/postgresql/data
+
+networks:
+  milestone1-private:
+    name: link-evidence-helper-milestone1-private
+    internal: true
+
+volumes:
+  milestone1-redis-data:
+    name: link-evidence-helper-milestone1-redis-data
+  milestone1-postgres-data:
+    name: link-evidence-helper-milestone1-postgres-data

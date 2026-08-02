@@ -1,0 +1,8 @@
+{
+  "eventId": "job-event-queued",
+  "jobId": "job_example",
+  "message": "Queued",
+  "occurredAt": "2026-08-01T00:00:00Z",
+  "progress": 0,
+  "state": "queued"
+}

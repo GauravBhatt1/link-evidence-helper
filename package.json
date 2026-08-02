@@ -1,0 +1,13 @@
+{
+  "name": "link-evidence-helper-workspace",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.18.3",
+  "engines": {
+    "node": "24.18.0"
+  },
+  "scripts": {
+    "typecheck": "corepack pnpm@10.18.3 --recursive typecheck",
+    "test:contracts": "corepack pnpm@10.18.3 --filter @link-evidence/contracts test"
+  }
+}

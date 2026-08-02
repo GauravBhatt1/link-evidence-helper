@@ -108,3 +108,30 @@ Run:
 
 These scripts are evidence tools. They fetch HTML pages and inspect redirect
 headers/landing pages. They do not download or mirror movie files.
+
+## Restructuring scaffold
+
+Milestone 1 adds contract and development-tooling foundations only. The Python
+application remains the production implementation on port 8765; no React, Go,
+Redis, PostgreSQL, or browser-worker feature receives production traffic.
+
+- Canonical public schemas: `packages/contracts/schema/`
+- Sanitized behavioral fixtures: `packages/testing/fixtures/`
+- Python parity harness: `packages/testing/python/`
+- Development-only dependencies: `infra/docker/compose.milestone1.yml`
+- Migration documentation: `docs/migration/`
+
+The development Compose file is opt-in, uses isolated volumes and an internal
+network, publishes no host ports, and never loads production data:
+
+```bash
+docker compose -f infra/docker/compose.milestone1.yml config
+```
+
+Contract checks:
+
+```bash
+python3 packages/testing/python/export_contract_fixtures.py --check
+pnpm typecheck
+pnpm test:contracts
+```

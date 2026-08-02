@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jobinfo.local/v1/release-variant.schema.json",
+  "title": "ReleaseVariant",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["variantId", "language", "audioVariant", "quality", "availableQualities", "releaseType", "packType", "season", "episode", "approxSize", "sourceCount", "sources"],
+  "properties": {
+    "variantId": {"type": "string", "minLength": 1},
+    "language": {"type": "string", "minLength": 1},
+    "audioVariant": {"type": "string", "minLength": 1},
+    "quality": {"type": "string", "minLength": 1},
+    "availableQualities": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "releaseType": {"type": "string", "minLength": 1},
+    "packType": {"type": "string", "enum": ["single", "episode", "season", "complete-series"]},
+    "season": {"type": ["integer", "null"], "minimum": 0},
+    "episode": {"type": ["integer", "null"], "minimum": 0},
+    "approxSize": {"type": "string"},
+    "sourceCount": {"type": "integer", "minimum": 0},
+    "sources": {
+      "type": "array",
+      "items": {"$ref": "source-candidate.schema.json"}
+    }
+  }
+}

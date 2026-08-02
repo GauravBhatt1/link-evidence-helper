@@ -1,0 +1,18 @@
+{
+  "attempts": [
+    {
+      "durationMs": 500,
+      "failureReason": "Manual verification required",
+      "sourceId": "source-one",
+      "status": "blocked"
+    }
+  ],
+  "code": "manual_verification_required",
+  "contentId": "content_example",
+  "deliveryLinks": [],
+  "message": "Manual verification required",
+  "ok": false,
+  "status": "blocked",
+  "success": false,
+  "variantId": "variant_1080p"
+}

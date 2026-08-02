@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jobinfo.local/v1/content.schema.json",
+  "title": "Content",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contentId", "tmdbId", "title", "year", "mediaType", "poster", "languages", "releaseVariants", "totalSources", "jellyfinStatus"],
+  "properties": {
+    "contentId": {"type": "string", "minLength": 1},
+    "tmdbId": {"type": ["string", "null"]},
+    "title": {"type": "string", "minLength": 1},
+    "year": {"type": "string"},
+    "mediaType": {"type": "string", "enum": ["movie", "tv"]},
+    "poster": {"type": "string"},
+    "languages": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "releaseVariants": {
+      "type": "array",
+      "items": {"$ref": "release-variant.schema.json"}
+    },
+    "totalSources": {"type": "integer", "minimum": 0},
+    "jellyfinStatus": {"type": "string", "enum": ["available", "missing", "unknown"]}
+  }
+}

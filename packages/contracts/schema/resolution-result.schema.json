@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jobinfo.local/v1/resolution-result.schema.json",
+  "title": "ResolutionResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "success", "code", "status", "contentId", "variantId", "deliveryLinks", "attempts", "message"],
+  "$defs": {
+    "deliveryLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "filename", "size", "quality", "sourceId", "verifiedAt"],
+      "properties": {
+        "url": {"type": "string", "format": "uri"},
+        "filename": {"type": "string", "minLength": 1},
+        "size": {"type": "string"},
+        "quality": {"type": "string", "minLength": 1},
+        "sourceId": {"type": "string", "minLength": 1},
+        "verifiedAt": {"type": "string", "format": "date-time"}
+      }
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceId", "status", "failureReason", "durationMs"],
+      "properties": {
+        "sourceId": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "enum": ["verified", "failed", "blocked", "cancelled"]},
+        "failureReason": {"type": ["string", "null"]},
+        "durationMs": {"type": "integer", "minimum": 0}
+      }
+    }
+  },
+  "properties": {
+    "ok": {"type": "boolean"},
+    "success": {"type": "boolean"},
+    "code": {"type": "string", "minLength": 1},
+    "status": {"type": "string", "enum": ["verified", "partial", "blocked", "failed"]},
+    "contentId": {"type": "string", "minLength": 1},
+    "variantId": {"type": "string", "minLength": 1},
+    "deliveryLinks": {"type": "array", "items": {"$ref": "#/$defs/deliveryLink"}},
+    "attempts": {"type": "array", "items": {"$ref": "#/$defs/attempt"}},
+    "message": {"type": "string"}
+  }
+}

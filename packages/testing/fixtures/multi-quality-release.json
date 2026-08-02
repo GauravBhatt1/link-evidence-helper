@@ -1,0 +1,50 @@
+{
+  "code": "ok",
+  "contents": [
+    {
+      "contentId": "content_3b750f8edc77152e",
+      "jellyfinStatus": "unknown",
+      "languages": [
+        "Hindi"
+      ],
+      "mediaType": "movie",
+      "poster": "",
+      "releaseVariants": [
+        {
+          "approxSize": "",
+          "audioVariant": "Hindi",
+          "availableQualities": [
+            "480p",
+            "720p",
+            "1080p",
+            "2160p"
+          ],
+          "episode": null,
+          "language": "Hindi",
+          "packType": "single",
+          "quality": "Multiple",
+          "releaseType": "BLURAY",
+          "season": null,
+          "sourceCount": 1,
+          "sources": [
+            {
+              "displayName": "Source One",
+              "priority": 0,
+              "sourceId": "source_0112f231c20e1c93",
+              "verificationState": "unverified"
+            }
+          ],
+          "variantId": "variant_c11a9ee05357339a"
+        }
+      ],
+      "title": "Example Film 2024 Hindi 480p 720p 1080p 2160p BluRay",
+      "tmdbId": null,
+      "totalSources": 1,
+      "year": "2024"
+    }
+  ],
+  "ok": true,
+  "partialFailures": [],
+  "query": "Example Film",
+  "success": true
+}

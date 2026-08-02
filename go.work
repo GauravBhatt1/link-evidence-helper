@@ -1,0 +1,8 @@
+go 1.23.0
+
+toolchain go1.23.12
+
+use (
+	./apps/api
+	./apps/worker
+)

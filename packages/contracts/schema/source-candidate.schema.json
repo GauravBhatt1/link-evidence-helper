@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jobinfo.local/v1/source-candidate.schema.json",
+  "title": "SourceCandidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sourceId", "displayName", "priority", "verificationState"],
+  "properties": {
+    "sourceId": {"type": "string", "minLength": 1},
+    "displayName": {"type": "string", "minLength": 1},
+    "priority": {"type": "integer", "minimum": 0},
+    "verificationState": {
+      "type": "string",
+      "enum": ["unverified", "checking", "verified", "failed", "blocked"]
+    }
+  }
+}

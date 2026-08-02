@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jobinfo.local/v1/resolution-request.schema.json",
+  "title": "ResolutionRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contentId", "variantId"],
+  "properties": {
+    "contentId": {"type": "string", "minLength": 1},
+    "variantId": {"type": "string", "minLength": 1},
+    "quality": {"type": "string", "minLength": 1}
+  }
+}

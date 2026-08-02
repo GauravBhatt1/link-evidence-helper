@@ -1,0 +1,8 @@
+{
+  "eventId": "job-event-verified",
+  "jobId": "job_example",
+  "message": "Verified",
+  "occurredAt": "2026-08-01T00:00:00Z",
+  "progress": 100,
+  "state": "verified"
+}

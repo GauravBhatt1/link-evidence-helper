@@ -1,0 +1,27 @@
+{
+  "attempts": [
+    {
+      "durationMs": 420,
+      "failureReason": null,
+      "sourceId": "source-one",
+      "status": "verified"
+    }
+  ],
+  "code": "ok",
+  "contentId": "content_example",
+  "deliveryLinks": [
+    {
+      "filename": "Example.Film.2024.1080p.mkv",
+      "quality": "1080p",
+      "size": "1.2 GB",
+      "sourceId": "source-one",
+      "url": "https://download.example.invalid/example.mkv",
+      "verifiedAt": "2026-08-01T00:00:00Z"
+    }
+  ],
+  "message": "Verified downloadable response",
+  "ok": true,
+  "status": "verified",
+  "success": true,
+  "variantId": "variant_1080p"
+}

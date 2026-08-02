@@ -1,0 +1,77 @@
+{
+  "code": "ok",
+  "contents": [
+    {
+      "contentId": "content_3b750f8edc77152e",
+      "jellyfinStatus": "unknown",
+      "languages": [
+        "Hindi",
+        "English"
+      ],
+      "mediaType": "movie",
+      "poster": "",
+      "releaseVariants": [
+        {
+          "approxSize": "1.2 GB",
+          "audioVariant": "Hindi",
+          "availableQualities": [
+            "1080p"
+          ],
+          "episode": null,
+          "language": "Hindi",
+          "packType": "single",
+          "quality": "1080P",
+          "releaseType": "WEB-DL",
+          "season": null,
+          "sourceCount": 2,
+          "sources": [
+            {
+              "displayName": "Source One",
+              "priority": 0,
+              "sourceId": "source_205a2d58766b085b",
+              "verificationState": "unverified"
+            },
+            {
+              "displayName": "Source Two",
+              "priority": 1,
+              "sourceId": "source_1966bf6863acb359",
+              "verificationState": "unverified"
+            }
+          ],
+          "variantId": "variant_051fab7b083f979a"
+        },
+        {
+          "approxSize": "",
+          "audioVariant": "Dual Audio",
+          "availableQualities": [
+            "720p"
+          ],
+          "episode": null,
+          "language": "Hindi/English",
+          "packType": "single",
+          "quality": "720P",
+          "releaseType": "BLURAY",
+          "season": null,
+          "sourceCount": 1,
+          "sources": [
+            {
+              "displayName": "Source One",
+              "priority": 2,
+              "sourceId": "source_2a3a062e340a8949",
+              "verificationState": "unverified"
+            }
+          ],
+          "variantId": "variant_3e362ebfef7aff82"
+        }
+      ],
+      "title": "Example Film 2024 Hindi 1080p WEB-DL 1.2 GB",
+      "tmdbId": null,
+      "totalSources": 2,
+      "year": "2024"
+    }
+  ],
+  "ok": true,
+  "partialFailures": [],
+  "query": "Example Film",
+  "success": true
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jobinfo.local/v1/job.schema.json",
+  "title": "Job",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobId", "kind", "state", "subscriberCount", "createdAt", "updatedAt", "result"],
+  "properties": {
+    "jobId": {"type": "string", "minLength": 1},
+    "kind": {"type": "string", "enum": ["search", "resolution", "library-scan"]},
+    "state": {"type": "string", "enum": ["queued", "checking-cache", "searching", "checking-preferred-source", "checking-backup-source", "browser-fallback", "verified", "partial", "blocked", "failed", "cancelled"]},
+    "subscriberCount": {"type": "integer", "minimum": 0},
+    "createdAt": {"type": "string", "format": "date-time"},
+    "updatedAt": {"type": "string", "format": "date-time"},
+    "result": {"type": ["object", "null"]}
+  }
+}

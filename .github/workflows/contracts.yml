@@ -1,0 +1,60 @@
+name: Contract scaffold
+
+on:
+  pull_request:
+  push:
+    branches:
+      - restructure/milestone-1-scaffold
+
+jobs:
+  python-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.3"
+      - run: pip install jsonschema==4.26.0 playwright==1.54.0
+      - run: python -m playwright install --with-deps chromium
+      - run: python -m unittest discover -v
+      - run: python packages/testing/python/export_contract_fixtures.py --check
+      - run: python -m unittest packages.testing.python.test_parity
+
+  go-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+      - run: go test ./...
+        working-directory: apps/api
+      - run: go test ./...
+        working-directory: apps/worker
+
+  typescript-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: pnpm
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10.18.3"
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test:contracts
+
+  development-compose-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f infra/docker/compose.milestone1.yml config
+      - run: |
+          if docker compose -f infra/docker/compose.milestone1.yml config --format json | jq -e '.services[] | has("ports") or has("network_mode")' | grep -q true; then
+            echo "Development services must not publish ports or use host networking" >&2
+            exit 1
+          fi

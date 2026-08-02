@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jobinfo.local/v1/job-event.schema.json",
+  "title": "JobEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "jobId", "state", "message", "occurredAt", "progress"],
+  "properties": {
+    "eventId": {"type": "string", "minLength": 1},
+    "jobId": {"type": "string", "minLength": 1},
+    "state": {"type": "string", "enum": ["queued", "checking-cache", "searching", "checking-preferred-source", "checking-backup-source", "browser-fallback", "verified", "partial", "blocked", "failed", "cancelled"]},
+    "message": {"type": "string"},
+    "occurredAt": {"type": "string", "format": "date-time"},
+    "progress": {"type": "integer", "minimum": 0, "maximum": 100}
+  }
+}

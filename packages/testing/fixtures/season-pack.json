@@ -1,0 +1,47 @@
+{
+  "code": "ok",
+  "contents": [
+    {
+      "contentId": "content_1dd51f09da9b615a",
+      "jellyfinStatus": "unknown",
+      "languages": [
+        "Hindi"
+      ],
+      "mediaType": "tv",
+      "poster": "",
+      "releaseVariants": [
+        {
+          "approxSize": "",
+          "audioVariant": "Hindi",
+          "availableQualities": [
+            "1080p"
+          ],
+          "episode": null,
+          "language": "Hindi",
+          "packType": "season",
+          "quality": "1080P",
+          "releaseType": "WEB-DL",
+          "season": 2,
+          "sourceCount": 1,
+          "sources": [
+            {
+              "displayName": "Source One",
+              "priority": 0,
+              "sourceId": "source_9beef2a453a714df",
+              "verificationState": "unverified"
+            }
+          ],
+          "variantId": "variant_c4303723f97d8179"
+        }
+      ],
+      "title": "Example Show 2024 Hindi Season 2 Complete Pack 1080p WEB-DL",
+      "tmdbId": null,
+      "totalSources": 1,
+      "year": "2024"
+    }
+  ],
+  "ok": true,
+  "partialFailures": [],
+  "query": "Example Show Season 2",
+  "success": true
+}

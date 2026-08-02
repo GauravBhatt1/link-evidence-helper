@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jobinfo.local/v1/error.schema.json",
+  "title": "ErrorResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "success", "code", "error", "requestId"],
+  "properties": {
+    "ok": {"const": false},
+    "success": {"const": false},
+    "code": {"type": "string", "minLength": 1},
+    "error": {"type": "string", "minLength": 1},
+    "requestId": {"type": ["string", "null"]}
+  }
+}

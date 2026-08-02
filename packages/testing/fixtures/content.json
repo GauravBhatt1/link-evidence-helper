@@ -1,0 +1,38 @@
+{
+  "contentId": "content_3b750f8edc77152e",
+  "jellyfinStatus": "unknown",
+  "languages": [
+    "Hindi"
+  ],
+  "mediaType": "movie",
+  "poster": "",
+  "releaseVariants": [
+    {
+      "approxSize": "1.2 GB",
+      "audioVariant": "Hindi",
+      "availableQualities": [
+        "1080p"
+      ],
+      "episode": null,
+      "language": "Hindi",
+      "packType": "single",
+      "quality": "1080P",
+      "releaseType": "WEB-DL",
+      "season": null,
+      "sourceCount": 1,
+      "sources": [
+        {
+          "displayName": "Source One",
+          "priority": 0,
+          "sourceId": "source_eadce85bb1968618",
+          "verificationState": "unverified"
+        }
+      ],
+      "variantId": "variant_051fab7b083f979a"
+    }
+  ],
+  "title": "Example Film 2024 Hindi 1080p WEB-DL 1.2 GB",
+  "tmdbId": null,
+  "totalSources": 1,
+  "year": "2024"
+}

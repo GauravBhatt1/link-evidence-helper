@@ -1,0 +1,47 @@
+{
+  "code": "ok",
+  "contents": [
+    {
+      "contentId": "content_94ca7da0f25fb305",
+      "jellyfinStatus": "unknown",
+      "languages": [
+        "Hindi"
+      ],
+      "mediaType": "tv",
+      "poster": "",
+      "releaseVariants": [
+        {
+          "approxSize": "",
+          "audioVariant": "Hindi",
+          "availableQualities": [
+            "1080p"
+          ],
+          "episode": null,
+          "language": "Hindi",
+          "packType": "single",
+          "quality": "1080P",
+          "releaseType": "WEB-DL",
+          "season": null,
+          "sourceCount": 1,
+          "sources": [
+            {
+              "displayName": "Source One",
+              "priority": 0,
+              "sourceId": "source_91a7c2afdeade034",
+              "verificationState": "unverified"
+            }
+          ],
+          "variantId": "variant_9f0ec11c68e7a4bc"
+        }
+      ],
+      "title": "Example Show 2024 Hindi S02E03 1080p WEB-DL",
+      "tmdbId": null,
+      "totalSources": 1,
+      "year": "2024"
+    }
+  ],
+  "ok": true,
+  "partialFailures": [],
+  "query": "Example Show S02E03",
+  "success": true
+}

@@ -1,0 +1,134 @@
+[
+  {
+    "file": "content.json",
+    "provenance": "sanitized content_aggregation.Content projection",
+    "schema": "content.schema.json",
+    "valid": true
+  },
+  {
+    "file": "error.json",
+    "provenance": "current safe error envelope",
+    "schema": "error.schema.json",
+    "valid": true
+  },
+  {
+    "file": "invalid/invalid-job-state.json",
+    "provenance": "negative enum fixture",
+    "schema": "job.schema.json",
+    "valid": false
+  },
+  {
+    "file": "invalid/invalid-resolution-request.json",
+    "provenance": "negative required-field fixture",
+    "schema": "resolution-request.schema.json",
+    "valid": false
+  },
+  {
+    "file": "invalid/invalid-search-extra-field.json",
+    "provenance": "negative additional-property fixture",
+    "schema": "search-response.schema.json",
+    "valid": false
+  },
+  {
+    "file": "job-event-checking.json",
+    "provenance": "approved Milestone 0 job lifecycle",
+    "schema": "job-event.schema.json",
+    "valid": true
+  },
+  {
+    "file": "job-event-queued.json",
+    "provenance": "approved Milestone 0 job lifecycle",
+    "schema": "job-event.schema.json",
+    "valid": true
+  },
+  {
+    "file": "job-event-verified.json",
+    "provenance": "approved Milestone 0 job lifecycle",
+    "schema": "job-event.schema.json",
+    "valid": true
+  },
+  {
+    "file": "job.json",
+    "provenance": "approved Milestone 0 job contract",
+    "schema": "job.schema.json",
+    "valid": true
+  },
+  {
+    "file": "movie-one-variant.json",
+    "provenance": "content_aggregation.aggregate_candidates",
+    "schema": "search-response.schema.json",
+    "valid": true
+  },
+  {
+    "file": "movie-several-variants.json",
+    "provenance": "content_aggregation.aggregate_candidates",
+    "schema": "search-response.schema.json",
+    "valid": true
+  },
+  {
+    "file": "multi-quality-release.json",
+    "provenance": "content_aggregation.aggregate_candidates",
+    "schema": "search-response.schema.json",
+    "valid": true
+  },
+  {
+    "file": "multiple-source-candidates.json",
+    "provenance": "content_aggregation.aggregate_candidates",
+    "schema": "search-response.schema.json",
+    "valid": true
+  },
+  {
+    "file": "partial-search-success.json",
+    "provenance": "current success envelope plus deterministic aggregate",
+    "schema": "search-response.schema.json",
+    "valid": true
+  },
+  {
+    "file": "release-variant.json",
+    "provenance": "sanitized content_aggregation.ReleaseVariant projection",
+    "schema": "release-variant.schema.json",
+    "valid": true
+  },
+  {
+    "file": "resolution-backup-success.json",
+    "provenance": "current failover behavior projected to safe attempt summaries",
+    "schema": "resolution-result.schema.json",
+    "valid": true
+  },
+  {
+    "file": "resolution-blocked.json",
+    "provenance": "current manual-verification behavior",
+    "schema": "resolution-result.schema.json",
+    "valid": true
+  },
+  {
+    "file": "resolution-request.json",
+    "provenance": "current content/variant/quality selection",
+    "schema": "resolution-request.schema.json",
+    "valid": true
+  },
+  {
+    "file": "resolution-success.json",
+    "provenance": "current safe resolution metadata envelope",
+    "schema": "resolution-result.schema.json",
+    "valid": true
+  },
+  {
+    "file": "season-pack.json",
+    "provenance": "content_aggregation.aggregate_candidates",
+    "schema": "search-response.schema.json",
+    "valid": true
+  },
+  {
+    "file": "source-candidate.json",
+    "provenance": "sanitized content_aggregation.SourceCandidate projection",
+    "schema": "source-candidate.schema.json",
+    "valid": true
+  },
+  {
+    "file": "tv-episode.json",
+    "provenance": "content_aggregation.aggregate_candidates",
+    "schema": "search-response.schema.json",
+    "valid": true
+  }
+]
