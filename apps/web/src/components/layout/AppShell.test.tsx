@@ -12,7 +12,11 @@ describe("AppShell", () => {
     expect(await screen.findByRole("heading", { level: 1, name: metadata.heading })).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(document.title).toBe(metadata.documentTitle);
-    expect(screen.getByText("No application data or backend connection is active here.")).toBeInTheDocument();
+    if (metadata.path === "/") {
+      expect(screen.getByText("Development fixture search — no live sources are contacted.")).toBeInTheDocument();
+    } else {
+      expect(screen.getByText("No application data or backend connection is active here.")).toBeInTheDocument();
+    }
   });
 
   it("exposes stable landmarks and does not steal focus on initial load", async () => {

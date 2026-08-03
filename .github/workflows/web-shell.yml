@@ -10,6 +10,7 @@ on:
   push:
     branches:
       - "restructure/milestone-2-react-shell"
+      - "restructure/milestone-3-react-search"
     paths:
       - "apps/web/**"
       - "package.json"

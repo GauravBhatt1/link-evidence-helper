@@ -147,3 +147,37 @@ corepack pnpm@10.18.3 --filter @link-evidence/web dev
 
 Vite binds only to `127.0.0.1:5173`. Production remains the Python service on
 port `8765`; no proxy, Docker, Compose, Caddy, or traffic change is involved.
+
+## Milestone 3 fixture search development
+
+The React Search page remains development-only and uses sanitized canonical
+contract fixtures. It makes no API, source, TMDB, Jellyfin, analytics, image,
+or other external request. `Find Links` validates a local selection intent but
+does not resolve or display delivery links.
+
+Fixture aliases use only trimmed, collapsed-whitespace, case-insensitive exact
+matching:
+
+- `Example Film`
+- `Single Release`
+- `Multi Quality`
+- `Multiple Sources`
+- `Example Show S02E03`
+- `Example Show Season 2`
+- `Fixture Collection`
+- `Partial Search`
+- `Fixture Error`
+
+Any other query returns the canonical empty response. The web app now consumes
+the existing `@link-evidence/contracts` workspace package as its schema/type
+authority. The sole new third-party direct runtime dependency is pinned
+`@tanstack/react-query@5.101.4`, used for abortable in-memory fixture request
+lifecycle state; it has no storage persistence or production transport.
+
+Run the isolated checks with the pinned toolchain:
+
+```bash
+corepack pnpm@10.18.3 --filter @link-evidence/web typecheck
+corepack pnpm@10.18.3 --filter @link-evidence/web test
+corepack pnpm@10.18.3 --filter @link-evidence/web test:browser
+```

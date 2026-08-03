@@ -17,7 +17,7 @@ export type RouteMetadata = {
 };
 
 export const routeMetadata: readonly RouteMetadata[] = [
-  { id: "search", path: "/", label: "Search", mobileLabel: "Search", documentTitle: "Search · FREEMIUM INDEX", heading: "Search", description: "Search moves into the React application in Milestone 3.", page: "search", icon: Search, mobilePrimary: true },
+  { id: "search", path: "/", label: "Search", mobileLabel: "Search", documentTitle: "Search · FREEMIUM INDEX", heading: "Search", description: "Development fixture search with no live source connection.", page: "search", icon: Search, mobilePrimary: true },
   { id: "movies", path: "/library/movies", label: "Movies", mobileLabel: "Movies", documentTitle: "Movies · FREEMIUM INDEX", heading: "Movies", description: "Movie library data remains in the Python application during this milestone.", page: "movies", icon: Film, mobilePrimary: true },
   { id: "tv", path: "/library/tv", label: "TV Shows", mobileLabel: "TV", documentTitle: "TV Shows · FREEMIUM INDEX", heading: "TV Shows", description: "TV library data remains in the Python application during this milestone.", page: "tv", icon: Tv, mobilePrimary: true },
   { id: "missing", path: "/library/missing", label: "Missing", mobileLabel: "Missing", documentTitle: "Missing · FREEMIUM INDEX", heading: "Missing", description: "Missing-library data is not connected to this development shell.", page: "missing", icon: CircleAlert, mobilePrimary: true },
