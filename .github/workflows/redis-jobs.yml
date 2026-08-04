@@ -72,6 +72,7 @@ jobs:
         run: |
           set -euo pipefail
           prefix="leh:ci:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}"
+          worker_pid=""
           env \
             LINK_EVIDENCE_SEARCH_MODE=fixture \
             LINK_EVIDENCE_API_ADDR=127.0.0.1:8780 \
@@ -81,19 +82,17 @@ jobs:
             /tmp/link-evidence-api >/tmp/link-evidence-api.log 2>&1 &
           api_pid=$!
 
-          env \
-            LINK_EVIDENCE_REDIS_ADDR=127.0.0.1:6379 \
-            LINK_EVIDENCE_JOB_PREFIX="$prefix" \
-            LINK_EVIDENCE_WORKER_CONCURRENCY=2 \
-            LINK_EVIDENCE_DEVELOPMENT_STEP_DELAY_MS=100 \
-            /tmp/link-evidence-worker >/tmp/link-evidence-worker.log 2>&1 &
-          worker_pid=$!
-
           cleanup() {
             status=$?
             trap - EXIT
-            kill "$api_pid" "$worker_pid" 2>/dev/null || true
-            wait "$api_pid" "$worker_pid" 2>/dev/null || true
+            kill "$api_pid" 2>/dev/null || true
+            if test -n "$worker_pid"; then
+              kill "$worker_pid" 2>/dev/null || true
+            fi
+            wait "$api_pid" 2>/dev/null || true
+            if test -n "$worker_pid"; then
+              wait "$worker_pid" 2>/dev/null || true
+            fi
             redis-cli --scan --pattern "$prefix:*" | xargs -r redis-cli del >/dev/null
             if test -n "$(ss -ltn 'sport = :8780' | tail -n +2)"; then
               echo "API port 8780 remained open after cleanup" >&2
@@ -107,12 +106,12 @@ jobs:
             if curl --fail --silent http://127.0.0.1:8780/healthz >/tmp/health.json; then
               break
             fi
-            if ! kill -0 "$api_pid" 2>/dev/null || ! kill -0 "$worker_pid" 2>/dev/null; then
-              cat /tmp/link-evidence-api.log /tmp/link-evidence-worker.log
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              cat /tmp/link-evidence-api.log
               exit 1
             fi
             if test "$attempt" -eq 30; then
-              cat /tmp/link-evidence-api.log /tmp/link-evidence-worker.log
+              cat /tmp/link-evidence-api.log
               exit 1
             fi
             sleep 1
@@ -154,20 +153,30 @@ jobs:
           joined = json.loads(Path('/tmp/job-joined.json').read_text())
           assert created['jobId'] == duplicate['jobId'] == joined['jobId']
           assert created['kind'] == 'resolution'
-          assert created['state'] in {
-              'queued', 'checking-cache', 'checking-preferred-source', 'partial'
-          }
-          assert duplicate['subscriberCount'] >= 1
-          assert joined['subscriberCount'] >= 2
+          assert created['state'] == duplicate['state'] == joined['state'] == 'queued'
+          assert created['subscriberCount'] == 1
+          assert duplicate['subscriberCount'] == 1
+          assert joined['subscriberCount'] == 2
           Path('/tmp/job-id.txt').write_text(created['jobId'])
-          headers = Path('/tmp/job-created.json.headers').read_text().lower()
-          assert 'x-job-outcome: created' in headers
+          assert 'x-job-outcome: created' in Path('/tmp/job-created.json.headers').read_text().lower()
           assert 'x-job-outcome: idempotent' in Path('/tmp/job-idempotent.json.headers').read_text().lower()
           assert 'x-job-outcome: joined' in Path('/tmp/job-joined.json.headers').read_text().lower()
           PY
 
+          env \
+            LINK_EVIDENCE_REDIS_ADDR=127.0.0.1:6379 \
+            LINK_EVIDENCE_JOB_PREFIX="$prefix" \
+            LINK_EVIDENCE_WORKER_CONCURRENCY=2 \
+            LINK_EVIDENCE_DEVELOPMENT_STEP_DELAY_MS=100 \
+            /tmp/link-evidence-worker >/tmp/link-evidence-worker.log 2>&1 &
+          worker_pid=$!
+
           job_id="$(cat /tmp/job-id.txt)"
           for attempt in $(seq 1 50); do
+            if ! kill -0 "$worker_pid" 2>/dev/null; then
+              cat /tmp/link-evidence-worker.log
+              exit 1
+            fi
             curl --fail --silent --show-error \
               "http://127.0.0.1:8780/api/v1/jobs/${job_id}" \
               >/tmp/job-status.json
@@ -192,7 +201,7 @@ jobs:
           assert status['state'] == 'partial'
           assert status['subscriberCount'] == 2
           assert status['result']['mode'] == 'development-job-foundation'
-          assert [event['state'] for event in events][0] == 'queued'
+          assert events[0]['state'] == 'queued'
           assert events[-1]['state'] == 'partial'
           assert events[-1]['progress'] == 100
           serialized = json.dumps({'status': status, 'events': events}).lower()
