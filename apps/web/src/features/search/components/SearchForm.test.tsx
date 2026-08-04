@@ -48,7 +48,7 @@ describe("SearchForm and query configuration", () => {
     expect(onSubmit).toHaveBeenCalledTimes(2);
   });
 
-  it("shows local validation and stays editable during a safe error or in-flight replacement", async () => {
+  it("shows local validation, keeps input editable, and blocks duplicate busy submission", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn(async () => true);
     const { rerender } = render(<SearchForm busy={false} externalError="" onSubmit={onSubmit} />);
@@ -59,8 +59,10 @@ describe("SearchForm and query configuration", () => {
     await user.type(screen.getByRole("searchbox"), "Example Film");
     rerender(<SearchForm busy externalError="The development fixture search could not be completed." onSubmit={onSubmit} />);
     const input = screen.getByRole("searchbox");
+    const button = screen.getByRole("button", { name: "Searching…" });
     expect(input).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Searching…" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Searching…" })).toHaveAttribute("aria-disabled", "true");
+    expect(button).toBeDisabled();
+    fireEvent.submit(screen.getByRole("form", { name: "Development fixture search" }));
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });
