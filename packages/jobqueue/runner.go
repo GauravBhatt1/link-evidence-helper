@@ -35,7 +35,9 @@ func NewRunner(store *Store, executor Executor, concurrency int) (*Runner, error
 	return &Runner{store: store, executor: executor, concurrency: concurrency}, nil
 }
 
-func (runner *Runner) Run(ctx context.Context) error {
+func (runner *Runner) Run(parent context.Context) error {
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
 	if _, err := runner.store.Recover(ctx); err != nil {
 		return err
 	}
@@ -51,6 +53,7 @@ func (runner *Runner) Run(ctx context.Context) error {
 				case errorsChannel <- err:
 				default:
 				}
+				cancel()
 			}
 		}()
 	}
@@ -62,10 +65,13 @@ func (runner *Runner) Run(ctx context.Context) error {
 	}()
 
 	select {
-	case <-ctx.Done():
+	case <-parent.Done():
+		cancel()
 		<-done
 		return nil
 	case err := <-errorsChannel:
+		cancel()
+		<-done
 		return err
 	case <-done:
 		return nil
