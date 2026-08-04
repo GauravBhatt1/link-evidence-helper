@@ -9,17 +9,20 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/httpapi"
+	jobservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/jobs"
 	searchservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/search"
+	"github.com/GauravBhatt1/link-evidence-helper/packages/jobqueue"
 )
 
 func main() {
 	if mode := envOrDefault("LINK_EVIDENCE_SEARCH_MODE", "fixture"); mode != "fixture" {
-		log.Fatalf("unsupported LINK_EVIDENCE_SEARCH_MODE %q; milestone 4 permits fixture only", mode)
+		log.Fatalf("unsupported LINK_EVIDENCE_SEARCH_MODE %q; development mode permits fixture only", mode)
 	}
 
 	address := envOrDefault("LINK_EVIDENCE_API_ADDR", "127.0.0.1:8780")
@@ -36,9 +39,33 @@ func main() {
 		log.Fatalf("load sanitized development fixtures: %v", err)
 	}
 
+	var jobs *jobservice.Service
+	if redisAddress := strings.TrimSpace(os.Getenv("LINK_EVIDENCE_REDIS_ADDR")); redisAddress != "" {
+		if !isLoopbackAddress(redisAddress) && os.Getenv("LINK_EVIDENCE_ALLOW_REMOTE_REDIS") != "true" {
+			log.Fatalf("refusing non-loopback Redis address %q without LINK_EVIDENCE_ALLOW_REMOTE_REDIS=true", redisAddress)
+		}
+		config := jobqueue.DefaultConfig()
+		config.Prefix = envOrDefault("LINK_EVIDENCE_JOB_PREFIX", config.Prefix)
+		config.MaxQueued = int64(envInt("LINK_EVIDENCE_JOB_MAX_QUEUED", int(config.MaxQueued), 1, 10000))
+		jobs, err = jobservice.Open(
+			redisAddress,
+			os.Getenv("LINK_EVIDENCE_REDIS_PASSWORD"),
+			envInt("LINK_EVIDENCE_REDIS_DB", 0, 0, 15),
+			config,
+		)
+		if err != nil {
+			log.Fatalf("enable development Redis jobs: %v", err)
+		}
+		defer jobs.Close()
+	}
+
+	handler := httpapi.Handler(catalog)
+	if jobs != nil {
+		handler = httpapi.HandlerWithJobs(catalog, jobs)
+	}
 	server := &http.Server{
 		Addr:              address,
-		Handler:           httpapi.Handler(catalog),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -57,7 +84,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("development fixture API listening on http://%s (no live sources)", address)
+	log.Printf("development fixture API listening on http://%s (live sources disabled; Redis jobs=%t)", address, jobs != nil)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
@@ -68,6 +95,18 @@ func envOrDefault(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func envInt(name string, fallback, minimum, maximum int) int {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < minimum || parsed > maximum {
+		log.Fatalf("%s must be an integer between %d and %d", name, minimum, maximum)
+	}
+	return parsed
 }
 
 func isLoopbackAddress(address string) bool {
