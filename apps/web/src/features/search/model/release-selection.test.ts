@@ -24,11 +24,26 @@ describe("release and quality selection", () => {
     expect(selectedQuality(qualitySelected, content.contentId, variant.variantId)).toBe("1080p");
   });
 
-  it("builds a strict validated intent with exactly three public fields", () => {
+  it("clears an invalid remembered quality when a release is revisited", () => {
+    const selections = {
+      content: {
+        selectedVariantId: "variant",
+        qualityByVariantId: { variant: "2160p" },
+      },
+    };
+    const next = selectRelease(selections, "content", {
+      variantId: "variant",
+      qualities: ["720p", "1080p"],
+    });
+    expect(next.content?.selectedVariantId).toBe("variant");
+    expect(selectedQuality(next, "content", "variant")).toBe("");
+  });
+
+  it("builds a strict canonical intent with exactly three public fields", () => {
     const content = fixtureResponseForScenario("movie-one", "Single Release").contents[0]!;
     const variant = content.releaseVariants[0]!;
     const selectable = { variantId: variant.variantId, qualities: variant.availableQualities };
-    const intent = buildResolutionIntent(content.contentId, selectable, variant.availableQualities[0]!);
+    const intent = buildResolutionIntent(content.contentId, selectable, `  ${variant.availableQualities[0]!.toUpperCase()}  `);
     expect(intent).toEqual({ contentId: content.contentId, variantId: variant.variantId, quality: variant.availableQualities[0] });
     expect(Object.keys(intent!)).toEqual(["contentId", "variantId", "quality"]);
     expect(buildResolutionIntent(content.contentId, selectable, "2160p")).toBeNull();
