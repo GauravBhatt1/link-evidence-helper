@@ -100,48 +100,80 @@ func (runner *Runner) worker(ctx context.Context) error {
 }
 
 func (runner *Runner) process(ctx context.Context, jobID string) error {
-	defer func() {
-		ackContext := context.WithoutCancel(ctx)
-		_ = runner.store.Ack(ackContext, jobID)
-	}()
-
 	job, err := runner.store.Get(ctx, jobID)
 	if errors.Is(err, ErrNotFound) {
-		return nil
+		return runner.ack(ctx, jobID)
 	}
 	if err != nil {
 		return err
 	}
 	if job.State.Terminal() {
-		return nil
+		return runner.ack(ctx, jobID)
 	}
 	cancelled, err := runner.store.CancelRequested(ctx, jobID)
 	if err != nil {
 		return err
 	}
 	if cancelled {
-		return nil
+		return runner.ack(ctx, jobID)
 	}
 
 	reporter := &storeReporter{store: runner.store, jobID: jobID}
-	if err := runner.executor.Execute(ctx, job, reporter); err != nil {
-		if errors.Is(err, ErrJobCancelled) || errors.Is(err, context.Canceled) {
-			return nil
+	executeErr := runner.executor.Execute(ctx, job, reporter)
+	if executeErr != nil {
+		if errors.Is(executeErr, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+			// Keep the job in the processing list. The next worker startup calls
+			// Recover and moves it back to the queue.
+			return context.Canceled
 		}
-		latest, getErr := runner.store.Get(context.WithoutCancel(ctx), jobID)
-		if getErr == nil && !latest.State.Terminal() {
-			_, _ = runner.store.Transition(
-				context.WithoutCancel(ctx),
-				jobID,
-				StateFailed,
-				"The development worker could not complete the job.",
-				100,
-				nil,
-			)
+		if errors.Is(executeErr, ErrJobCancelled) {
+			return runner.ack(ctx, jobID)
 		}
-		return nil
+		return runner.failAndAck(ctx, jobID)
 	}
-	return nil
+
+	latest, err := runner.store.Get(context.WithoutCancel(ctx), jobID)
+	if err != nil {
+		return err
+	}
+	if !latest.State.Terminal() {
+		if _, err := runner.store.Transition(
+			context.WithoutCancel(ctx),
+			jobID,
+			StateFailed,
+			"The development worker ended without a terminal job state.",
+			100,
+			nil,
+		); err != nil {
+			return err
+		}
+	}
+	return runner.ack(ctx, jobID)
+}
+
+func (runner *Runner) failAndAck(ctx context.Context, jobID string) error {
+	background := context.WithoutCancel(ctx)
+	latest, err := runner.store.Get(background, jobID)
+	if err != nil {
+		return err
+	}
+	if !latest.State.Terminal() {
+		if _, err := runner.store.Transition(
+			background,
+			jobID,
+			StateFailed,
+			"The development worker could not complete the job.",
+			100,
+			nil,
+		); err != nil {
+			return err
+		}
+	}
+	return runner.ack(ctx, jobID)
+}
+
+func (runner *Runner) ack(ctx context.Context, jobID string) error {
+	return runner.store.Ack(context.WithoutCancel(ctx), jobID)
 }
 
 type storeReporter struct {
