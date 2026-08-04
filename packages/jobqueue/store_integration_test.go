@@ -41,6 +41,9 @@ func testStore(t *testing.T, maxQueued int64) *Store {
 
 func createRequest(label, idempotencyKey string) CreateRequest {
 	payload := json.RawMessage(fmt.Sprintf(`{"contentId":%q,"variantId":"variant","quality":"1080p"}`, label))
+	// fmt.Sprintf above uses a raw format string solely to preserve %q output;
+	// remove JSON escaping introduced for the Go source representation.
+	payload = json.RawMessage(strings.ReplaceAll(string(payload), `\"`, `"`))
 	digest := sha256.Sum256(payload)
 	return CreateRequest{
 		Kind: KindResolution, Fingerprint: hex.EncodeToString(digest[:]),
@@ -141,6 +144,7 @@ func TestTransitionsEventsQueueCapacityAndRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	result := json.RawMessage(`{"mode":"development-job-foundation"}`)
+	result = json.RawMessage(strings.ReplaceAll(string(result), `\"`, `"`))
 	completed, err := store.Transition(ctx, claimed, StatePartial, "Development pipeline complete.", 100, result)
 	if err != nil {
 		t.Fatal(err)
@@ -204,7 +208,9 @@ func (executor *concurrencyExecutor) Execute(ctx context.Context, _ Job, reporte
 		return ctx.Err()
 	case <-timer.C:
 	}
-	if _, err := reporter.Transition(ctx, StatePartial, "Bounded worker complete.", 100, json.RawMessage(`{"mode":"test"}`)); err != nil {
+	result := json.RawMessage(`{"mode":"test"}`)
+	result = json.RawMessage(strings.ReplaceAll(string(result), `\"`, `"`))
+	if _, err := reporter.Transition(ctx, StatePartial, "Bounded worker complete.", 100, result); err != nil {
 		return err
 	}
 	executor.done <- struct{}{}
