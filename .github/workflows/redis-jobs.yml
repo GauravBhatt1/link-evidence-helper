@@ -93,7 +93,8 @@ jobs:
             if test -n "$worker_pid"; then
               wait "$worker_pid" 2>/dev/null || true
             fi
-            redis-cli --scan --pattern "$prefix:*" | xargs -r redis-cli del >/dev/null
+            # The Redis service container and its isolated namespace are
+            # discarded automatically when this ephemeral CI job ends.
             if test -n "$(ss -ltn 'sport = :8780' | tail -n +2)"; then
               echo "API port 8780 remained open after cleanup" >&2
               status=1
