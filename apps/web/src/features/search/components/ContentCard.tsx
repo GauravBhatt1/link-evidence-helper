@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type { ContentCardViewModel } from "../model/search-view-model";
 import { ContentSummary } from "./ContentSummary";
 import { FindLinksAction } from "./FindLinksAction";
@@ -29,7 +30,9 @@ export function ContentCard({
   onSelectQuality: (quality: string) => void;
   onFind: () => void;
 }) {
-  const workspaceId = `content-workspace-${content.contentId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  const generatedId = useId().replace(/:/g, "");
+  const safeContentId = content.contentId.replace(/[^a-zA-Z0-9_-]/g, "-");
+  const workspaceId = `content-workspace-${safeContentId}-${generatedId}`;
   const selectedVariant = content.variants.find((variant) => variant.variantId === selectedVariantId);
   return (
     <article className={`content-card${active ? " active" : ""}`}>
