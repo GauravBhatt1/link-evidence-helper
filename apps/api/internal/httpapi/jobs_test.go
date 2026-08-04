@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -69,9 +68,11 @@ func jobsHandler(stub *stubJobs) http.Handler {
 func TestCreateResolutionJob(t *testing.T) {
 	quality := "1080p"
 	stub := &stubJobs{createJob: canonicalJob(), createOutcome: jobqueue.OutcomeCreated}
-	body := `{"contentId":"content","variantId":"variant","quality":"1080p"}`
-	body = strings.ReplaceAll(body, `\"`, `"`)
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/resolution", strings.NewReader(body))
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/jobs/resolution",
+		strings.NewReader(`{"contentId":"content","variantId":"variant","quality":"1080p"}`),
+	)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", "request-0001")
 	recorder := httptest.NewRecorder()
@@ -98,8 +99,11 @@ func TestCreateResolutionJob(t *testing.T) {
 func TestJoinedAndIdempotentJobsReturnOK(t *testing.T) {
 	for _, outcome := range []jobqueue.CreateOutcome{jobqueue.OutcomeJoined, jobqueue.OutcomeIdempotent} {
 		stub := &stubJobs{createJob: canonicalJob(), createOutcome: outcome}
-		request := httptest.NewRequest(http.MethodPost, "/api/v1/jobs/resolution", bytes.NewBufferString(`{"contentId":"content","variantId":"variant"}`))
-		request.Body = io.NopCloser(strings.NewReader(strings.ReplaceAll(`{"contentId":"content","variantId":"variant"}`, `\"`, `"`)))
+		request := httptest.NewRequest(
+			http.MethodPost,
+			"/api/v1/jobs/resolution",
+			strings.NewReader(`{"contentId":"content","variantId":"variant"}`),
+		)
 		request.Header.Set("Content-Type", "application/json; charset=utf-8")
 		request.Header.Set("Idempotency-Key", "request-0002")
 		recorder := httptest.NewRecorder()
@@ -127,8 +131,7 @@ func TestCreateResolutionRejectsUnsafeInputs(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			body := strings.ReplaceAll(test.body, `\"`, `"`)
-			request := httptest.NewRequest(http.MethodPost, test.target, strings.NewReader(body))
+			request := httptest.NewRequest(http.MethodPost, test.target, strings.NewReader(test.body))
 			request.Header.Set("Content-Type", test.contentType)
 			if test.key != "" {
 				request.Header.Set("Idempotency-Key", test.key)
