@@ -1,6 +1,7 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig, loadEnv } from "vitest/config";
+import { loadEnv } from "vite";
+import { defineConfig } from "vitest/config";
 
 const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 
