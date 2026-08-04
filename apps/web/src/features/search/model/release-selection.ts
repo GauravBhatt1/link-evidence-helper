@@ -10,19 +10,29 @@ export type SearchSelections = Record<string, ContentSelection>;
 export type ResolutionIntent = ResolutionRequest & { quality: string };
 export type SelectableRelease = { variantId: string; qualities: string[] };
 
+function qualityKey(value: string) {
+  return value.trim().toLocaleLowerCase("en-US");
+}
+
+function matchingQuality(qualities: string[], requestedQuality: string) {
+  const requestedKey = qualityKey(requestedQuality);
+  if (!requestedKey) return undefined;
+  return qualities.find((quality) => qualityKey(quality) === requestedKey);
+}
+
 export function selectableQualities(variant: Pick<ReleaseVariant, "availableQualities" | "quality">) {
   const qualities: string[] = [];
   const keys = new Set<string>();
   for (const value of variant.availableQualities) {
     const trimmed = value.trim();
-    const key = trimmed.toLocaleLowerCase("en-US");
+    const key = qualityKey(trimmed);
     if (trimmed && !keys.has(key)) {
       keys.add(key);
       qualities.push(trimmed);
     }
   }
   const fallback = variant.quality.trim();
-  if (!qualities.length && fallback && fallback.toLocaleLowerCase("en-US") !== "multiple") qualities.push(fallback);
+  if (!qualities.length && fallback && qualityKey(fallback) !== "multiple") qualities.push(fallback);
   return qualities;
 }
 
@@ -32,18 +42,22 @@ export function selectRelease(
   variant: SelectableRelease,
 ) {
   const existing = selections[contentId] ?? { selectedVariantId: null, qualityByVariantId: {} };
-  const qualities = variant.qualities;
   const previous = existing.qualityByVariantId[variant.variantId];
-  const validPrevious = previous && qualities.some((quality) => quality.toLocaleLowerCase("en-US") === previous.toLocaleLowerCase("en-US"));
-  const selectedQuality = validPrevious ? previous : qualities.length === 1 ? qualities[0] : undefined;
+  const canonicalPrevious = previous ? matchingQuality(variant.qualities, previous) : undefined;
+  const nextSelectedQuality = canonicalPrevious ?? (variant.qualities.length === 1 ? variant.qualities[0] : undefined);
+  const qualityByVariantId = { ...existing.qualityByVariantId };
+
+  if (nextSelectedQuality) {
+    qualityByVariantId[variant.variantId] = nextSelectedQuality;
+  } else {
+    delete qualityByVariantId[variant.variantId];
+  }
+
   return {
     ...selections,
     [contentId]: {
       selectedVariantId: variant.variantId,
-      qualityByVariantId: {
-        ...existing.qualityByVariantId,
-        ...(selectedQuality ? { [variant.variantId]: selectedQuality } : {}),
-      },
+      qualityByVariantId,
     },
   };
 }
@@ -54,9 +68,7 @@ export function selectQuality(
   variant: SelectableRelease,
   requestedQuality: string,
 ) {
-  const match = variant.qualities.find(
-    (quality) => quality.toLocaleLowerCase("en-US") === requestedQuality.trim().toLocaleLowerCase("en-US"),
-  );
+  const match = matchingQuality(variant.qualities, requestedQuality);
   if (!match) return selections;
   const existing = selections[contentId] ?? { selectedVariantId: variant.variantId, qualityByVariantId: {} };
   return {
@@ -77,10 +89,9 @@ export function buildResolutionIntent(
   variant: SelectableRelease,
   quality: string,
 ): ResolutionIntent | null {
-  const valid = variant.qualities.some(
-    (item) => item.toLocaleLowerCase("en-US") === quality.toLocaleLowerCase("en-US"),
-  );
-  if (!valid) return null;
-  const parsed = resolutionRequestSchema.safeParse({ contentId, variantId: variant.variantId, quality });
-  return parsed.success ? { ...parsed.data, quality } : null;
+  const canonicalQuality = matchingQuality(variant.qualities, quality);
+  if (!canonicalQuality) return null;
+  const candidate = { contentId, variantId: variant.variantId, quality: canonicalQuality };
+  const parsed = resolutionRequestSchema.safeParse(candidate);
+  return parsed.success ? { ...parsed.data, quality: canonicalQuality } : null;
 }
