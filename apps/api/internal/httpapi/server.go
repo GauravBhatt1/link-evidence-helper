@@ -2,6 +2,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,21 +22,11 @@ const maxJSONBodyBytes = 16 << 10
 
 var jobIDPattern = regexp.MustCompile(`^job_[a-f0-9]{32}$`)
 
-type JobService interface {
-	CreateResolution(ctx interface{ Done() <-chan struct{} }, request contracts.ResolutionRequest, idempotencyKey string) (contracts.Job, jobqueue.CreateOutcome, error)
-}
-
-// jobService uses context.Context in the concrete method set. The private
-// adapter below keeps the public Handler signature compatible with Milestone 4.
-type redisJobs interface {
-	CreateResolution(ctxContext, contracts.ResolutionRequest, string) (contracts.Job, jobqueue.CreateOutcome, error)
-	Get(ctxContext, string) (contracts.Job, error)
-	Events(ctxContext, string) ([]contracts.JobEvent, error)
-	Unsubscribe(ctxContext, string, string) (contracts.Job, error)
-}
-
-type ctxContext interface {
-	Deadline() (deadlineTime interface{}, ok bool)
+type JobBackend interface {
+	CreateResolution(ctx context.Context, request contracts.ResolutionRequest, idempotencyKey string) (contracts.Job, jobqueue.CreateOutcome, error)
+	Get(ctx context.Context, jobID string) (contracts.Job, error)
+	Events(ctx context.Context, jobID string) ([]contracts.JobEvent, error)
+	Unsubscribe(ctx context.Context, jobID, idempotencyKey string) (contracts.Job, error)
 }
 
 // Handler returns an isolated HTTP handler with job routes disabled. It remains
@@ -54,13 +45,6 @@ func HandlerWithJobs(searcher searchservice.Searcher, jobs JobBackend) http.Hand
 	mux.HandleFunc("/api/v1/jobs/resolution", api.createResolutionJob)
 	mux.HandleFunc("/api/v1/jobs/", api.jobResource)
 	return api.securityHeaders(mux)
-}
-
-type JobBackend interface {
-	CreateResolution(ctx context.Context, request contracts.ResolutionRequest, idempotencyKey string) (contracts.Job, jobqueue.CreateOutcome, error)
-	Get(ctx context.Context, jobID string) (contracts.Job, error)
-	Events(ctx context.Context, jobID string) ([]contracts.JobEvent, error)
-	Unsubscribe(ctx context.Context, jobID, idempotencyKey string) (contracts.Job, error)
 }
 
 type apiHandler struct {
