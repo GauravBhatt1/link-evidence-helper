@@ -1,7 +1,114 @@
 package main
 
-import "fmt"
+import (
+	"context"
+	"errors"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/httpapi"
+	searchservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/search"
+)
 
 func main() {
-	fmt.Println("Milestone 1 contract scaffold only; API server is not implemented")
+	if mode := envOrDefault("LINK_EVIDENCE_SEARCH_MODE", "fixture"); mode != "fixture" {
+		log.Fatalf("unsupported LINK_EVIDENCE_SEARCH_MODE %q; milestone 4 permits fixture only", mode)
+	}
+
+	address := envOrDefault("LINK_EVIDENCE_API_ADDR", "127.0.0.1:8780")
+	if !isLoopbackAddress(address) && os.Getenv("LINK_EVIDENCE_ALLOW_PUBLIC_LISTEN") != "true" {
+		log.Fatalf("refusing non-loopback API address %q without LINK_EVIDENCE_ALLOW_PUBLIC_LISTEN=true", address)
+	}
+
+	fixtureDir, err := resolveFixtureDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	catalog, err := searchservice.NewFixtureCatalog(fixtureDir)
+	if err != nil {
+		log.Fatalf("load sanitized development fixtures: %v", err)
+	}
+
+	server := &http.Server{
+		Addr:              address,
+		Handler:           httpapi.Handler(catalog),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    16 << 10,
+	}
+
+	stopped := make(chan os.Signal, 1)
+	signal.Notify(stopped, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-stopped
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			log.Printf("development API shutdown: %v", err)
+		}
+	}()
+
+	log.Printf("development fixture API listening on http://%s (no live sources)", address)
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatal(err)
+	}
+}
+
+func envOrDefault(name, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func isLoopbackAddress(address string) bool {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return false
+	}
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func resolveFixtureDir() (string, error) {
+	if configured := strings.TrimSpace(os.Getenv("LINK_EVIDENCE_FIXTURE_DIR")); configured != "" {
+		return requireDirectory(configured)
+	}
+	for _, candidate := range []string{
+		"packages/testing/fixtures",
+		"../../packages/testing/fixtures",
+	} {
+		if directory, err := requireDirectory(candidate); err == nil {
+			return directory, nil
+		}
+	}
+	return "", errors.New("sanitized fixture directory not found; set LINK_EVIDENCE_FIXTURE_DIR")
+}
+
+func requireDirectory(path string) (string, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(absolute)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", errors.New("fixture path is not a directory")
+	}
+	return absolute, nil
 }
