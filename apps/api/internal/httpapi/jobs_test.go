@@ -66,7 +66,6 @@ func jobsHandler(stub *stubJobs) http.Handler {
 }
 
 func TestCreateResolutionJob(t *testing.T) {
-	quality := "1080p"
 	stub := &stubJobs{createJob: canonicalJob(), createOutcome: jobqueue.OutcomeCreated}
 	request := httptest.NewRequest(
 		http.MethodPost,
@@ -78,20 +77,17 @@ func TestCreateResolutionJob(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	jobsHandler(stub).ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusAccepted {
-		t.Fatalf("status = %d body=%s", recorder.Code, recorder.Body.String())
+	if recorder.Code != http.StatusAccepted || recorder.Header().Get("X-Job-Outcome") != string(jobqueue.OutcomeCreated) {
+		t.Fatalf("status=%d outcome=%q body=%s", recorder.Code, recorder.Header().Get("X-Job-Outcome"), recorder.Body.String())
 	}
-	if recorder.Header().Get("X-Job-Outcome") != string(jobqueue.OutcomeCreated) {
-		t.Fatalf("outcome = %q", recorder.Header().Get("X-Job-Outcome"))
-	}
-	if stub.idempotencyKey != "request-0001" || stub.request.ContentID != "content" || stub.request.VariantID != "variant" || stub.request.Quality == nil || *stub.request.Quality != quality {
+	if stub.idempotencyKey != "request-0001" || stub.request.ContentID != "content" || stub.request.VariantID != "variant" || stub.request.Quality == nil || *stub.request.Quality != "1080p" {
 		t.Fatalf("captured request = %#v key=%q", stub.request, stub.idempotencyKey)
 	}
 	var response contracts.Job
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.JobID != testJobID || response.Result != nil {
+	if response.JobID != testJobID || string(response.Result) != "null" {
 		t.Fatalf("response = %#v", response)
 	}
 }
@@ -109,7 +105,7 @@ func TestJoinedAndIdempotentJobsReturnOK(t *testing.T) {
 		recorder := httptest.NewRecorder()
 		jobsHandler(stub).ServeHTTP(recorder, request)
 		if recorder.Code != http.StatusOK || recorder.Header().Get("X-Job-Outcome") != string(outcome) {
-			t.Fatalf("outcome %s status=%d header=%q", outcome, recorder.Code, recorder.Header().Get("X-Job-Outcome"))
+			t.Fatalf("outcome=%s status=%d header=%q", outcome, recorder.Code, recorder.Header().Get("X-Job-Outcome"))
 		}
 	}
 }
@@ -141,7 +137,8 @@ func TestCreateResolutionRejectsUnsafeInputs(t *testing.T) {
 			if recorder.Code != test.status {
 				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 			}
-			if strings.Contains(strings.ToLower(recorder.Body.String()), "secret") || strings.Contains(strings.ToLower(recorder.Body.String()), "hidden") {
+			lowerBody := strings.ToLower(recorder.Body.String())
+			if strings.Contains(lowerBody, "secret") || strings.Contains(lowerBody, "hidden") {
 				t.Fatal("safe errors must not echo internal values")
 			}
 		})
@@ -171,7 +168,7 @@ func TestJobStatusEventsAndUnsubscribe(t *testing.T) {
 		recorder := httptest.NewRecorder()
 		jobsHandler(stub).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, target, nil))
 		if recorder.Code != http.StatusOK {
-			t.Fatalf("target %s status=%d body=%s", target, recorder.Code, recorder.Body.String())
+			t.Fatalf("target=%s status=%d body=%s", target, recorder.Code, recorder.Body.String())
 		}
 	}
 
@@ -200,14 +197,14 @@ func TestJobErrorsAreMappedSafely(t *testing.T) {
 		recorder := httptest.NewRecorder()
 		jobsHandler(stub).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/jobs/"+testJobID, nil))
 		if recorder.Code != test.status {
-			t.Fatalf("error %v status=%d", test.err, recorder.Code)
+			t.Fatalf("error=%v status=%d", test.err, recorder.Code)
 		}
 		var response contracts.ErrorResponse
 		if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 			t.Fatal(err)
 		}
 		if response.Code != test.code || strings.Contains(recorder.Body.String(), "secret-value") {
-			t.Fatalf("response = %#v body=%s", response, recorder.Body.String())
+			t.Fatalf("response=%#v body=%s", response, recorder.Body.String())
 		}
 	}
 }
