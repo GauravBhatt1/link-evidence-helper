@@ -1,2 +1,12 @@
-// Public application types are owned by packages/contracts/schema.
-export type ContractPackage = "@link-evidence/contracts";
+export {
+  resolutionRequestSchema,
+  searchResponseSchema,
+} from "@link-evidence/contracts";
+
+export type {
+  Content,
+  ErrorResponse,
+  ReleaseVariant,
+  ResolutionRequest,
+  SearchResponse,
+} from "@link-evidence/contracts";

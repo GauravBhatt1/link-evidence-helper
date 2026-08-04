@@ -12,8 +12,9 @@ const viewports = [
 
 export default defineConfig({
   testDir: "./e2e",
-  outputDir: "/tmp/link-evidence-helper-milestone-2-playwright",
+  outputDir: "/tmp/link-evidence-helper-milestone-3-playwright",
   fullyParallel: false,
+  workers: 1,
   forbidOnly: true,
   retries: 0,
   reporter: "line",

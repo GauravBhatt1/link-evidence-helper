@@ -56,7 +56,11 @@ test("supports direct navigation, refresh, one h1, and local-only placeholders",
     await expect(page).toHaveTitle(route.title);
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     await expect(page.getByRole("heading", { level: 1, name: route.heading })).toBeVisible();
-    await expect(page.getByText("No application data or backend connection is active here.")).toBeVisible();
+    if (route.path === "/") {
+      await expect(page.getByText("Development fixture search — no live sources are contacted.")).toBeVisible();
+    } else {
+      await expect(page.getByText("No application data or backend connection is active here.")).toBeVisible();
+    }
   }
   assertNoFailures();
 });
@@ -101,7 +105,7 @@ test("mobile More disclosure dismisses accessibly and returns focus", async ({ p
   await expect(trigger).toBeFocused();
 
   await trigger.click();
-  await page.locator(".route-placeholder").click({ position: { x: 8, y: 8 } });
+  await page.locator(".search-page").click({ position: { x: 8, y: 8 } });
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
   await expect(trigger).toBeFocused();
   assertNoFailures();

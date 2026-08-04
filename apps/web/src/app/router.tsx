@@ -5,12 +5,12 @@ import { MissingPlaceholderPage } from "../pages/MissingPlaceholderPage";
 import { MoviesPlaceholderPage } from "../pages/MoviesPlaceholderPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { RecentPlaceholderPage } from "../pages/RecentPlaceholderPage";
-import { SearchPlaceholderPage } from "../pages/SearchPlaceholderPage";
+import { SearchPage } from "../pages/SearchPage";
 import { TvPlaceholderPage } from "../pages/TvPlaceholderPage";
 import { routeMetadata } from "./route-metadata";
 
 const pages = {
-  search: <SearchPlaceholderPage />,
+  search: <SearchPage />,
   movies: <MoviesPlaceholderPage />,
   tv: <TvPlaceholderPage />,
   missing: <MissingPlaceholderPage />,
