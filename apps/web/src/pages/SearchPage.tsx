@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fixtureSearchTransport } from "../features/search/api/fixture-search-transport";
+import {
+  defaultSearchTransportConfiguration,
+  type SearchTransportMode,
+} from "../features/search/api/search-transport-config";
 import type { SearchTransport } from "../features/search/api/search-transport";
 import { SearchDevelopmentNotice } from "../features/search/components/SearchDevelopmentNotice";
 import { SearchForm } from "../features/search/components/SearchForm";
@@ -15,7 +18,15 @@ import { toContentCardViewModel } from "../features/search/model/search-view-mod
 import "../features/search/styles/search.css";
 import type { ResolutionRequest } from "../types/contracts";
 
-export function SearchPage({ transport = fixtureSearchTransport }: { transport?: SearchTransport }) {
+type SearchPageProps = {
+  transport?: SearchTransport;
+  mode?: SearchTransportMode;
+};
+
+export function SearchPage({
+  transport = defaultSearchTransportConfiguration.transport,
+  mode = defaultSearchTransportConfiguration.mode,
+}: SearchPageProps) {
   const search = useSearch(transport);
   const [activeContentId, setActiveContentId] = useState<string | null>(null);
   const [selections, setSelections] = useState<SearchSelections>({});
@@ -47,8 +58,8 @@ export function SearchPage({ transport = fixtureSearchTransport }: { transport?:
   const contentViewModels = useMemo(() => contents.map(toContentCardViewModel), [contents]);
 
   return (
-    <section className="search-page" aria-label="Fixture search workflow">
-      <SearchDevelopmentNotice />
+    <section className="search-page" aria-label={mode === "api" ? "Development Go API search workflow" : "Fixture search workflow"}>
+      <SearchDevelopmentNotice mode={mode} />
       <SearchForm busy={search.phase === "submitting"} externalError={search.formError} onSubmit={submit} />
       <div
         ref={resultsRegionRef}
