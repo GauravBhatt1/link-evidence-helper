@@ -30,7 +30,9 @@ export class ApiSearchTransport implements SearchTransport {
 
     let response: Response;
     try {
-      response = await this.fetchImpl(target.toString(), {
+      // Native browser fetch must be invoked with the global object, not the
+      // ApiSearchTransport instance as its receiver.
+      response = await this.fetchImpl.call(globalThis, target.toString(), {
         method: "GET",
         headers: { Accept: "application/json" },
         cache: "no-store",
