@@ -3,6 +3,7 @@ name: React shell checks
 on:
   pull_request:
     paths:
+      - "apps/api/**"
       - "apps/web/**"
       - "packages/contracts/**"
       - "packages/testing/fixtures/**"
@@ -13,7 +14,9 @@ on:
     branches:
       - "restructure/milestone-2-react-shell"
       - "restructure/milestone-3-react-search"
+      - "restructure/integration"
     paths:
+      - "apps/api/**"
       - "apps/web/**"
       - "packages/contracts/**"
       - "packages/testing/fixtures/**"
@@ -48,3 +51,84 @@ jobs:
         run: pnpm --filter @link-evidence/web exec playwright install --with-deps chromium
       - name: Test frontend shell in Chromium
         run: pnpm --filter @link-evidence/web test:browser
+
+  go-api-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10.18.3"
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: "pnpm"
+      - name: Install pinned dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test Go API
+        run: go test ./...
+        working-directory: apps/api
+      - name: Install Playwright Chromium
+        run: pnpm --filter @link-evidence/web exec playwright install --with-deps chromium
+      - name: Test React against loopback-only Go API
+        env:
+          VITE_SEARCH_TRANSPORT: api
+        run: |
+          set -euo pipefail
+          (cd apps/api && go build -o /tmp/link-evidence-api ./cmd/server)
+          env \
+            LINK_EVIDENCE_SEARCH_MODE=fixture \
+            LINK_EVIDENCE_API_ADDR=127.0.0.1:8780 \
+            LINK_EVIDENCE_FIXTURE_DIR="$GITHUB_WORKSPACE/packages/testing/fixtures" \
+            /tmp/link-evidence-api >/tmp/link-evidence-api.log 2>&1 &
+          api_pid=$!
+
+          cleanup() {
+            status=$?
+            trap - EXIT
+            kill "$api_pid" 2>/dev/null || true
+            wait "$api_pid" 2>/dev/null || true
+            if test -n "$(ss -ltn 'sport = :8780' | tail -n +2)"; then
+              echo "Go API port 8780 remained open after cleanup" >&2
+              status=1
+            fi
+            exit "$status"
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8780/healthz >/dev/null; then
+              break
+            fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              cat /tmp/link-evidence-api.log
+              exit 1
+            fi
+            if test "$attempt" -eq 30; then
+              cat /tmp/link-evidence-api.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+          curl --fail --silent --show-error \
+            'http://127.0.0.1:8780/api/v1/search?q=Example%20Film' \
+            >/tmp/link-evidence-search.json
+          python3 - <<'PY'
+          import json
+          with open('/tmp/link-evidence-search.json', encoding='utf-8') as handle:
+              payload = json.load(handle)
+          assert payload.get('ok') is True
+          assert payload.get('success') is True
+          assert payload.get('code') == 'ok'
+          assert payload.get('query') == 'Example Film'
+          assert len(payload.get('contents', [])) == 1
+          PY
+
+          pnpm --filter @link-evidence/web exec playwright test \
+            e2e/api-search.spec.ts --project=mobile-390x844
