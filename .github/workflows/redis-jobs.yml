@@ -1,0 +1,211 @@
+name: Redis job foundation
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/**"
+      - "apps/worker/**"
+      - "packages/jobqueue/**"
+      - "go.work"
+      - "go.work.sum"
+      - ".github/workflows/redis-jobs.yml"
+  push:
+    branches:
+      - "restructure/integration"
+    paths:
+      - "apps/api/**"
+      - "apps/worker/**"
+      - "packages/jobqueue/**"
+      - "go.work"
+      - "go.work.sum"
+      - ".github/workflows/redis-jobs.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  redis-jobs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      redis:
+        image: redis:7.4.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      LINK_EVIDENCE_TEST_REDIS_ADDR: 127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+      - name: Verify Go module metadata
+        run: |
+          (cd packages/jobqueue && go mod tidy)
+          (cd apps/api && go mod tidy)
+          (cd apps/worker && go mod tidy)
+          go work sync
+          git diff --exit-code -- \
+            packages/jobqueue/go.mod packages/jobqueue/go.sum \
+            apps/api/go.mod apps/api/go.sum \
+            apps/worker/go.mod apps/worker/go.sum \
+            go.work go.work.sum
+      - name: Test shared Redis jobqueue
+        run: go test -race ./...
+        working-directory: packages/jobqueue
+      - name: Test Go API
+        run: go test -race ./...
+        working-directory: apps/api
+      - name: Test Go worker
+        run: go test -race ./...
+        working-directory: apps/worker
+      - name: Build API and worker
+        run: |
+          (cd apps/api && go build -o /tmp/link-evidence-api ./cmd/server)
+          (cd apps/worker && go build -o /tmp/link-evidence-worker ./cmd/worker)
+      - name: Verify API, coalescing, worker completion, and cleanup
+        run: |
+          set -euo pipefail
+          prefix="leh:ci:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}"
+          worker_pid=""
+          env \
+            LINK_EVIDENCE_SEARCH_MODE=fixture \
+            LINK_EVIDENCE_API_ADDR=127.0.0.1:8780 \
+            LINK_EVIDENCE_FIXTURE_DIR="$GITHUB_WORKSPACE/packages/testing/fixtures" \
+            LINK_EVIDENCE_REDIS_ADDR=127.0.0.1:6379 \
+            LINK_EVIDENCE_JOB_PREFIX="$prefix" \
+            /tmp/link-evidence-api >/tmp/link-evidence-api.log 2>&1 &
+          api_pid=$!
+
+          cleanup() {
+            status=$?
+            trap - EXIT
+            kill "$api_pid" 2>/dev/null || true
+            if test -n "$worker_pid"; then
+              kill "$worker_pid" 2>/dev/null || true
+            fi
+            wait "$api_pid" 2>/dev/null || true
+            if test -n "$worker_pid"; then
+              wait "$worker_pid" 2>/dev/null || true
+            fi
+            # The Redis service container and its isolated namespace are
+            # discarded automatically when this ephemeral CI job ends.
+            if test -n "$(ss -ltn 'sport = :8780' | tail -n +2)"; then
+              echo "API port 8780 remained open after cleanup" >&2
+              status=1
+            fi
+            exit "$status"
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8780/healthz >/tmp/health.json; then
+              break
+            fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              cat /tmp/link-evidence-api.log
+              exit 1
+            fi
+            if test "$attempt" -eq 30; then
+              cat /tmp/link-evidence-api.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+          python3 - <<'PY'
+          import json
+          with open('/tmp/health.json', encoding='utf-8') as handle:
+              health = json.load(handle)
+          assert health == {
+              'ok': True,
+              'service': 'link-evidence-api',
+              'mode': 'development-fixture',
+              'jobs': 'redis-development',
+          }
+          PY
+
+          create_job() {
+            local key="$1"
+            local output="$2"
+            curl --fail --silent --show-error \
+              -D "${output}.headers" \
+              -H 'Content-Type: application/json' \
+              -H "Idempotency-Key: ${key}" \
+              --data '{"contentId":"content","variantId":"variant","quality":"1080p"}' \
+              http://127.0.0.1:8780/api/v1/jobs/resolution \
+              >"$output"
+          }
+
+          create_job request-ci-0001 /tmp/job-created.json
+          create_job request-ci-0001 /tmp/job-idempotent.json
+          create_job request-ci-0002 /tmp/job-joined.json
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          created = json.loads(Path('/tmp/job-created.json').read_text())
+          duplicate = json.loads(Path('/tmp/job-idempotent.json').read_text())
+          joined = json.loads(Path('/tmp/job-joined.json').read_text())
+          assert created['jobId'] == duplicate['jobId'] == joined['jobId']
+          assert created['kind'] == 'resolution'
+          assert created['state'] == duplicate['state'] == joined['state'] == 'queued'
+          assert created['subscriberCount'] == 1
+          assert duplicate['subscriberCount'] == 1
+          assert joined['subscriberCount'] == 2
+          Path('/tmp/job-id.txt').write_text(created['jobId'])
+          assert 'x-job-outcome: created' in Path('/tmp/job-created.json.headers').read_text().lower()
+          assert 'x-job-outcome: idempotent' in Path('/tmp/job-idempotent.json.headers').read_text().lower()
+          assert 'x-job-outcome: joined' in Path('/tmp/job-joined.json.headers').read_text().lower()
+          PY
+
+          env \
+            LINK_EVIDENCE_REDIS_ADDR=127.0.0.1:6379 \
+            LINK_EVIDENCE_JOB_PREFIX="$prefix" \
+            LINK_EVIDENCE_WORKER_CONCURRENCY=2 \
+            LINK_EVIDENCE_DEVELOPMENT_STEP_DELAY_MS=100 \
+            /tmp/link-evidence-worker >/tmp/link-evidence-worker.log 2>&1 &
+          worker_pid=$!
+
+          job_id="$(cat /tmp/job-id.txt)"
+          for attempt in $(seq 1 50); do
+            if ! kill -0 "$worker_pid" 2>/dev/null; then
+              cat /tmp/link-evidence-worker.log
+              exit 1
+            fi
+            curl --fail --silent --show-error \
+              "http://127.0.0.1:8780/api/v1/jobs/${job_id}" \
+              >/tmp/job-status.json
+            state="$(python3 -c 'import json; print(json.load(open("/tmp/job-status.json"))["state"])')"
+            if test "$state" = partial; then
+              break
+            fi
+            if test "$attempt" -eq 50; then
+              cat /tmp/job-status.json /tmp/link-evidence-api.log /tmp/link-evidence-worker.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+
+          curl --fail --silent --show-error \
+            "http://127.0.0.1:8780/api/v1/jobs/${job_id}/events" \
+            >/tmp/job-events.json
+          python3 - <<'PY'
+          import json
+          status = json.load(open('/tmp/job-status.json'))
+          events = json.load(open('/tmp/job-events.json'))
+          assert status['state'] == 'partial'
+          assert status['subscriberCount'] == 2
+          assert status['result']['mode'] == 'development-job-foundation'
+          assert events[0]['state'] == 'queued'
+          assert events[-1]['state'] == 'partial'
+          assert events[-1]['progress'] == 100
+          serialized = json.dumps({'status': status, 'events': events}).lower()
+          for forbidden in ('deliverylinks', 'sourceid', 'http://', 'https://', 'password', 'cookie'):
+              assert forbidden not in serialized
+          PY
