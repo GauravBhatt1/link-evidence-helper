@@ -75,32 +75,60 @@ jobs:
         working-directory: apps/api
       - name: Install Playwright Chromium
         run: pnpm --filter @link-evidence/web exec playwright install --with-deps chromium
-      - name: Start loopback-only fixture API
+      - name: Test React against loopback-only Go API
+        env:
+          VITE_SEARCH_TRANSPORT: api
         run: |
+          set -euo pipefail
           (cd apps/api && go build -o /tmp/link-evidence-api ./cmd/server)
-          nohup env \
+          env \
             LINK_EVIDENCE_SEARCH_MODE=fixture \
             LINK_EVIDENCE_API_ADDR=127.0.0.1:8780 \
             LINK_EVIDENCE_FIXTURE_DIR="$GITHUB_WORKSPACE/packages/testing/fixtures" \
             /tmp/link-evidence-api >/tmp/link-evidence-api.log 2>&1 &
-          echo $! >/tmp/link-evidence-api.pid
+          api_pid=$!
+
+          cleanup() {
+            status=$?
+            trap - EXIT
+            kill "$api_pid" 2>/dev/null || true
+            wait "$api_pid" 2>/dev/null || true
+            if test -n "$(ss -ltn 'sport = :8780' | tail -n +2)"; then
+              echo "Go API port 8780 remained open after cleanup" >&2
+              status=1
+            fi
+            exit "$status"
+          }
+          trap cleanup EXIT
+
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:8780/healthz >/dev/null; then
-              exit 0
+              break
+            fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              cat /tmp/link-evidence-api.log
+              exit 1
+            fi
+            if test "$attempt" -eq 30; then
+              cat /tmp/link-evidence-api.log
+              exit 1
             fi
             sleep 1
           done
-          cat /tmp/link-evidence-api.log
-          exit 1
-      - name: Test React against Go API
-        env:
-          VITE_SEARCH_TRANSPORT: api
-          VITE_SEARCH_API_TARGET: http://127.0.0.1:8780
-        run: pnpm --filter @link-evidence/web exec playwright test e2e/api-search.spec.ts --project=mobile-390x844
-      - name: Stop loopback-only fixture API
-        if: always()
-        run: |
-          if test -f /tmp/link-evidence-api.pid; then
-            kill "$(cat /tmp/link-evidence-api.pid)" 2>/dev/null || true
-          fi
-          test -z "$(ss -ltn 'sport = :8780' | tail -n +2)"
+
+          curl --fail --silent --show-error \
+            'http://127.0.0.1:8780/api/v1/search?q=Example%20Film' \
+            >/tmp/link-evidence-search.json
+          python3 - <<'PY'
+          import json
+          with open('/tmp/link-evidence-search.json', encoding='utf-8') as handle:
+              payload = json.load(handle)
+          assert payload.get('ok') is True
+          assert payload.get('success') is True
+          assert payload.get('code') == 'ok'
+          assert payload.get('query') == 'Example Film'
+          assert len(payload.get('contents', [])) == 1
+          PY
+
+          pnpm --filter @link-evidence/web exec playwright test \
+            e2e/api-search.spec.ts --project=mobile-390x844
