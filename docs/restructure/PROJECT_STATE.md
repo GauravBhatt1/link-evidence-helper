@@ -51,7 +51,7 @@ Completed read-only architecture audit, migration matrix, rollback boundaries, r
 
 - Source branch: `restructure/milestone-3-react-search`
 - Reviewed head: `3d5819a389b5932b048eb5ccab2dc8f5e7927b6f`
-- Squash merged into the cumulative restructuring line as: `ef53c42a88504c483cf657bc2dbee421a6d5fa42`
+- Squash merged as: `ef53c42a88504c483cf657bc2dbee421a6d5fa42`
 - Deterministic fixture search, unified content cards, active-card workspace, native release/quality selection, validated local resolution intent, cancellation/stale-response protection, accessibility fixes, and green CI
 - Final CI: Python 109 passed; contract, Go, TypeScript, Compose safety, frontend typecheck, Vitest 55 passed, Playwright 53 passed with 3 expected desktop-only skips
 
@@ -59,12 +59,23 @@ Completed read-only architecture audit, migration matrix, rollback boundaries, r
 
 - Source branch: `restructure/milestone-4-go-search-api`
 - Reviewed head: `e0f2587fc3f2b4eb425420b53628ba198469390d`
-- Squash merged into the cumulative restructuring line as: `ec6db3ca70548f36e2bb74b6e7e4f6645a6b3e81`
+- Squash merged as: `ec6db3ca70548f36e2bb74b6e7e4f6645a6b3e81`
 - Added loopback-only Go HTTP service with `GET /healthz` and `GET /api/v1/search?q=`
 - Added exact deterministic sanitized-fixture backend, canonical empty/error responses, strict method/parameter boundaries, request IDs, and safe errors
 - Added same-origin typed React API transport with canonical schema validation and explicit `VITE_SEARCH_TRANSPORT=api` opt-in
 - Fixture mode remains the default; Vite proxies `/api` to `127.0.0.1:8780` only in explicit API mode
 - Final CI: all contract jobs passed; Go API integration passed; frontend typecheck passed; Vitest 62 passed; fixture-mode Playwright 53 passed with 10 expected mode/viewport skips; dedicated React-to-Go browser integration passed; loopback API cleanup passed
+
+### Milestone 5 — Redis-backed job foundation
+
+- Source branch: `restructure/milestone-5-redis-jobs`
+- Reviewed head: `4a31e5b1b898882dbd23cbdec49f1f4681673067`
+- Squash merged as: `7f11f13e71e50ac0294230c370838632db4bd3c3`
+- Added canonical Redis job/event storage, atomic idempotency and canonical-fingerprint coalescing, subscriber counting, per-subscription unsubscribe, and final-subscriber cancellation
+- Added bounded queue capacity and worker concurrency, validated state transitions, TTL cleanup, processing recovery, and acknowledgement rules
+- Worker shutdown leaves an interrupted job recoverable in the processing list; startup recovery safely returns it to the queue
+- Added versioned job creation/status/events/unsubscribe API routes and a transparent development executor that contacts no live sources and returns no Delivery Links
+- Final CI: contract scaffold passed; React shell and React-to-Go integration passed; Go module metadata clean; jobqueue/API/worker race tests passed against Redis 7.4.2; API and worker builds passed; end-to-end idempotency, coalescing, processing, status/events, recovery, and cleanup passed
 
 ## Current integration branch
 
@@ -72,7 +83,7 @@ Completed read-only architecture audit, migration matrix, rollback boundaries, r
 
 Current recorded implementation commit:
 
-`ec6db3ca70548f36e2bb74b6e7e4f6645a6b3e81`
+`7f11f13e71e50ac0294230c370838632db4bd3c3`
 
 This branch is the cumulative non-production integration line for all remaining work. Documentation updates may appear after the recorded implementation commit.
 
@@ -84,16 +95,15 @@ The known production service remains the existing Python application on port 876
 
 ## Remaining work
 
-1. Redis-backed jobs, caching, request coalescing, cancellation, bounded concurrency, and idempotency
-2. Go HTTP-first live source search and ranked failover parity with the Python behavioral oracle
-3. TypeScript Playwright browser-worker fallback
-4. Link-resolution workflow and Delivery Links UI
-5. Movies, TV, Missing, Recently Added, and Jellyfin integration
-6. Admin authentication, source management, diagnostics, and audit-safe events
-7. PostgreSQL durable schema and SQLite migration/rollback tooling
-8. Production Docker Compose, health checks, Caddy routing, observability, backup, and restore
-9. Full parity, load, security, migration, rollback, and release-candidate verification
-10. Final controlled deployment and traffic switch
+1. Go HTTP-first source search and ranked failover parity with the Python behavioral oracle
+2. TypeScript Playwright browser-worker fallback
+3. Real link-resolution workflow and Delivery Links UI
+4. Movies, TV, Missing, Recently Added, and Jellyfin integration
+5. Admin authentication, source management, diagnostics, and audit-safe events
+6. PostgreSQL durable schema and SQLite migration/rollback tooling
+7. Production Docker Compose, health checks, Caddy routing, observability, backup, and restore
+8. Full parity, load, security, migration, rollback, and release-candidate verification
+9. Final controlled deployment and traffic switch
 
 ## Working method
 
@@ -105,4 +115,4 @@ The known production service remains the existing Python application on port 876
 
 ## Next action
 
-Create the next focused branch from `restructure/integration` and implement the Redis-backed development job foundation: canonical job creation/status APIs, idempotency, request coalescing, bounded concurrency, cancellation semantics, TTL cleanup, and tests. Do not connect live sources, production traffic, or the current Python service yet.
+Create the next focused branch from `restructure/integration` and implement the HTTP-first Go source-search compatibility layer in shadow/development mode. Preserve the existing Python implementation as the behavioral oracle, use sanitized local fixtures and mock HTTP servers for parity tests, enforce network-safety rules, and do not route production traffic or contact unapproved live sources.
