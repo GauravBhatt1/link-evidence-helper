@@ -1,8 +1,14 @@
-export type SearchTransportErrorCode = "fixture-error" | "invalid-contract";
+export type SearchTransportErrorCode =
+  | "fixture-error"
+  | "invalid-contract"
+  | "api-unavailable"
+  | "api-rejected";
 
 const SAFE_MESSAGES: Record<SearchTransportErrorCode, string> = {
   "fixture-error": "The development fixture search could not be completed.",
   "invalid-contract": "Development search data did not match the application contract.",
+  "api-unavailable": "The development Go search API is unavailable.",
+  "api-rejected": "The development Go search request was rejected.",
 };
 
 export class SearchTransportError extends Error {
@@ -17,5 +23,5 @@ export class SearchTransportError extends Error {
 
 export function safeSearchError(error: unknown) {
   if (error instanceof SearchTransportError) return error.message;
-  return "The development fixture search could not be completed.";
+  return "The development search could not be completed.";
 }
