@@ -17,6 +17,7 @@ export function SearchForm({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (busy) return;
     const validation = validateSearchQuery(draft);
     if (!validation.ok) {
       setLocalError(validation.error);
@@ -25,6 +26,8 @@ export function SearchForm({
     setLocalError("");
     await onSubmit(validation.query);
   };
+
+  const submitDisabled = busy || !draft.trim();
 
   return (
     <form className="search-form" aria-label="Development fixture search" onSubmit={submit} noValidate>
@@ -52,7 +55,7 @@ export function SearchForm({
         </div>
         {error && <p id="search-query-error" className="field-error" role="alert">{error}</p>}
       </div>
-      <button className="search-submit" type="submit" disabled={!draft.trim()} aria-disabled={busy || undefined}>
+      <button className="search-submit" type="submit" disabled={submitDisabled}>
         {busy ? "Searching…" : "Search"}
       </button>
     </form>
