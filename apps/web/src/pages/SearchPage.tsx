@@ -1,5 +1,6 @@
-import type { SearchTransport } from "../features/search/api/search-transport";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fixtureSearchTransport } from "../features/search/api/fixture-search-transport";
+import type { SearchTransport } from "../features/search/api/search-transport";
 import { SearchDevelopmentNotice } from "../features/search/components/SearchDevelopmentNotice";
 import { SearchForm } from "../features/search/components/SearchForm";
 import { SearchResults } from "../features/search/components/SearchResults";
@@ -10,16 +11,17 @@ import {
   selectRelease,
   type SearchSelections,
 } from "../features/search/model/release-selection";
-import type { ResolutionRequest } from "../types/contracts";
-import { useMemo, useState } from "react";
 import { toContentCardViewModel } from "../features/search/model/search-view-model";
 import "../features/search/styles/search.css";
+import type { ResolutionRequest } from "../types/contracts";
 
 export function SearchPage({ transport = fixtureSearchTransport }: { transport?: SearchTransport }) {
   const search = useSearch(transport);
   const [activeContentId, setActiveContentId] = useState<string | null>(null);
   const [selections, setSelections] = useState<SearchSelections>({});
   const [localIntent, setLocalIntent] = useState<ResolutionRequest | null>(null);
+  const resultsRegionRef = useRef<HTMLDivElement>(null);
+  const focusResultsAfterRetry = useRef(false);
 
   const resetDecisions = () => {
     setActiveContentId(null);
@@ -32,6 +34,15 @@ export function SearchPage({ transport = fixtureSearchTransport }: { transport?:
     return search.submit(query);
   };
 
+  useEffect(() => {
+    if (!focusResultsAfterRetry.current || search.phase === "submitting") return;
+    focusResultsAfterRetry.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      resultsRegionRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [search.phase]);
+
   const contents = search.response?.contents ?? [];
   const contentViewModels = useMemo(() => contents.map(toContentCardViewModel), [contents]);
 
@@ -39,7 +50,14 @@ export function SearchPage({ transport = fixtureSearchTransport }: { transport?:
     <section className="search-page" aria-label="Fixture search workflow">
       <SearchDevelopmentNotice />
       <SearchForm busy={search.phase === "submitting"} externalError={search.formError} onSubmit={submit} />
-      <div className="search-results" aria-busy={search.phase === "submitting"}>
+      <div
+        ref={resultsRegionRef}
+        className="search-results"
+        role="region"
+        aria-label="Search results"
+        aria-busy={search.phase === "submitting"}
+        tabIndex={-1}
+      >
         <SearchResults
           phase={search.phase}
           query={search.submittedQuery}
@@ -75,6 +93,7 @@ export function SearchPage({ transport = fixtureSearchTransport }: { transport?:
           }}
           onRetry={() => {
             resetDecisions();
+            focusResultsAfterRetry.current = true;
             void search.retry();
           }}
         />
