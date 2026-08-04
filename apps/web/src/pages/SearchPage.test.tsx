@@ -1,11 +1,21 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
+import { describe, expect, it } from "vitest";
 import { createAppQueryClient } from "../app/query-client";
 import { FixtureSearchTransport } from "../features/search/api/fixture-search-transport";
 import { fixtureResponseForScenario } from "../features/search/api/search-fixture-catalog";
 import type { SearchRequest, SearchTransport } from "../features/search/api/search-transport";
+import { useSearch } from "../features/search/hooks/use-search";
 import type { SearchResponse } from "../types/contracts";
 import { SearchPage } from "./SearchPage";
 
@@ -120,17 +130,37 @@ describe("SearchPage", () => {
         });
       },
     };
-    const user = userEvent.setup();
-    renderSearch(transport);
-    await submitAlias(user, "Example Film");
+    const queryClient = createAppQueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useSearch(transport), { wrapper });
+
+    await act(async () => {
+      await result.current.submit("Example Film");
+    });
     await waitFor(() => expect(started).toContain("Example Film"));
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Example Show S02E03" } });
-    fireEvent.click(screen.getByRole("button", { name: /search/i }));
-    await screen.findByRole("heading", { level: 2, name: /Example Show/ });
+
+    await act(async () => {
+      await result.current.submit("Example Show S02E03");
+    });
     await waitFor(() => expect(aborted).toContain("Example Film"));
+    await waitFor(() => expect(result.current.response?.query).toBe("Example Show S02E03"));
     await new Promise((resolve) => window.setTimeout(resolve, 100));
-    expect(screen.getByRole("heading", { level: 2, name: /Example Show/ })).toBeVisible();
-    expect(screen.queryByRole("heading", { level: 2, name: /Example Film 2024/ })).not.toBeInTheDocument();
+    expect(result.current.response?.query).toBe("Example Show S02E03");
+    expect(result.current.response?.contents[0]?.mediaType).toBe("tv");
+  });
+
+  it("returns focus to the results region after an explicit Retry completes", async () => {
+    const user = userEvent.setup();
+    renderSearch();
+    await submitAlias(user, "Fixture Error");
+    await screen.findByRole("heading", { name: "Development search unavailable" });
+    const resultsRegion = screen.getByRole("region", { name: "Search results" });
+    expect(resultsRegion).not.toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    await screen.findByRole("heading", { name: "Development search unavailable" });
+    await waitFor(() => expect(resultsRegion).toHaveFocus());
   });
 
   it("contains no source internals in text or any serialized DOM attribute and never renders an image", async () => {
