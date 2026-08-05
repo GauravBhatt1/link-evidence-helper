@@ -94,6 +94,27 @@ func TestAggregateUsesTMDBIdentityAcrossDifferentProviderTitles(t *testing.T) {
 	}
 }
 
+func TestAggregateKeepsVariantReferencesValidAcrossSliceGrowth(t *testing.T) {
+	contents := Aggregate([]Candidate{
+		{Title: "Example Film 2024 Hindi 1080p WEB-DL", URL: "https://one.example/hindi", SourceID: "one"},
+		{Title: "Example Film 2024 English 720p WEB-DL", URL: "https://two.example/english", SourceID: "two"},
+		{Title: "Example Film 2024 Hindi 1080p WEB-DL", URL: "https://three.example/hindi", SourceID: "three"},
+	})
+	if len(contents) != 1 || len(contents[0].ReleaseVariants) != 2 {
+		t.Fatalf("contents = %#v", contents)
+	}
+	var hindi *ReleaseVariant
+	for index := range contents[0].ReleaseVariants {
+		variant := &contents[0].ReleaseVariants[index]
+		if variant.Language == "Hindi" {
+			hindi = variant
+		}
+	}
+	if hindi == nil || len(hindi.Sources) != 2 || hindi.Sources[0].AdapterName != "one" || hindi.Sources[1].AdapterName != "three" {
+		t.Fatalf("Hindi variant = %#v", hindi)
+	}
+}
+
 func TestAggregateDeduplicatesIdenticalSourceCandidates(t *testing.T) {
 	row := Candidate{Title: "Example 2024 English 720p", URL: "https://source.example/item", SourceID: "source"}
 	contents := Aggregate([]Candidate{row, row})
