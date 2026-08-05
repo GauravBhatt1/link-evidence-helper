@@ -5,8 +5,8 @@ import "testing"
 func TestNormalizedTitleMatchesLegacyNoiseRemoval(t *testing.T) {
 	for input, expected := range map[string]string{
 		"Hockey Movie 2025 Hindi Dual Audio 1080p WEB-DL 1.5GB": "hockey",
-		"Example Show Season 2 English 720p WEBRip":                 "example show 2",
-		"Download Ikka ESub 2160p HEVC":                              "ikka",
+		"Example Show Season 2 English 720p WEBRip":             "example show 2",
+		"Download Ikka ESub 2160p HEVC":                         "ikka",
 	} {
 		if actual := NormalizedTitle(input); actual != expected {
 			t.Fatalf("NormalizedTitle(%q) = %q, want %q", input, actual, expected)
@@ -18,11 +18,11 @@ func TestAggregateMergesProviderCandidatesAndIgnoresSizeForVariantIdentity(t *te
 	contents := Aggregate([]Candidate{
 		{
 			Title: "Hockey 2025 Hindi Dual Audio 1080p WEB-DL 1.5GB",
-			URL: "https://source-a.example/hockey", SourceID: "source-a", SourceName: "Source A",
+			URL:   "https://source-a.example/hockey", SourceID: "source-a", SourceName: "Source A",
 		},
 		{
 			Title: "Hockey Movie 2025 Hindi Dual Audio 1080p WEB-DL 2GB",
-			URL: "https://source-b.example/hockey", SourceID: "source-b", SourceName: "Source B",
+			URL:   "https://source-b.example/hockey", SourceID: "source-b", SourceName: "Source B",
 		},
 	})
 	if len(contents) != 1 {
@@ -50,7 +50,7 @@ func TestAggregateMergesProviderCandidatesAndIgnoresSizeForVariantIdentity(t *te
 func TestAggregateRepresentsMultiQualityReleaseHonestly(t *testing.T) {
 	contents := Aggregate([]Candidate{{
 		Title: "Example Film 2024 Hindi 480p 720p FHD 4K WEB-DL",
-		URL: "https://source.example/example-film", SourceID: "source",
+		URL:   "https://source.example/example-film", SourceID: "source",
 	}})
 	variant := contents[0].ReleaseVariants[0]
 	if variant.Quality != "Multiple" {
@@ -70,7 +70,7 @@ func TestAggregateRepresentsMultiQualityReleaseHonestly(t *testing.T) {
 func TestAggregateExtractsTVSeasonAndEpisode(t *testing.T) {
 	contents := Aggregate([]Candidate{{
 		Title: "Example Show S02E03 English 1080p WEBRip 900MB",
-		URL: "https://source.example/show", SourceID: "source",
+		URL:   "https://source.example/show", SourceID: "source",
 	}})
 	if len(contents) != 1 || contents[0].MediaType != "tv" {
 		t.Fatalf("contents = %#v", contents)

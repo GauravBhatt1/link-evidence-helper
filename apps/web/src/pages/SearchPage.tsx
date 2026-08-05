@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ResolutionClient } from "../features/resolution/api/resolution-client";
+import { useResolution } from "../features/resolution/hooks/use-resolution";
 import {
   defaultSearchTransportConfiguration,
   type SearchTransportMode,
@@ -21,13 +23,16 @@ import type { ResolutionRequest } from "../types/contracts";
 type SearchPageProps = {
   transport?: SearchTransport;
   mode?: SearchTransportMode;
+  resolutionClient?: ResolutionClient;
 };
 
 export function SearchPage({
   transport = defaultSearchTransportConfiguration.transport,
   mode = defaultSearchTransportConfiguration.mode,
+  resolutionClient,
 }: SearchPageProps) {
   const search = useSearch(transport);
+  const resolution = useResolution(resolutionClient ? { client: resolutionClient } : undefined);
   const [activeContentId, setActiveContentId] = useState<string | null>(null);
   const [selections, setSelections] = useState<SearchSelections>({});
   const [localIntent, setLocalIntent] = useState<ResolutionRequest | null>(null);
@@ -35,6 +40,7 @@ export function SearchPage({
   const focusResultsAfterRetry = useRef(false);
 
   const resetDecisions = () => {
+    resolution.reset();
     setActiveContentId(null);
     setSelections({});
     setLocalIntent(null);
@@ -57,8 +63,13 @@ export function SearchPage({
   const contents = search.response?.contents ?? [];
   const contentViewModels = useMemo(() => contents.map(toContentCardViewModel), [contents]);
 
+  const clearResolutionDecision = () => {
+    resolution.reset();
+    setLocalIntent(null);
+  };
+
   return (
-    <section className="search-page" aria-label={mode === "api" ? "Development Go API search workflow" : "Fixture search workflow"}>
+    <section className="search-page" aria-label={mode === "api" ? "Go API search and link workflow" : "Fixture search workflow"}>
       <SearchDevelopmentNotice mode={mode} />
       <SearchForm busy={search.phase === "submitting"} externalError={search.formError} onSubmit={submit} />
       <div
@@ -78,30 +89,43 @@ export function SearchPage({
           activeContentId={activeContentId}
           selections={selections}
           localIntent={localIntent}
+          resolutionEnabled={mode === "api"}
+          resolutionState={{
+            phase: resolution.phase,
+            request: resolution.request,
+            job: resolution.job,
+            result: resolution.result,
+            statusMessage: resolution.statusMessage,
+            error: resolution.error,
+          }}
           onToggleContent={(contentId) => {
             setActiveContentId((current) => current === contentId ? null : contentId);
-            setLocalIntent(null);
+            clearResolutionDecision();
           }}
           onSelectVariant={(contentId, variantId) => {
             const content = contentViewModels.find((item) => item.contentId === contentId);
             const variant = content?.variants.find((item) => item.variantId === variantId);
             if (!variant) return;
             setSelections((current) => selectRelease(current, contentId, variant));
-            setLocalIntent(null);
+            clearResolutionDecision();
           }}
           onSelectQuality={(contentId, variantId, quality) => {
             const content = contentViewModels.find((item) => item.contentId === contentId);
             const variant = content?.variants.find((item) => item.variantId === variantId);
             if (!variant) return;
             setSelections((current) => selectQuality(current, contentId, variant, quality));
-            setLocalIntent(null);
+            clearResolutionDecision();
           }}
           onFind={(contentId, variantId, quality) => {
             const content = contentViewModels.find((item) => item.contentId === contentId);
             const variant = content?.variants.find((item) => item.variantId === variantId);
             if (!variant) return;
-            setLocalIntent(buildResolutionIntent(contentId, variant, quality));
+            const intent = buildResolutionIntent(contentId, variant, quality);
+            if (!intent) return;
+            setLocalIntent(intent);
+            if (mode === "api") void resolution.start(intent);
           }}
+          onCancelResolution={resolution.cancel}
           onRetry={() => {
             resetDecisions();
             focusResultsAfterRetry.current = true;

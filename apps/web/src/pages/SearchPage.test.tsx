@@ -1,7 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
-  fireEvent,
   render,
   renderHook,
   screen,
@@ -10,19 +9,28 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createAppQueryClient } from "../app/query-client";
+import { ResolutionClient } from "../features/resolution/api/resolution-client";
 import { FixtureSearchTransport } from "../features/search/api/fixture-search-transport";
 import { fixtureResponseForScenario } from "../features/search/api/search-fixture-catalog";
+import type { SearchTransportMode } from "../features/search/api/search-transport-config";
 import type { SearchRequest, SearchTransport } from "../features/search/api/search-transport";
 import { useSearch } from "../features/search/hooks/use-search";
-import type { SearchResponse } from "../types/contracts";
+import type { Job, SearchResponse } from "../types/contracts";
 import { SearchPage } from "./SearchPage";
 
-function renderSearch(transport: SearchTransport = new FixtureSearchTransport(0)) {
+const jobId = "job_0123456789abcdef0123456789abcdef";
+const now = "2026-08-05T00:00:00Z";
+
+function renderSearch(
+  transport: SearchTransport = new FixtureSearchTransport(0),
+  mode: SearchTransportMode = "fixture",
+  resolutionClient?: ResolutionClient,
+) {
   return render(
     <QueryClientProvider client={createAppQueryClient()}>
-      <SearchPage transport={transport} />
+      <SearchPage transport={transport} mode={mode} resolutionClient={resolutionClient} />
     </QueryClientProvider>,
   );
 }
@@ -34,6 +42,55 @@ async function submitAlias(user: ReturnType<typeof userEvent.setup>, alias: stri
   await user.click(screen.getByRole("button", { name: /search/i }));
 }
 
+function jsonResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function queuedJob(): Job {
+  return {
+    jobId,
+    kind: "resolution",
+    state: "queued",
+    subscriberCount: 1,
+    createdAt: now,
+    updatedAt: now,
+    result: null,
+  };
+}
+
+function verifiedJob(): Job {
+  return {
+    ...queuedJob(),
+    state: "verified",
+    result: {
+      ok: true,
+      success: true,
+      code: "ok",
+      status: "verified",
+      contentId: "content_3b750f8edc77152e",
+      variantId: "variant_051fab7b083f979a",
+      deliveryLinks: [{
+        url: "https://delivery.example/Example.Film.2024.1080p.mkv",
+        filename: "Example.Film.2024.1080p.mkv",
+        size: "1 GB",
+        quality: "1080p",
+        sourceId: "source_eadce85bb1968618",
+        verifiedAt: now,
+      }],
+      attempts: [{
+        sourceId: "source_eadce85bb1968618",
+        status: "verified",
+        failureReason: null,
+        durationMs: 12,
+      }],
+      message: "Verified delivery links are ready.",
+    },
+  };
+}
+
 describe("SearchPage", () => {
   it("keeps the fixture disclosure visible in idle, loading, result, partial, empty, error, selection, and local-intent states", async () => {
     const user = userEvent.setup();
@@ -43,7 +100,7 @@ describe("SearchPage", () => {
 
     await submitAlias(user, "Example Film");
     expect(notice()).toBeVisible();
-    expect(screen.getByText("Searching development fixtures…")).toBeVisible();
+    expect(screen.getByText("Searching…")).toBeVisible();
     await screen.findByText(/Example Film 2024/);
     expect(notice()).toBeVisible();
     await user.click(screen.getByRole("button", { name: /choose releases for example film/i }));
@@ -51,7 +108,7 @@ describe("SearchPage", () => {
     await user.click(screen.getAllByRole("radio", { name: /Hindi/ })[0]!);
     await user.click(screen.getByRole("button", { name: "Find Links" }));
     expect(notice()).toBeVisible();
-    expect(screen.getByText("Selection is ready. Link resolution is not connected in Milestone 3.")).toBeVisible();
+    expect(screen.getByText("Selection is ready. Start the app in API mode to resolve links.")).toBeVisible();
 
     await submitAlias(user, "Partial Search");
     await screen.findByText(/Results may be incomplete/);
@@ -90,7 +147,7 @@ describe("SearchPage", () => {
     expect(findButton).toBeEnabled();
   });
 
-  it("auto-selects one quality after release selection and Find Links never submits search or renders resolver UI", async () => {
+  it("auto-selects one quality after release selection and fixture Find Links never renders resolver UI", async () => {
     const user = userEvent.setup();
     renderSearch();
     await submitAlias(user, "Single Release");
@@ -103,8 +160,76 @@ describe("SearchPage", () => {
     expect(findButton).toBeEnabled();
     await user.click(findButton);
     expect(screen.getByText("1 unified content item")).toBeVisible();
-    expect(screen.getByText("Selection is ready. Link resolution is not connected in Milestone 3.")).toBeVisible();
-    expect(screen.queryByText(/Delivery Links|Checking source|Download|Copy/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Selection is ready. Start the app in API mode to resolve links.")).toBeVisible();
+    expect(screen.queryByText(/Delivery Links|Checking source|Open \/ Download|Copy Link/i)).not.toBeInTheDocument();
+  });
+
+  it("creates a private three-field API request and renders only verified Delivery Links", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const requestPath = String(input);
+      if (requestPath === "/api/v1/jobs/resolution" && init?.method === "POST") {
+        return jsonResponse(queuedJob(), 202);
+      }
+      if (requestPath === `/api/v1/jobs/${jobId}` && init?.method === "GET") {
+        return jsonResponse(verifiedJob());
+      }
+      throw new Error(`Unexpected request: ${init?.method} ${requestPath}`);
+    });
+    renderSearch(new FixtureSearchTransport(0), "api", new ResolutionClient(fetchMock as typeof fetch));
+
+    await submitAlias(user, "Single Release");
+    await screen.findByText("1 unified content item");
+    await user.click(screen.getByRole("button", { name: /choose releases for/i }));
+    await user.click(screen.getByRole("radio", { name: /Hindi/ }));
+    await user.click(screen.getByRole("button", { name: "Find Links" }));
+
+    expect(await screen.findByRole("heading", { name: "Delivery Links" })).toBeVisible();
+    const delivery = screen.getByRole("link", { name: "Open / Download" });
+    expect(delivery).toHaveAttribute("href", "https://delivery.example/Example.Film.2024.1080p.mkv");
+    expect(delivery).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.getByText("Example.Film.2024.1080p.mkv")).toBeVisible();
+    expect(screen.getByText("1080p · 1 GB")).toBeVisible();
+
+    const createCall = fetchMock.mock.calls.find(([requestPath, init]) => String(requestPath) === "/api/v1/jobs/resolution" && init?.method === "POST");
+    expect(createCall).toBeDefined();
+    const body = JSON.parse(String(createCall?.[1]?.body));
+    expect(body).toEqual({
+      contentId: "content_3b750f8edc77152e",
+      variantId: "variant_051fab7b083f979a",
+      quality: "1080p",
+    });
+    expect(JSON.stringify(body)).not.toMatch(/source|url|cookie|token/i);
+    expect(screen.queryByText(/source_eadce|checking development job pipeline/i)).not.toBeInTheDocument();
+  });
+
+  it("unsubscribes an active job when the user cancels", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const requestPath = String(input);
+      if (requestPath === "/api/v1/jobs/resolution" && init?.method === "POST") {
+        return jsonResponse(queuedJob(), 202);
+      }
+      if (requestPath === `/api/v1/jobs/${jobId}` && init?.method === "DELETE") {
+        return jsonResponse({ ...queuedJob(), state: "cancelled", subscriberCount: 0 });
+      }
+      if (requestPath === `/api/v1/jobs/${jobId}` && init?.method === "GET") {
+        return new Promise<Response>(() => undefined);
+      }
+      throw new Error(`Unexpected request: ${init?.method} ${requestPath}`);
+    });
+    renderSearch(new FixtureSearchTransport(0), "api", new ResolutionClient(fetchMock as typeof fetch));
+
+    await submitAlias(user, "Single Release");
+    await screen.findByText("1 unified content item");
+    await user.click(screen.getByRole("button", { name: /choose releases for/i }));
+    await user.click(screen.getByRole("radio", { name: /Hindi/ }));
+    await user.click(screen.getByRole("button", { name: "Find Links" }));
+    await user.click(await screen.findByRole("button", { name: "Cancel" }));
+    expect(await screen.findByText("Link request cancelled.")).toBeVisible();
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([requestPath, init]) => String(requestPath) === `/api/v1/jobs/${jobId}` && init?.method === "DELETE")).toBe(true);
+    });
   });
 
   it("does not clear displayed results when only the draft changes", async () => {
@@ -163,7 +288,7 @@ describe("SearchPage", () => {
     await waitFor(() => expect(resultsRegion).toHaveFocus());
   });
 
-  it("contains no source internals in text or any serialized DOM attribute and never renders an image", async () => {
+  it("contains no source internals in search text or serialized search DOM and never renders a poster image", async () => {
     const user = userEvent.setup();
     const { container } = renderSearch();
     await submitAlias(user, "Multiple Sources");

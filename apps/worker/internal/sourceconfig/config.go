@@ -159,8 +159,8 @@ func Compile(config Config) ([]httpsearch.Source, error) {
 			Name:               strings.TrimSpace(configured.Name),
 			Rank:               configured.Rank,
 			Endpoint:           configured.Endpoint,
-			BuildURL:            buildURL(configured.QueryParameter),
-			Parse:               parseJSON(configured.ResultRoot, configured.TitleField, configured.URLField),
+			BuildURL:           buildURL(configured.QueryParameter),
+			Parse:              parseJSON(configured.ResultRoot, configured.TitleField, configured.URLField),
 			AllowedResultHosts: allowed,
 		})
 	}

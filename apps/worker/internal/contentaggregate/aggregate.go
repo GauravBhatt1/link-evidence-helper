@@ -81,19 +81,19 @@ type variantLocation struct {
 }
 
 var (
-	metadataTokens       = regexp.MustCompile(`(?i)\b(download|movie|esub|480p|720p|1080p|2160p|4k|uhd|fhd|web[- ]?dl|web[- ]?rip|bluray|brrip|hdrip|x26[45]|hevc|10bit|dual audio|multi audio|hindi dubbed|hindi|english|tamil|telugu|malayalam|kannada|season|series|episode|ep)\b`)
-	yearPattern          = regexp.MustCompile(`\b(19|20)[0-9]{2}\b`)
-	sizePattern          = regexp.MustCompile(`(?i)\b[0-9]+(\.[0-9]+)?\s*(KB|MB|GB|TB)\b`)
-	nonAlphaNum          = regexp.MustCompile(`[^a-z0-9]+`)
-	qualityPattern       = regexp.MustCompile(`(?i)\b(480p|720p|1080p|2160p|4k|uhd|fhd)\b`)
-	releasePattern       = regexp.MustCompile(`(?i)\b(web[- ]?dl|web[- ]?rip|bluray|brrip|hdrip|dvdrip)\b`)
-	seasonPattern        = regexp.MustCompile(`(?i)\b(season\s*|s)0?([0-9]{1,2})\b`)
-	episodePattern       = regexp.MustCompile(`(?i)\b(episode\s*|ep\s*|e)0?([0-9]{1,3})\b`)
+	metadataTokens        = regexp.MustCompile(`(?i)\b(download|movie|esub|480p|720p|1080p|2160p|4k|uhd|fhd|web[- ]?dl|web[- ]?rip|bluray|brrip|hdrip|x26[45]|hevc|10bit|dual audio|multi audio|hindi dubbed|hindi|english|tamil|telugu|malayalam|kannada|season|series|episode|ep)\b`)
+	yearPattern           = regexp.MustCompile(`\b(19|20)[0-9]{2}\b`)
+	sizePattern           = regexp.MustCompile(`(?i)\b[0-9]+(\.[0-9]+)?\s*(KB|MB|GB|TB)\b`)
+	nonAlphaNum           = regexp.MustCompile(`[^a-z0-9]+`)
+	qualityPattern        = regexp.MustCompile(`(?i)\b(480p|720p|1080p|2160p|4k|uhd|fhd)\b`)
+	releasePattern        = regexp.MustCompile(`(?i)\b(web[- ]?dl|web[- ]?rip|bluray|brrip|hdrip|dvdrip)\b`)
+	seasonPattern         = regexp.MustCompile(`(?i)\b(season\s*|s)0?([0-9]{1,2})\b`)
+	episodePattern        = regexp.MustCompile(`(?i)\b(episode\s*|ep\s*|e)0?([0-9]{1,3})\b`)
 	compactEpisodePattern = regexp.MustCompile(`(?i)\bs0?([0-9]{1,2})e0?([0-9]{1,3})\b`)
-	packPattern          = regexp.MustCompile(`(?i)\b(zip|complete|pack)\b`)
-	tvPattern            = regexp.MustCompile(`(?i)\b(season|series|s[0-9]{1,2}(?:e[0-9]{1,3})?)\b`)
-	dualPattern          = regexp.MustCompile(`(?i)\bdual\b`)
-	multiPattern         = regexp.MustCompile(`(?i)\bmulti\b`)
+	packPattern           = regexp.MustCompile(`(?i)\b(zip|complete|pack)\b`)
+	tvPattern             = regexp.MustCompile(`(?i)\b(season|series|s[0-9]{1,2}(?:e[0-9]{1,3})?)\b`)
+	dualPattern           = regexp.MustCompile(`(?i)\bdual\b`)
+	multiPattern          = regexp.MustCompile(`(?i)\bmulti\b`)
 )
 
 var qualityAliases = map[string]string{

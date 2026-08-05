@@ -34,8 +34,16 @@ func TestValidateRejectsUnsafeOrAmbiguousConfiguration(t *testing.T) {
 		{Version: 1, Sources: []SourceConfig{}},
 		{Version: 1, Sources: []SourceConfig{valid, valid}},
 		{Version: 1, Sources: []SourceConfig{func() SourceConfig { value := valid; value.Enabled = false; return value }()}},
-		{Version: 1, Sources: []SourceConfig{func() SourceConfig { value := valid; value.Endpoint = "https://user:pass@source.example/search"; return value }()}},
-		{Version: 1, Sources: []SourceConfig{func() SourceConfig { value := valid; value.Endpoint = "https://source.example/search?fixed=1"; return value }()}},
+		{Version: 1, Sources: []SourceConfig{func() SourceConfig {
+			value := valid
+			value.Endpoint = "https://user:pass@source.example/search"
+			return value
+		}()}},
+		{Version: 1, Sources: []SourceConfig{func() SourceConfig {
+			value := valid
+			value.Endpoint = "https://source.example/search?fixed=1"
+			return value
+		}()}},
 		{Version: 1, Sources: []SourceConfig{func() SourceConfig { value := valid; value.Format = "html"; return value }()}},
 		{Version: 1, Sources: []SourceConfig{func() SourceConfig { value := valid; value.TitleField = "items[0].title"; return value }()}},
 	}

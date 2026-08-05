@@ -59,7 +59,7 @@ describe("SearchForm and query configuration", () => {
     await user.type(screen.getByRole("searchbox"), "Example Film");
     rerender(<SearchForm busy externalError="The development fixture search could not be completed." onSubmit={onSubmit} />);
     const input = screen.getByRole("searchbox");
-    const button = screen.getByRole("button", { name: "Searching…" });
+    const button = screen.getByRole("button", { name: "Search in progress…" });
     expect(input).toBeEnabled();
     expect(button).toBeDisabled();
     fireEvent.submit(screen.getByRole("form", { name: "Development fixture search" }));
