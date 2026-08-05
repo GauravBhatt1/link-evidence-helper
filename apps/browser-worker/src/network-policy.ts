@@ -28,19 +28,28 @@ export async function prepareNetworkPolicy(
   const endpointHost = canonicalHost(endpoint.hostname);
   const resourceHosts = new Set(task.allowedResourceHosts.map(canonicalHost));
   const resultHosts = new Set(task.allowedResultHosts.map(canonicalHost));
-  const mappings: string[] = [];
+  const allApprovedHosts = new Set([...resourceHosts, ...resultHosts]);
+  const resolvedByHost = new Map<string, readonly ResolvedAddress[]>();
 
-  for (const host of resourceHosts) {
+  for (const host of allApprovedHosts) {
     const literalFamily = isIP(host);
     const addresses = literalFamily
       ? [{ address: host, family: literalFamily as 4 | 6 }]
       : await resolveHost(host, resolver);
     if (!allowPrivate && addresses.some(({ address }) => isUnsafeAddress(address))) {
-      throw new BrowserWorkerError("unsafe_endpoint", "A browser resource host resolved to a blocked network address.");
+      throw new BrowserWorkerError("unsafe_endpoint", "An approved browser host resolved to a blocked network address.");
     }
-    if (!literalFamily) {
-      mappings.push(`MAP ${host} ${formatResolverAddress(addresses[0]!.address)}`);
+    resolvedByHost.set(host, addresses);
+  }
+
+  const mappings: string[] = [];
+  for (const host of resourceHosts) {
+    if (isIP(host)) continue;
+    const addresses = resolvedByHost.get(host);
+    if (!addresses?.length) {
+      throw new BrowserWorkerError("unsafe_endpoint", "A browser resource host could not be pinned safely.");
     }
+    mappings.push(`MAP ${host} ${formatResolverAddress(addresses[0]!.address)}`);
   }
 
   return Object.freeze({
@@ -165,12 +174,12 @@ async function resolveHost(host: string, resolver: DNSResolver): Promise<readonl
   try {
     addresses = await resolver(host);
   } catch (error) {
-    throw new BrowserWorkerError("unsafe_endpoint", "A browser resource host could not be resolved safely.", {
+    throw new BrowserWorkerError("unsafe_endpoint", "An approved browser host could not be resolved safely.", {
       cause: error,
     });
   }
   if (!addresses.length || addresses.some(({ address, family }) => isIP(address) !== family)) {
-    throw new BrowserWorkerError("unsafe_endpoint", "A browser resource host returned invalid DNS data.");
+    throw new BrowserWorkerError("unsafe_endpoint", "An approved browser host returned invalid DNS data.");
   }
   return addresses;
 }
