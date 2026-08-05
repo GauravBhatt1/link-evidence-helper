@@ -19,6 +19,7 @@ import (
 	jobservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/jobs"
 	libraryservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/library"
 	searchservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/search"
+	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/sourceadmin"
 	"github.com/GauravBhatt1/link-evidence-helper/packages/jobqueue"
 )
 
@@ -101,7 +102,20 @@ func main() {
 		}
 	}
 
-	handler := httpapi.HandlerWithServices(catalog, jobs, libraryRepository, adminVerifier)
+	sourceAdminMode := envOrDefault("LINK_EVIDENCE_SOURCE_ADMIN_MODE", "disabled")
+	var sourceRegistry sourceadmin.Registry
+	switch sourceAdminMode {
+	case "disabled":
+	case "memory":
+		if adminVerifier == nil {
+			log.Fatal("LINK_EVIDENCE_SOURCE_ADMIN_MODE=memory requires LINK_EVIDENCE_ADMIN_TOKEN")
+		}
+		sourceRegistry = sourceadmin.NewMemoryRegistry()
+	default:
+		log.Fatalf("unsupported LINK_EVIDENCE_SOURCE_ADMIN_MODE %q", sourceAdminMode)
+	}
+
+	handler := httpapi.HandlerWithServicesAndSources(catalog, jobs, libraryRepository, adminVerifier, sourceRegistry)
 	server := &http.Server{
 		Addr:              address,
 		Handler:           handler,
@@ -123,7 +137,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("development API listening on http://%s (search=fixture; library=%s; Redis jobs=%t; admin auth=%t)", address, libraryMode, jobs != nil, adminVerifier != nil)
+	log.Printf("development API listening on http://%s (search=fixture; library=%s; Redis jobs=%t; admin auth=%t; source admin=%s)", address, libraryMode, jobs != nil, adminVerifier != nil, sourceAdminMode)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
