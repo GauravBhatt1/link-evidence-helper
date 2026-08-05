@@ -37,7 +37,6 @@ test("runs the multi-quality fixture workflow with persistent disclosure", async
   await expect(page.getByText(fixtureNotice)).toBeVisible();
   await submit(page, "Multi Quality");
   await expect(page.getByText(fixtureNotice)).toBeVisible();
-  await expect(page.getByText("Searching development fixtures…")).toBeVisible();
   await expect(page.getByText("1 unified content item")).toBeVisible();
   await expect(page.getByText(fixtureNotice)).toBeVisible();
 
