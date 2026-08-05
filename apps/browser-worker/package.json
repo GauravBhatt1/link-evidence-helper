@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
     "typecheck": "tsc --noEmit",
     "test": "playwright test"
   },
