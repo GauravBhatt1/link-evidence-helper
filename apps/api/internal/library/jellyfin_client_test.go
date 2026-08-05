@@ -25,8 +25,8 @@ func TestJellyfinClientPaginatesAndMapsSafeLibraryItems(t *testing.T) {
 		if request.Header.Get("X-Emby-Token") != "test-secret" {
 			t.Errorf("missing API token header")
 		}
-		if request.URL.Query().Get("api_key") != "" || strings.Contains(request.RawQuery, "test-secret") {
-			t.Errorf("credential leaked in query: %q", request.RawQuery)
+		if request.URL.Query().Get("api_key") != "" || strings.Contains(request.URL.RawQuery, "test-secret") {
+			t.Errorf("credential leaked in query: %q", request.URL.RawQuery)
 		}
 		if request.URL.Query().Get("ParentId") != "library-a" {
 			t.Errorf("ParentId = %q", request.URL.Query().Get("ParentId"))
