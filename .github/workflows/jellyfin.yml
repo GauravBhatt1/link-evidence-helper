@@ -39,6 +39,7 @@ jobs:
         run: go test -race ./...
         working-directory: apps/api
       - name: Verify fixture-default runtime boundary
+        working-directory: apps/api
         run: |
           go build -o /tmp/link-evidence-api ./cmd/server
           env \
