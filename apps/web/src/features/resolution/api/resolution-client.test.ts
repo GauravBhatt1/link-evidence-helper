@@ -122,8 +122,10 @@ describe("ResolutionClient", () => {
   it("uses safe server errors and rejects non-JSON responses", async () => {
     const safeClient = new ResolutionClient(trackedFetch(async () => jsonResponse({
       ok: false,
+      success: false,
       error: "Select a quality before resolving links.",
       code: "quality_required",
+      requestId: null,
     }, 400)).fetch);
     await expect(safeClient.get(jobId)).rejects.toMatchObject({
       code: "quality_required",
