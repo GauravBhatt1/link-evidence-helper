@@ -29,7 +29,8 @@ test.describe("development Go API library integration", () => {
     await expect(page.getByText("Jellyfin not configured")).toBeVisible();
 
     const probe = await page.evaluate(async () => {
-      const module = await import("/src/features/library/api/library-transport.ts");
+      const modulePath = "/src/features/library/api/library-transport.ts";
+      const module = await import(modulePath);
       const configuration = module.defaultLibraryTransportConfiguration;
       const response = await configuration.transport.list("recent", new AbortController().signal);
       return {
