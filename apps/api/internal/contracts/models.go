@@ -56,6 +56,55 @@ type SearchResponse struct {
 	PartialFailures []PartialFailure `json:"partialFailures"`
 }
 
+type LibraryItemJellyfin struct {
+	Configured   bool       `json:"configured"`
+	Present      bool       `json:"present"`
+	ItemID       *string    `json:"itemId"`
+	ServerID     *string    `json:"serverId"`
+	LastSyncedAt *time.Time `json:"lastSyncedAt"`
+}
+
+type LibraryItem struct {
+	ItemID       string               `json:"itemId"`
+	ContentID    *string              `json:"contentId"`
+	TMDBID       *string              `json:"tmdbId"`
+	Title        string               `json:"title"`
+	Year         *int                 `json:"year"`
+	MediaType    string               `json:"mediaType"`
+	Season       *int                 `json:"season"`
+	Episode      *int                 `json:"episode"`
+	Poster       *string              `json:"poster"`
+	LibraryState string               `json:"libraryState"`
+	Missing      bool                 `json:"missing"`
+	DateAdded    time.Time            `json:"dateAdded"`
+	UpdatedAt    time.Time            `json:"updatedAt"`
+	Jellyfin     LibraryItemJellyfin `json:"jellyfin"`
+}
+
+type LibrarySummary struct {
+	Total   int `json:"total"`
+	Movies  int `json:"movies"`
+	TV      int `json:"tv"`
+	Missing int `json:"missing"`
+}
+
+type LibraryJellyfinStatus struct {
+	Configured   bool       `json:"configured"`
+	Mode         string     `json:"mode"`
+	LastSyncedAt *time.Time `json:"lastSyncedAt"`
+}
+
+type LibraryResponse struct {
+	OK          bool                   `json:"ok"`
+	Success     bool                   `json:"success"`
+	Code        string                 `json:"code"`
+	View        string                 `json:"view"`
+	GeneratedAt time.Time              `json:"generatedAt"`
+	Items       []LibraryItem          `json:"items"`
+	Summary     LibrarySummary         `json:"summary"`
+	Jellyfin    LibraryJellyfinStatus `json:"jellyfin"`
+}
+
 type ResolutionRequest struct {
 	ContentID string  `json:"contentId"`
 	VariantID string  `json:"variantId"`
