@@ -1,0 +1,36 @@
+name: Audit event safety
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/internal/audit/**"
+      - ".github/workflows/audit-events.yml"
+  push:
+    branches:
+      - "restructure/integration"
+    paths:
+      - "apps/api/internal/audit/**"
+      - ".github/workflows/audit-events.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit-events:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+      - name: Verify formatting
+        run: |
+          files="$(gofmt -l apps/api/internal/audit)"
+          if test -n "$files"; then
+            printf 'Go files require gofmt:\n%s\n' "$files" >&2
+            exit 1
+          fi
+      - name: Test audit contract
+        run: go test -race ./internal/audit
+        working-directory: apps/api
