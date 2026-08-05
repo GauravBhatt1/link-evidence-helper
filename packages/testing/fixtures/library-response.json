@@ -1,0 +1,152 @@
+{
+  "ok": true,
+  "success": true,
+  "code": "ok",
+  "view": "recent",
+  "generatedAt": "2026-08-05T12:00:00Z",
+  "items": [
+    {
+      "itemId": "movie:horizon-gate:2026",
+      "contentId": "content_horizon_gate_2026",
+      "tmdbId": "100001",
+      "title": "Horizon Gate",
+      "year": 2026,
+      "mediaType": "movie",
+      "season": null,
+      "episode": null,
+      "poster": null,
+      "libraryState": "available",
+      "missing": false,
+      "dateAdded": "2026-08-05T09:30:00Z",
+      "updatedAt": "2026-08-05T10:00:00Z",
+      "jellyfin": {
+        "configured": false,
+        "present": false,
+        "itemId": null,
+        "serverId": null,
+        "lastSyncedAt": null
+      }
+    },
+    {
+      "itemId": "episode:signal-house:s01e02",
+      "contentId": "content_signal_house_s01e02",
+      "tmdbId": "200102",
+      "title": "Signal House — S01E02",
+      "year": 2025,
+      "mediaType": "episode",
+      "season": 1,
+      "episode": 2,
+      "poster": null,
+      "libraryState": "missing",
+      "missing": true,
+      "dateAdded": "2026-08-04T18:00:00Z",
+      "updatedAt": "2026-08-04T18:00:00Z",
+      "jellyfin": {
+        "configured": false,
+        "present": false,
+        "itemId": null,
+        "serverId": null,
+        "lastSyncedAt": null
+      }
+    },
+    {
+      "itemId": "series:signal-house:2025",
+      "contentId": "content_signal_house_2025",
+      "tmdbId": "200100",
+      "title": "Signal House",
+      "year": 2025,
+      "mediaType": "series",
+      "season": null,
+      "episode": null,
+      "poster": null,
+      "libraryState": "partial",
+      "missing": true,
+      "dateAdded": "2026-08-03T14:15:00Z",
+      "updatedAt": "2026-08-05T08:00:00Z",
+      "jellyfin": {
+        "configured": false,
+        "present": false,
+        "itemId": null,
+        "serverId": null,
+        "lastSyncedAt": null
+      }
+    },
+    {
+      "itemId": "movie:paper-city:2024",
+      "contentId": "content_paper_city_2024",
+      "tmdbId": "100002",
+      "title": "Paper City",
+      "year": 2024,
+      "mediaType": "movie",
+      "season": null,
+      "episode": null,
+      "poster": null,
+      "libraryState": "missing",
+      "missing": true,
+      "dateAdded": "2026-08-02T11:45:00Z",
+      "updatedAt": "2026-08-02T11:45:00Z",
+      "jellyfin": {
+        "configured": false,
+        "present": false,
+        "itemId": null,
+        "serverId": null,
+        "lastSyncedAt": null
+      }
+    },
+    {
+      "itemId": "season:signal-house:s01",
+      "contentId": "content_signal_house_s01",
+      "tmdbId": "200101",
+      "title": "Signal House — Season 1",
+      "year": 2025,
+      "mediaType": "season",
+      "season": 1,
+      "episode": null,
+      "poster": null,
+      "libraryState": "available",
+      "missing": false,
+      "dateAdded": "2026-08-01T16:30:00Z",
+      "updatedAt": "2026-08-05T08:00:00Z",
+      "jellyfin": {
+        "configured": false,
+        "present": false,
+        "itemId": null,
+        "serverId": null,
+        "lastSyncedAt": null
+      }
+    },
+    {
+      "itemId": "movie:archive-zero:2023",
+      "contentId": "content_archive_zero_2023",
+      "tmdbId": "100003",
+      "title": "Archive Zero",
+      "year": 2023,
+      "mediaType": "movie",
+      "season": null,
+      "episode": null,
+      "poster": null,
+      "libraryState": "available",
+      "missing": false,
+      "dateAdded": "2026-07-30T08:20:00Z",
+      "updatedAt": "2026-07-30T08:20:00Z",
+      "jellyfin": {
+        "configured": false,
+        "present": false,
+        "itemId": null,
+        "serverId": null,
+        "lastSyncedAt": null
+      }
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "movies": 3,
+    "tv": 3,
+    "missing": 3
+  },
+  "jellyfin": {
+    "configured": false,
+    "mode": "disabled",
+    "lastSyncedAt": null
+  }
+}

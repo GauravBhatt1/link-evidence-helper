@@ -54,6 +54,12 @@
     "valid": true
   },
   {
+    "file": "library-response.json",
+    "provenance": "sanitized deterministic Movies, TV, Missing, Recently Added, and disabled Jellyfin projection",
+    "schema": "library-response.schema.json",
+    "valid": true
+  },
+  {
     "file": "movie-one-variant.json",
     "provenance": "content_aggregation.aggregate_candidates",
     "schema": "search-response.schema.json",

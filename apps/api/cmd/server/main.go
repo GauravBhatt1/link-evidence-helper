@@ -16,6 +16,7 @@ import (
 
 	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/httpapi"
 	jobservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/jobs"
+	libraryservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/library"
 	searchservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/search"
 	"github.com/GauravBhatt1/link-evidence-helper/packages/jobqueue"
 )
@@ -38,6 +39,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("load sanitized development fixtures: %v", err)
 	}
+	libraryRepository, err := libraryservice.NewFixtureRepository(fixtureDir)
+	if err != nil {
+		log.Fatalf("load sanitized development library: %v", err)
+	}
 
 	var jobs *jobservice.Service
 	if redisAddress := strings.TrimSpace(os.Getenv("LINK_EVIDENCE_REDIS_ADDR")); redisAddress != "" {
@@ -59,10 +64,7 @@ func main() {
 		defer jobs.Close()
 	}
 
-	handler := httpapi.Handler(catalog)
-	if jobs != nil {
-		handler = httpapi.HandlerWithJobs(catalog, jobs)
-	}
+	handler := httpapi.HandlerWithJobsAndLibrary(catalog, jobs, libraryRepository)
 	server := &http.Server{
 		Addr:              address,
 		Handler:           handler,
@@ -84,7 +86,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("development fixture API listening on http://%s (live sources disabled; Redis jobs=%t)", address, jobs != nil)
+	log.Printf("development fixture API listening on http://%s (live sources disabled; library=fixture; Redis jobs=%t)", address, jobs != nil)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
