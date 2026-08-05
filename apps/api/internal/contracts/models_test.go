@@ -66,6 +66,10 @@ func typedValue(schema string) any {
 		return &Content{}
 	case "search-response.schema.json":
 		return &SearchResponse{}
+	case "library-item.schema.json":
+		return &LibraryItem{}
+	case "library-response.schema.json":
+		return &LibraryResponse{}
 	case "resolution-request.schema.json":
 		return &ResolutionRequest{}
 	case "resolution-result.schema.json":
@@ -150,7 +154,8 @@ func TestPublicGoTypesContainNoInternalOrSecretJSONFields(t *testing.T) {
 	forbidden := []string{"cookie", "authorization", "workflowMetadata", "selector", "signedQuery", "apiKey", "password", "token"}
 	types := []reflect.Type{
 		reflect.TypeOf(SourceCandidate{}), reflect.TypeOf(ReleaseVariant{}), reflect.TypeOf(Content{}),
-		reflect.TypeOf(SearchResponse{}), reflect.TypeOf(ResolutionRequest{}), reflect.TypeOf(ResolutionResult{}),
+		reflect.TypeOf(SearchResponse{}), reflect.TypeOf(LibraryItem{}), reflect.TypeOf(LibraryResponse{}),
+		reflect.TypeOf(ResolutionRequest{}), reflect.TypeOf(ResolutionResult{}),
 		reflect.TypeOf(Job{}), reflect.TypeOf(JobEvent{}), reflect.TypeOf(ErrorResponse{}),
 	}
 	var found []string
@@ -177,6 +182,8 @@ func TestGoTopLevelFieldsMatchCanonicalSchemas(t *testing.T) {
 		"release-variant.schema.json":    reflect.TypeOf(ReleaseVariant{}),
 		"content.schema.json":            reflect.TypeOf(Content{}),
 		"search-response.schema.json":    reflect.TypeOf(SearchResponse{}),
+		"library-item.schema.json":       reflect.TypeOf(LibraryItem{}),
+		"library-response.schema.json":   reflect.TypeOf(LibraryResponse{}),
 		"resolution-request.schema.json": reflect.TypeOf(ResolutionRequest{}),
 		"resolution-result.schema.json":  reflect.TypeOf(ResolutionResult{}),
 		"job.schema.json":                reflect.TypeOf(Job{}),
