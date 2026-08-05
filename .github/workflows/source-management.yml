@@ -1,0 +1,36 @@
+name: Source management safety
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/internal/sourceadmin/**"
+      - ".github/workflows/source-management.yml"
+  push:
+    branches:
+      - "restructure/integration"
+    paths:
+      - "apps/api/internal/sourceadmin/**"
+      - ".github/workflows/source-management.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  source-management:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+      - name: Verify formatting
+        run: |
+          files="$(gofmt -l apps/api/internal/sourceadmin)"
+          if test -n "$files"; then
+            printf 'Go files require gofmt:\n%s\n' "$files" >&2
+            exit 1
+          fi
+      - name: Test source registry
+        run: go test -race ./internal/sourceadmin
+        working-directory: apps/api
