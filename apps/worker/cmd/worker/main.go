@@ -12,6 +12,8 @@ import (
 	"time"
 
 	workerjobs "github.com/GauravBhatt1/link-evidence-helper/apps/worker/internal/jobs"
+	"github.com/GauravBhatt1/link-evidence-helper/apps/worker/internal/linkverify"
+	"github.com/GauravBhatt1/link-evidence-helper/apps/worker/internal/resolution"
 	"github.com/GauravBhatt1/link-evidence-helper/packages/jobqueue"
 )
 
@@ -35,18 +37,55 @@ func main() {
 	defer store.Close()
 
 	concurrency := envInt("LINK_EVIDENCE_WORKER_CONCURRENCY", 2, 1, jobqueue.MaxWorkerConcurrency)
-	stepDelay := time.Duration(envInt("LINK_EVIDENCE_DEVELOPMENT_STEP_DELAY_MS", 100, 0, 10000)) * time.Millisecond
-	runner, err := jobqueue.NewRunner(store, workerjobs.DevelopmentExecutor{StepDelay: stepDelay}, concurrency)
+	executor, mode, err := configuredExecutor()
+	if err != nil {
+		log.Fatal(err)
+	}
+	runner, err := jobqueue.NewRunner(store, executor, concurrency)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	log.Printf("development Redis worker started (concurrency=%d; live sources disabled)", concurrency)
+	log.Printf("Redis worker started (mode=%s; concurrency=%d)", mode, concurrency)
 	if err := runner.Run(ctx); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func configuredExecutor() (jobqueue.Executor, string, error) {
+	catalogPath := strings.TrimSpace(os.Getenv("LINK_EVIDENCE_RESOLUTION_CATALOG"))
+	if catalogPath == "" {
+		stepDelay := time.Duration(envInt("LINK_EVIDENCE_DEVELOPMENT_STEP_DELAY_MS", 100, 0, 10000)) * time.Millisecond
+		return workerjobs.DevelopmentExecutor{StepDelay: stepDelay}, "development-foundation", nil
+	}
+
+	catalogFile, err := os.Open(catalogPath)
+	if err != nil {
+		return nil, "", err
+	}
+	defer catalogFile.Close()
+	catalog, err := resolution.LoadCatalog(catalogFile)
+	if err != nil {
+		return nil, "", err
+	}
+	verifier := linkverify.Verifier{
+		AllowPrivate: os.Getenv("LINK_EVIDENCE_RESOLUTION_ALLOW_PRIVATE") == "true",
+		Timeout: time.Duration(envInt(
+			"LINK_EVIDENCE_RESOLUTION_TIMEOUT_MS",
+			int(linkverify.DefaultTimeout/time.Millisecond),
+			100,
+			60000,
+		)) * time.Millisecond,
+		MaxRedirects: envInt(
+			"LINK_EVIDENCE_RESOLUTION_MAX_REDIRECTS",
+			linkverify.DefaultMaxRedirects,
+			1,
+			10,
+		),
+	}
+	return resolution.Executor{Catalog: catalog, Verifier: verifier}, "resolution", nil
 }
 
 func envOrDefault(name, fallback string) string {
