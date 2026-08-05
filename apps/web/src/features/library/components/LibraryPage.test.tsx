@@ -23,7 +23,7 @@ describe("LibraryPage", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Horizon Gate" })).toBeVisible();
     expect(screen.getByRole("heading", { level: 2, name: "Paper City" })).toBeVisible();
     expect(screen.queryByText("Signal House — S01E02")).not.toBeInTheDocument();
-    expect(screen.getByText("3 movies")).toBeVisible();
+    expect(screen.getByLabelText("Library summary")).toHaveTextContent("3 movies");
     expect(screen.getByText("Jellyfin not configured")).toBeVisible();
     expect(container.querySelector("img")).toBeNull();
     expect(container.outerHTML).not.toMatch(/serverId|itemId|tmdbId|contentId/i);
