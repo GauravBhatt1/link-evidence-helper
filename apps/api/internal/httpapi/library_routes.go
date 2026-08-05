@@ -5,14 +5,22 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/adminauth"
 	libraryservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/library"
 	searchservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/search"
 )
 
 // HandlerWithJobsAndLibrary enables the deterministic library API alongside
-// the existing search and job routes. The repository decides whether data is a
-// sanitized fixture or a future explicitly configured durable implementation.
+// the existing search and job routes. Admin authentication remains disabled.
 func HandlerWithJobsAndLibrary(searcher searchservice.Searcher, jobs JobBackend, library libraryservice.Repository) http.Handler {
+	return HandlerWithServices(searcher, jobs, library, nil)
+}
+
+// HandlerWithServices composes all currently supported API boundaries. The
+// admin route exists only as a session probe and is fail-closed when verifier
+// is nil; future administrative mutations must be mounted behind the same
+// verifier boundary.
+func HandlerWithServices(searcher searchservice.Searcher, jobs JobBackend, library libraryservice.Repository, verifier *adminauth.Verifier) http.Handler {
 	api := &apiHandler{searcher: searcher, jobs: jobs}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", api.health)
@@ -20,6 +28,7 @@ func HandlerWithJobsAndLibrary(searcher searchservice.Searcher, jobs JobBackend,
 	mux.HandleFunc("/api/v1/library", api.library(library))
 	mux.HandleFunc("/api/v1/jobs/resolution", api.createResolutionJob)
 	mux.HandleFunc("/api/v1/jobs/", api.jobResource)
+	mux.HandleFunc("/api/v1/admin/session", api.adminSession(verifier))
 	return api.securityHeaders(mux)
 }
 

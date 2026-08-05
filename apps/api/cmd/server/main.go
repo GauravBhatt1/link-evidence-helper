@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/adminauth"
 	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/httpapi"
 	jobservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/jobs"
 	libraryservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/library"
@@ -92,7 +93,15 @@ func main() {
 		defer jobs.Close()
 	}
 
-	handler := httpapi.HandlerWithJobsAndLibrary(catalog, jobs, libraryRepository)
+	var adminVerifier *adminauth.Verifier
+	if token := os.Getenv("LINK_EVIDENCE_ADMIN_TOKEN"); token != "" {
+		adminVerifier, err = adminauth.NewVerifier(token)
+		if err != nil {
+			log.Fatalf("invalid LINK_EVIDENCE_ADMIN_TOKEN: %v", err)
+		}
+	}
+
+	handler := httpapi.HandlerWithServices(catalog, jobs, libraryRepository, adminVerifier)
 	server := &http.Server{
 		Addr:              address,
 		Handler:           handler,
@@ -114,7 +123,7 @@ func main() {
 		}
 	}()
 
-	log.Printf("development API listening on http://%s (search=fixture; library=%s; Redis jobs=%t)", address, libraryMode, jobs != nil)
+	log.Printf("development API listening on http://%s (search=fixture; library=%s; Redis jobs=%t; admin auth=%t)", address, libraryMode, jobs != nil, adminVerifier != nil)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
