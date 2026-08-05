@@ -1,6 +1,6 @@
 # Restructuring project state
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
 ## Goal
 
@@ -31,67 +31,48 @@ Deliver one production-ready repository and deployment path for the existing lin
 
 ## Completed checkpoints
 
-### Milestone 0 — audit and migration design
+### Milestones 0–8 — architecture, contracts, UI, search, jobs, browser fallback, and Delivery Links
 
-Completed read-only architecture audit, migration matrix, rollback boundaries, risk analysis, and scaling plan.
+Completed architecture and migration design, canonical contracts, isolated React shell, fixture search workflow, loopback-only Go Search API, Redis job foundation, hardened HTTP-first shadow search, isolated Playwright fallback, and verified resolution/Delivery Links workflow.
 
-### Milestone 1 — contracts and scaffold
+Key cumulative Delivery Links integration commit: `02d49d5bf97f20e0e9f7595971e17cd9c424761c`.
 
-- Branch: `restructure/milestone-1-scaffold`
-- Commit: `67587d2184ca505c25a3cb02a5301765dbf769ac`
-- Canonical JSON Schemas, Go/TypeScript/Python representations, deterministic fixtures, contract parity tests, and isolated development Redis/PostgreSQL scaffold
+### Milestone 9 — library domain foundation
 
-### Milestone 2 — isolated React shell
+- Pull request: `#9`
+- Added versioned library contracts and validated Go domain models for Movies, TV, Missing, Recently Added, seasons, episodes, and future Jellyfin boundaries.
+- No live integration, persistence, production data, or external requests.
 
-- Branch: `restructure/milestone-2-react-shell`
-- Original commit: `19f949528282664c92adceecca3f9242f611468d`
-- Responsive React shell, navigation, route placeholders, accessibility, component tests, and seven-viewport browser tests
+### Milestone 10 — fixture-backed library API and React views
 
-### Milestone 3 — fixture-driven React search workflow
+- Pull request: `#10`
+- Added deterministic shared fixtures, repository boundaries, strict same-origin library API, typed React transport, responsive library views, accessibility coverage, and privacy tests.
 
-- Source branch: `restructure/milestone-3-react-search`
-- Reviewed head: `3d5819a389b5932b048eb5ccab2dc8f5e7927b6f`
-- Squash merged as: `ef53c42a88504c483cf657bc2dbee421a6d5fa42`
-- Deterministic fixture search, unified content cards, active-card workspace, native release/quality selection, validated local resolution intent, cancellation/stale-response protection, accessibility fixes, and green CI
+### Milestone 11 — explicit secure Jellyfin connector
 
-### Milestone 4 — development Go Search API and typed React client
+- Pull request: `#11`
+- Added opt-in runtime-only Jellyfin configuration, bounded pagination, canonical mapping, DNS and redirect safety, proxy isolation, response limits, caching, cancellation, deterministic mock-server tests, and operator documentation.
+- Fixture mode remains the default; no live server or credential is committed or contacted by CI.
 
-- Source branch: `restructure/milestone-4-go-search-api`
-- Reviewed head: `e0f2587fc3f2b4eb425420b53628ba198469390d`
-- Squash merged as: `ec6db3ca70548f36e2bb74b6e7e4f6645a6b3e81`
-- Added loopback-only Go HTTP service, deterministic sanitized-fixture search, canonical safe errors, and explicit typed React API transport
+### Milestone 12 — administrator authentication boundary
 
-### Milestone 5 — Redis-backed job foundation
+- Pull requests: `#13` and follow-up `#16`
+- Added runtime-only administrator bearer-token configuration, strict parsing, constant-time verification, fail-closed session endpoint, disabled-by-default behavior, route/runtime/security tests, dedicated CI, and secret-safe operator documentation.
+- Tokens are not accepted through query strings, cookies, local storage, committed files, or logs.
 
-- Source branch: `restructure/milestone-5-redis-jobs`
-- Reviewed head: `4a31e5b1b898882dbd23cbdec49f1f4681673067`
-- Squash merged as: `7f11f13e71e50ac0294230c370838632db4bd3c3`
-- Added canonical Redis job/event storage, atomic idempotency and coalescing, subscriber cancellation, bounded queueing, recovery, cleanup, API routes, and a disconnected development executor
+### Milestone 13 — secret-safe audit event foundation
 
-### Milestone 6 — hardened HTTP-first shadow search
+- Pull request: `#14`
+- Added bounded administrative audit events with allowlisted actor, action, resource, and outcome values.
+- Arbitrary metadata, headers, bodies, URLs, credentials, cookies, and tokens are excluded by construction.
+- No production logging sink or durable database is enabled yet.
 
-- Source branch: `restructure/milestone-6-http-search-workers`
-- Reviewed head: `a9c82c73912f7aa90ddf869ae14c83aa31e8294a`
-- Pull request: `#5`
-- Added concurrent ranked source search, isolated partial failure, strict versioned source configuration, bounded HTTP handling, DNS pinning, private-network rejection, redirect restrictions, proxy isolation, duplicate suppression, and Go aggregation/parity coverage
-- No built-in live sources or production routing were added
+### Milestone 14 — bounded source-management registry foundation
 
-### Milestone 7 — isolated Playwright browser fallback
-
-- Source branch: `restructure/browser-worker-fallback`
-- Reviewed head: `ce9a77636a5d04b8cb8d53ff66c650e52036e8a9`
-- Pull request: `#6`
-- Added a credential-free browser worker with strict task validation, DNS and network safety, host pinning, request/resource restrictions, bounded extraction, cancellation, safe errors, and deterministic local-browser tests
-- Browser execution remains isolated and fallback-only
-
-### Milestone 8 — verified resolution and Delivery Links
-
-- Source branch: `restructure/resolution-delivery-workflow`
-- Reviewed head: `dd508a9e29ab3e303ec78b8a969d275cf4f6f3bd`
-- Pull request: `#7`
-- Integrated as: `02d49d5bf97f20e0e9f7595971e17cd9c424761c`
-- Added strict versioned catalog configuration, ranked preferred/backup source failover, DNS-pinned proxy-free ranged delivery verification, exact-origin redirect policy, canonical resolution results, safe attempt summaries, cancellation/job events, Delivery Links UI, and end-to-end CI
-- Existing disconnected executor remains the default unless the verified resolver is explicitly configured
+- Pull request: `#15`
+- Integrated as: `a8a4208bac59709b97a9bfd57be3db87a0f89f9e`
+- Added concurrency-safe list/create/update/disable operations, optimistic revisions, deterministic ordering, credential-free endpoint contracts, strict kind and URL validation, UTC normalization, race-enabled tests, and dedicated CI.
+- The in-memory registry is non-durable and is not wired into runtime implicitly; no live source configuration or mutation route is enabled.
 
 ## Current integration branch
 
@@ -99,7 +80,7 @@ Completed read-only architecture audit, migration matrix, rollback boundaries, r
 
 Current recorded implementation commit:
 
-`02d49d5bf97f20e0e9f7595971e17cd9c424761c`
+`a8a4208bac59709b97a9bfd57be3db87a0f89f9e`
 
 This branch is the cumulative non-production integration line for all remaining work.
 
@@ -111,22 +92,22 @@ The known production service remains the existing Python application on port 876
 
 ## Remaining work
 
-1. Movies, TV, Missing, Recently Added, and Jellyfin integration with deterministic non-production fixtures and explicit external configuration
-2. Admin authentication, authorization boundaries, source management, diagnostics, and audit-safe events
-3. PostgreSQL durable schema, repository layer, migrations, and SQLite import/rollback tooling
+1. Authenticated and authorized source-management HTTP routes with strict request bounds, optimistic concurrency responses, CSRF-safe same-origin behavior, and audit-event emission
+2. Diagnostics and operational read models that remain secret-safe and disabled unless explicitly configured
+3. PostgreSQL durable schema, repositories, migrations, transaction boundaries, and SQLite import/rollback tooling
 4. Production Docker images and Compose topology, health/readiness checks, Caddy routing, secrets handling, and least-privilege runtime settings
-5. Structured observability, metrics, tracing boundaries, operational diagnostics, backup, restore, and recovery drills
+5. Structured observability, metrics, tracing boundaries, backup, restore, and recovery drills
 6. Full behavioral parity, load, security, migration, rollback, and release-candidate verification
 7. Final controlled deployment and traffic switch after explicit user action
 
 ## Working method
 
-- Continue through internal checkpoints without requiring the user to copy large milestone prompts.
+- Continue through internal checkpoints without requiring milestone approvals.
 - Use focused branches and pull requests into `restructure/integration`.
-- Require green CI before each integration merge.
+- Require green relevant CI before each integration merge.
 - Keep `master` and production untouched until a final release candidate is complete.
 - Stop only for an actual external blocker, missing production-only information, or the final VPS deployment/cutover action.
 
 ## Next action
 
-Create the next focused branch from `restructure/integration` and implement the library-domain foundation for Movies, TV, Missing, and Recently Added. Keep Jellyfin behind an explicit credential-free interface and sanitized mock server first; define canonical contracts, durable-boundary interfaces, deterministic fixture parity, cancellation/timeouts, and network-safety rules before adding any real external configuration. Do not contact a live Jellyfin server, change production routing, or touch port 8765.
+Create a focused branch from `restructure/integration` for authenticated source-management HTTP routes. Reuse the existing fail-closed administrator verifier, bounded source registry, and secret-safe audit event contract. Add strict JSON and body-size limits, reject query-string credentials and unsupported content types, map revision conflicts deterministically, keep the registry disabled unless explicitly supplied, and cover unauthorized, malformed, conflict, race, and secret-leak regression cases. Do not add live sources, persistence, production routing, deployment, VPS access, or port 8765 changes.
