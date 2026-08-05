@@ -31,7 +31,11 @@ describe("library transports", () => {
   });
 
   it("uses a same-origin no-store API request and validates the requested view", async () => {
-    const fetchMock = vi.fn(async () => response({ ...libraryFixture, view: "movies", items: libraryFixture.items.filter((item) => item.mediaType === "movie") }));
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => response({
+      ...libraryFixture,
+      view: "movies",
+      items: libraryFixture.items.filter((item) => item.mediaType === "movie"),
+    }));
     const transport = new ApiLibraryTransport("/api/v1/library", fetchMock as typeof fetch);
     const result = await transport.list("movies", new AbortController().signal);
 
