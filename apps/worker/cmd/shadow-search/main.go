@@ -12,17 +12,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/GauravBhatt1/link-evidence-helper/apps/worker/internal/contentaggregate"
 	"github.com/GauravBhatt1/link-evidence-helper/apps/worker/internal/httpsearch"
+	"github.com/GauravBhatt1/link-evidence-helper/apps/worker/internal/shadowsearch"
 	"github.com/GauravBhatt1/link-evidence-helper/apps/worker/internal/sourceconfig"
 )
-
-type output struct {
-	Mode            string                     `json:"mode"`
-	Query           string                     `json:"query"`
-	Contents        []contentaggregate.Content `json:"contents"`
-	PartialFailures []httpsearch.SourceError   `json:"partialFailures"`
-}
 
 func main() {
 	log.SetFlags(0)
@@ -54,37 +47,17 @@ func main() {
 		log.Fatal(err)
 	}
 
-	engine := httpsearch.Engine{
+	output, err := shadowsearch.Run(context.Background(), httpsearch.Engine{
 		AllowPrivate:        *allowPrivate,
 		SourceTimeout:       *timeout,
 		MaxResponseBytes:    httpsearch.DefaultMaxResponseBytes,
 		MaxResultsPerSource: httpsearch.DefaultMaxResultsPerSource,
 		Backoff:             httpsearch.NewBackoff(30*time.Second, 10*time.Minute),
-	}
-	response, err := engine.Search(context.Background(), *query, sources)
+	}, *query, sources)
 	if err != nil {
 		log.Fatal(err)
 	}
-	normalized, err := httpsearch.NormalizeQuery(*query)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	candidates := make([]contentaggregate.Candidate, 0, len(response.Results))
-	for _, result := range response.Results {
-		candidates = append(candidates, contentaggregate.Candidate{
-			Title:      result.Title,
-			URL:        result.URL,
-			SourceID:   result.SourceID,
-			SourceName: result.Source,
-		})
-	}
-	encoded, err := json.MarshalIndent(output{
-		Mode:            "development-shadow-http-search",
-		Query:           normalized,
-		Contents:        contentaggregate.Aggregate(candidates),
-		PartialFailures: response.Errors,
-	}, "", "  ")
+	encoded, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
 		log.Fatalf("encode shadow result: %v", err)
 	}
