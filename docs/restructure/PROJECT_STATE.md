@@ -53,29 +53,45 @@ Completed read-only architecture audit, migration matrix, rollback boundaries, r
 - Reviewed head: `3d5819a389b5932b048eb5ccab2dc8f5e7927b6f`
 - Squash merged as: `ef53c42a88504c483cf657bc2dbee421a6d5fa42`
 - Deterministic fixture search, unified content cards, active-card workspace, native release/quality selection, validated local resolution intent, cancellation/stale-response protection, accessibility fixes, and green CI
-- Final CI: Python 109 passed; contract, Go, TypeScript, Compose safety, frontend typecheck, Vitest 55 passed, Playwright 53 passed with 3 expected desktop-only skips
 
 ### Milestone 4 — development Go Search API and typed React client
 
 - Source branch: `restructure/milestone-4-go-search-api`
 - Reviewed head: `e0f2587fc3f2b4eb425420b53628ba198469390d`
 - Squash merged as: `ec6db3ca70548f36e2bb74b6e7e4f6645a6b3e81`
-- Added loopback-only Go HTTP service with `GET /healthz` and `GET /api/v1/search?q=`
-- Added exact deterministic sanitized-fixture backend, canonical empty/error responses, strict method/parameter boundaries, request IDs, and safe errors
-- Added same-origin typed React API transport with canonical schema validation and explicit `VITE_SEARCH_TRANSPORT=api` opt-in
-- Fixture mode remains the default; Vite proxies `/api` to `127.0.0.1:8780` only in explicit API mode
-- Final CI: all contract jobs passed; Go API integration passed; frontend typecheck passed; Vitest 62 passed; fixture-mode Playwright 53 passed with 10 expected mode/viewport skips; dedicated React-to-Go browser integration passed; loopback API cleanup passed
+- Added loopback-only Go HTTP service, deterministic sanitized-fixture search, canonical safe errors, and explicit typed React API transport
 
 ### Milestone 5 — Redis-backed job foundation
 
 - Source branch: `restructure/milestone-5-redis-jobs`
 - Reviewed head: `4a31e5b1b898882dbd23cbdec49f1f4681673067`
 - Squash merged as: `7f11f13e71e50ac0294230c370838632db4bd3c3`
-- Added canonical Redis job/event storage, atomic idempotency and canonical-fingerprint coalescing, subscriber counting, per-subscription unsubscribe, and final-subscriber cancellation
-- Added bounded queue capacity and worker concurrency, validated state transitions, TTL cleanup, processing recovery, and acknowledgement rules
-- Worker shutdown leaves an interrupted job recoverable in the processing list; startup recovery safely returns it to the queue
-- Added versioned job creation/status/events/unsubscribe API routes and a transparent development executor that contacts no live sources and returns no Delivery Links
-- Final CI: contract scaffold passed; React shell and React-to-Go integration passed; Go module metadata clean; jobqueue/API/worker race tests passed against Redis 7.4.2; API and worker builds passed; end-to-end idempotency, coalescing, processing, status/events, recovery, and cleanup passed
+- Added canonical Redis job/event storage, atomic idempotency and coalescing, subscriber cancellation, bounded queueing, recovery, cleanup, API routes, and a disconnected development executor
+
+### Milestone 6 — hardened HTTP-first shadow search
+
+- Source branch: `restructure/milestone-6-http-search-workers`
+- Reviewed head: `a9c82c73912f7aa90ddf869ae14c83aa31e8294a`
+- Pull request: `#5`
+- Added concurrent ranked source search, isolated partial failure, strict versioned source configuration, bounded HTTP handling, DNS pinning, private-network rejection, redirect restrictions, proxy isolation, duplicate suppression, and Go aggregation/parity coverage
+- No built-in live sources or production routing were added
+
+### Milestone 7 — isolated Playwright browser fallback
+
+- Source branch: `restructure/browser-worker-fallback`
+- Reviewed head: `ce9a77636a5d04b8cb8d53ff66c650e52036e8a9`
+- Pull request: `#6`
+- Added a credential-free browser worker with strict task validation, DNS and network safety, host pinning, request/resource restrictions, bounded extraction, cancellation, safe errors, and deterministic local-browser tests
+- Browser execution remains isolated and fallback-only
+
+### Milestone 8 — verified resolution and Delivery Links
+
+- Source branch: `restructure/resolution-delivery-workflow`
+- Reviewed head: `dd508a9e29ab3e303ec78b8a969d275cf4f6f3bd`
+- Pull request: `#7`
+- Integrated as: `02d49d5bf97f20e0e9f7595971e17cd9c424761c`
+- Added strict versioned catalog configuration, ranked preferred/backup source failover, DNS-pinned proxy-free ranged delivery verification, exact-origin redirect policy, canonical resolution results, safe attempt summaries, cancellation/job events, Delivery Links UI, and end-to-end CI
+- Existing disconnected executor remains the default unless the verified resolver is explicitly configured
 
 ## Current integration branch
 
@@ -83,27 +99,25 @@ Completed read-only architecture audit, migration matrix, rollback boundaries, r
 
 Current recorded implementation commit:
 
-`7f11f13e71e50ac0294230c370838632db4bd3c3`
+`02d49d5bf97f20e0e9f7595971e17cd9c424761c`
 
-This branch is the cumulative non-production integration line for all remaining work. Documentation updates may appear after the recorded implementation commit.
+This branch is the cumulative non-production integration line for all remaining work.
 
 ## Current production boundary
 
 The default branch is `master`. No restructuring work has been merged to `master`, deployed, or routed to production.
 
-The known production service remains the existing Python application on port 8765. GitHub cannot independently verify the current VPS listener, container identity, local database, or mounted volumes; those checks must be executed on the VPS during release-candidate and final-cutover verification.
+The known production service remains the existing Python application on port 8765. GitHub cannot independently verify the current VPS listener, container identity, local database, credentials, or mounted volumes; those checks must be executed on the VPS during release-candidate and final-cutover verification.
 
 ## Remaining work
 
-1. Go HTTP-first source search and ranked failover parity with the Python behavioral oracle
-2. TypeScript Playwright browser-worker fallback
-3. Real link-resolution workflow and Delivery Links UI
-4. Movies, TV, Missing, Recently Added, and Jellyfin integration
-5. Admin authentication, source management, diagnostics, and audit-safe events
-6. PostgreSQL durable schema and SQLite migration/rollback tooling
-7. Production Docker Compose, health checks, Caddy routing, observability, backup, and restore
-8. Full parity, load, security, migration, rollback, and release-candidate verification
-9. Final controlled deployment and traffic switch
+1. Movies, TV, Missing, Recently Added, and Jellyfin integration with deterministic non-production fixtures and explicit external configuration
+2. Admin authentication, authorization boundaries, source management, diagnostics, and audit-safe events
+3. PostgreSQL durable schema, repository layer, migrations, and SQLite import/rollback tooling
+4. Production Docker images and Compose topology, health/readiness checks, Caddy routing, secrets handling, and least-privilege runtime settings
+5. Structured observability, metrics, tracing boundaries, operational diagnostics, backup, restore, and recovery drills
+6. Full behavioral parity, load, security, migration, rollback, and release-candidate verification
+7. Final controlled deployment and traffic switch after explicit user action
 
 ## Working method
 
@@ -115,4 +129,4 @@ The known production service remains the existing Python application on port 876
 
 ## Next action
 
-Create the next focused branch from `restructure/integration` and implement the HTTP-first Go source-search compatibility layer in shadow/development mode. Preserve the existing Python implementation as the behavioral oracle, use sanitized local fixtures and mock HTTP servers for parity tests, enforce network-safety rules, and do not route production traffic or contact unapproved live sources.
+Create the next focused branch from `restructure/integration` and implement the library-domain foundation for Movies, TV, Missing, and Recently Added. Keep Jellyfin behind an explicit credential-free interface and sanitized mock server first; define canonical contracts, durable-boundary interfaces, deterministic fixture parity, cancellation/timeouts, and network-safety rules before adding any real external configuration. Do not contact a live Jellyfin server, change production routing, or touch port 8765.
