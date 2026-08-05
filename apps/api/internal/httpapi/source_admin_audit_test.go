@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/adminauth"
 	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/audit"
@@ -38,8 +39,7 @@ func TestSourceAdminRecordsBoundedMutationOutcomes(t *testing.T) {
 	if event.Action != "source.create" || event.Resource != "source:example" || event.Outcome != "success" {
 		t.Fatalf("event = %#v", event)
 	}
-	serialized := response.Body.String()
-	if strings.Contains(serialized, token) {
+	if strings.Contains(response.Body.String(), token) {
 		t.Fatal("response leaked administrator token")
 	}
 }
@@ -54,7 +54,7 @@ func TestSourceAdminRecordsFailedConflict(t *testing.T) {
 	recorder := audit.NewMemoryRecorder()
 	handler := SourceAdminHandlerWithAudit(verifier, registry, recorder)
 
-	created, err := registry.Create(sourceadmin.Draft{ID: "example", DisplayName: "Example", Kind: "http-json", Endpoint: "https://example.test/", Enabled: true}, testNow())
+	created, err := registry.Create(sourceadmin.Draft{ID: "example", DisplayName: "Example", Kind: "http-json", Endpoint: "https://example.test/", Enabled: true}, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
