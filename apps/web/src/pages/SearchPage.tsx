@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ResolutionClient } from "../features/resolution/api/resolution-client";
+import { useResolution } from "../features/resolution/hooks/use-resolution";
 import {
   defaultSearchTransportConfiguration,
   type SearchTransportMode,
@@ -15,21 +17,22 @@ import {
   type SearchSelections,
 } from "../features/search/model/release-selection";
 import { toContentCardViewModel } from "../features/search/model/search-view-model";
-import { useResolution } from "../features/resolution/hooks/use-resolution";
 import "../features/search/styles/search.css";
 import type { ResolutionRequest } from "../types/contracts";
 
 type SearchPageProps = {
   transport?: SearchTransport;
   mode?: SearchTransportMode;
+  resolutionClient?: ResolutionClient;
 };
 
 export function SearchPage({
   transport = defaultSearchTransportConfiguration.transport,
   mode = defaultSearchTransportConfiguration.mode,
+  resolutionClient,
 }: SearchPageProps) {
   const search = useSearch(transport);
-  const resolution = useResolution();
+  const resolution = useResolution(resolutionClient ? { client: resolutionClient } : undefined);
   const [activeContentId, setActiveContentId] = useState<string | null>(null);
   const [selections, setSelections] = useState<SearchSelections>({});
   const [localIntent, setLocalIntent] = useState<ResolutionRequest | null>(null);
