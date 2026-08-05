@@ -119,16 +119,29 @@ jobs:
           curl --fail --silent --show-error \
             'http://127.0.0.1:8780/api/v1/search?q=Example%20Film' \
             >/tmp/link-evidence-search.json
+          curl --fail --silent --show-error \
+            'http://127.0.0.1:8780/api/v1/library?view=movies' \
+            >/tmp/link-evidence-library.json
           python3 - <<'PY'
           import json
           with open('/tmp/link-evidence-search.json', encoding='utf-8') as handle:
-              payload = json.load(handle)
-          assert payload.get('ok') is True
-          assert payload.get('success') is True
-          assert payload.get('code') == 'ok'
-          assert payload.get('query') == 'Example Film'
-          assert len(payload.get('contents', [])) == 1
+              search = json.load(handle)
+          assert search.get('ok') is True
+          assert search.get('success') is True
+          assert search.get('code') == 'ok'
+          assert search.get('query') == 'Example Film'
+          assert len(search.get('contents', [])) == 1
+
+          with open('/tmp/link-evidence-library.json', encoding='utf-8') as handle:
+              library = json.load(handle)
+          assert library.get('ok') is True
+          assert library.get('success') is True
+          assert library.get('code') == 'ok'
+          assert library.get('view') == 'movies'
+          assert len(library.get('items', [])) == 3
+          assert library.get('summary') == {'total': 6, 'movies': 3, 'tv': 3, 'missing': 3}
+          assert library.get('jellyfin') == {'configured': False, 'mode': 'disabled', 'lastSyncedAt': None}
           PY
 
           pnpm --filter @link-evidence/web exec playwright test \
-            e2e/api-search.spec.ts --project=mobile-390x844
+            e2e/api-search.spec.ts e2e/api-library.spec.ts --project=mobile-390x844

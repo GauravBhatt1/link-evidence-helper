@@ -1,44 +1,78 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://link-evidence-helper.invalid/schema/library-item.schema.json",
-  "title": "Library item",
+  "$id": "https://schemas.jobinfo.local/v1/library-item.schema.json",
+  "title": "LibraryItem",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "itemId",
-    "title",
-    "mediaType",
-    "libraryState",
-    "dateAdded",
-    "updatedAt",
-    "missing",
-    "jellyfin"
+    "itemId", "contentId", "tmdbId", "title", "year", "mediaType",
+    "season", "episode", "poster", "libraryState", "missing",
+    "dateAdded", "updatedAt", "jellyfin"
   ],
   "properties": {
-    "itemId": { "type": "string", "minLength": 1, "maxLength": 128 },
-    "contentId": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 },
-    "tmdbId": { "type": ["string", "null"], "pattern": "^[0-9]+$" },
-    "title": { "type": "string", "minLength": 1, "maxLength": 300 },
-    "year": { "type": ["integer", "null"], "minimum": 1874, "maximum": 2200 },
-    "mediaType": { "enum": ["movie", "series", "season", "episode"] },
-    "season": { "type": ["integer", "null"], "minimum": 0, "maximum": 10000 },
-    "episode": { "type": ["integer", "null"], "minimum": 0, "maximum": 10000 },
-    "poster": { "type": ["string", "null"], "maxLength": 2048 },
-    "libraryState": { "enum": ["available", "missing", "partial", "unknown"] },
-    "missing": { "type": "boolean" },
-    "dateAdded": { "type": "string", "format": "date-time" },
-    "updatedAt": { "type": "string", "format": "date-time" },
+    "itemId": {"type": "string", "minLength": 1, "maxLength": 128},
+    "contentId": {"type": ["string", "null"], "minLength": 1, "maxLength": 128},
+    "tmdbId": {"type": ["string", "null"], "pattern": "^[0-9]+$"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 300},
+    "year": {"type": ["integer", "null"], "minimum": 1874, "maximum": 2200},
+    "mediaType": {"enum": ["movie", "series", "season", "episode"]},
+    "season": {"type": ["integer", "null"], "minimum": 0, "maximum": 10000},
+    "episode": {"type": ["integer", "null"], "minimum": 0, "maximum": 10000},
+    "poster": {"type": ["string", "null"], "minLength": 1, "maxLength": 2048},
+    "libraryState": {"enum": ["available", "missing", "partial", "unknown"]},
+    "missing": {"type": "boolean"},
+    "dateAdded": {"type": "string", "format": "date-time"},
+    "updatedAt": {"type": "string", "format": "date-time"},
     "jellyfin": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["configured", "present"],
+      "required": ["configured", "present", "itemId", "serverId", "lastSyncedAt"],
       "properties": {
-        "configured": { "type": "boolean" },
-        "present": { "type": "boolean" },
-        "itemId": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 },
-        "serverId": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 },
-        "lastSyncedAt": { "type": ["string", "null"], "format": "date-time" }
-      }
+        "configured": {"type": "boolean"},
+        "present": {"type": "boolean"},
+        "itemId": {"type": ["string", "null"], "minLength": 1, "maxLength": 128},
+        "serverId": {"type": ["string", "null"], "minLength": 1, "maxLength": 128},
+        "lastSyncedAt": {"type": ["string", "null"], "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"configured": {"const": false}}, "required": ["configured"]},
+          "then": {
+            "properties": {
+              "present": {"const": false},
+              "itemId": {"const": null},
+              "serverId": {"const": null},
+              "lastSyncedAt": {"const": null}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"present": {"const": true}}, "required": ["present"]},
+          "then": {"properties": {"itemId": {"type": "string", "minLength": 1}}}
+        }
+      ]
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"mediaType": {"const": "episode"}}, "required": ["mediaType"]},
+      "then": {"properties": {"season": {"type": "integer"}, "episode": {"type": "integer"}}}
+    },
+    {
+      "if": {"properties": {"mediaType": {"const": "season"}}, "required": ["mediaType"]},
+      "then": {"properties": {"season": {"type": "integer"}, "episode": {"const": null}}}
+    },
+    {
+      "if": {"properties": {"mediaType": {"enum": ["movie", "series"]}}, "required": ["mediaType"]},
+      "then": {"properties": {"season": {"const": null}, "episode": {"const": null}}}
+    },
+    {
+      "if": {"properties": {"libraryState": {"const": "available"}}, "required": ["libraryState"]},
+      "then": {"properties": {"missing": {"const": false}}}
+    },
+    {
+      "if": {"properties": {"libraryState": {"const": "missing"}}, "required": ["libraryState"]},
+      "then": {"properties": {"missing": {"const": true}}}
+    }
+  ]
 }

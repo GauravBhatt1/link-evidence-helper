@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { notFoundMetadata, routeMetadata } from "../../app/route-metadata";
 import { renderRoute } from "../../test/render";
 
+const libraryPages = new Set(["movies", "tv", "missing", "recent"]);
+
 describe("AppShell", () => {
   it.each([...routeMetadata, notFoundMetadata])("renders one heading for $path", async (metadata) => {
     const path = metadata.path === "*" ? "/not-a-real-route" : metadata.path;
@@ -14,6 +16,8 @@ describe("AppShell", () => {
     expect(document.title).toBe(metadata.documentTitle);
     if (metadata.path === "/") {
       expect(screen.getByText("Development fixture search — no live sources are contacted.")).toBeInTheDocument();
+    } else if (libraryPages.has(metadata.page)) {
+      expect(await screen.findByText("Development library fixtures")).toBeInTheDocument();
     } else {
       expect(screen.getByText("No application data or backend connection is active here.")).toBeInTheDocument();
     }

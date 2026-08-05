@@ -81,6 +81,55 @@ export const errorResponseSchema = z.object({
   requestId: z.string().nullable(),
 }).strict();
 
+const nullableIdentifierSchema = z.string().min(1).max(128).nullable();
+export const libraryViewSchema = z.enum(["movies", "tv", "missing", "recent"]);
+export const libraryStateSchema = z.enum(["available", "missing", "partial", "unknown"]);
+export const libraryMediaTypeSchema = z.enum(["movie", "series", "season", "episode"]);
+export const libraryItemJellyfinSchema = z.object({
+  configured: z.boolean(),
+  present: z.boolean(),
+  itemId: nullableIdentifierSchema,
+  serverId: nullableIdentifierSchema,
+  lastSyncedAt: z.string().datetime().nullable(),
+}).strict();
+export const libraryItemSchema = z.object({
+  itemId: z.string().min(1).max(128),
+  contentId: nullableIdentifierSchema,
+  tmdbId: z.string().regex(/^[0-9]+$/).nullable(),
+  title: z.string().min(1).max(300),
+  year: z.number().int().min(1874).max(2200).nullable(),
+  mediaType: libraryMediaTypeSchema,
+  season: z.number().int().min(0).max(10000).nullable(),
+  episode: z.number().int().min(0).max(10000).nullable(),
+  poster: z.string().min(1).max(2048).nullable(),
+  libraryState: libraryStateSchema,
+  missing: z.boolean(),
+  dateAdded: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  jellyfin: libraryItemJellyfinSchema,
+}).strict();
+export const librarySummarySchema = z.object({
+  total: z.number().int().min(0),
+  movies: z.number().int().min(0),
+  tv: z.number().int().min(0),
+  missing: z.number().int().min(0),
+}).strict();
+export const libraryJellyfinStatusSchema = z.object({
+  configured: z.boolean(),
+  mode: z.enum(["disabled", "fixture", "connected"]),
+  lastSyncedAt: z.string().datetime().nullable(),
+}).strict();
+export const libraryResponseSchema = z.object({
+  ok: z.literal(true),
+  success: z.literal(true),
+  code: z.literal("ok"),
+  view: libraryViewSchema,
+  generatedAt: z.string().datetime(),
+  items: z.array(libraryItemSchema).max(5000),
+  summary: librarySummarySchema,
+  jellyfin: libraryJellyfinStatusSchema,
+}).strict();
+
 export const zodSchemas = {
   "source-candidate.schema.json": sourceCandidateSchema,
   "release-variant.schema.json": releaseVariantSchema,
@@ -91,6 +140,8 @@ export const zodSchemas = {
   "job.schema.json": jobSchema,
   "job-event.schema.json": jobEventSchema,
   "error.schema.json": errorResponseSchema,
+  "library-item.schema.json": libraryItemSchema,
+  "library-response.schema.json": libraryResponseSchema,
 } as const;
 
 export type Content = z.infer<typeof contentSchema>;
@@ -102,3 +153,8 @@ export type ResolutionResult = z.infer<typeof resolutionResultSchema>;
 export type Job = z.infer<typeof jobSchema>;
 export type JobEvent = z.infer<typeof jobEventSchema>;
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
+export type LibraryView = z.infer<typeof libraryViewSchema>;
+export type LibraryItem = z.infer<typeof libraryItemSchema>;
+export type LibraryResponse = z.infer<typeof libraryResponseSchema>;
+export type LibrarySummary = z.infer<typeof librarySummarySchema>;
+export type LibraryJellyfinStatus = z.infer<typeof libraryJellyfinStatusSchema>;

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.jobinfo.local/v1/library-response.schema.json",
+  "title": "LibraryResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "success", "code", "view", "generatedAt", "items", "summary", "jellyfin"],
+  "properties": {
+    "ok": {"const": true},
+    "success": {"const": true},
+    "code": {"const": "ok"},
+    "view": {"enum": ["movies", "tv", "missing", "recent"]},
+    "generatedAt": {"type": "string", "format": "date-time"},
+    "items": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {"$ref": "https://schemas.jobinfo.local/v1/library-item.schema.json"}
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "movies", "tv", "missing"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "movies": {"type": "integer", "minimum": 0},
+        "tv": {"type": "integer", "minimum": 0},
+        "missing": {"type": "integer", "minimum": 0}
+      }
+    },
+    "jellyfin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configured", "mode", "lastSyncedAt"],
+      "properties": {
+        "configured": {"type": "boolean"},
+        "mode": {"enum": ["disabled", "fixture", "connected"]},
+        "lastSyncedAt": {"type": ["string", "null"], "format": "date-time"}
+      }
+    }
+  }
+}

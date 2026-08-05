@@ -1,12 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const routes = [
-  { path: "/", heading: "Search", title: "Search · FREEMIUM INDEX" },
-  { path: "/library/movies", heading: "Movies", title: "Movies · FREEMIUM INDEX" },
-  { path: "/library/tv", heading: "TV Shows", title: "TV Shows · FREEMIUM INDEX" },
-  { path: "/library/missing", heading: "Missing", title: "Missing · FREEMIUM INDEX" },
-  { path: "/library/recent", heading: "Recently Added", title: "Recently Added · FREEMIUM INDEX" },
-  { path: "/admin", heading: "Admin", title: "Admin · FREEMIUM INDEX" },
+  { path: "/", heading: "Search", title: "Search · FREEMIUM INDEX", state: "search" },
+  { path: "/library/movies", heading: "Movies", title: "Movies · FREEMIUM INDEX", state: "library" },
+  { path: "/library/tv", heading: "TV Shows", title: "TV Shows · FREEMIUM INDEX", state: "library" },
+  { path: "/library/missing", heading: "Missing", title: "Missing · FREEMIUM INDEX", state: "library" },
+  { path: "/library/recent", heading: "Recently Added", title: "Recently Added · FREEMIUM INDEX", state: "library" },
+  { path: "/admin", heading: "Admin", title: "Admin · FREEMIUM INDEX", state: "placeholder" },
 ] as const;
 
 function observeFailures(page: Page) {
@@ -48,7 +48,7 @@ test("uses the deterministic navigation mode with no horizontal overflow", async
   assertNoFailures();
 });
 
-test("supports direct navigation, refresh, one h1, and local-only placeholders", async ({ page }) => {
+test("supports direct navigation, refresh, one h1, and safe local states", async ({ page }) => {
   const assertNoFailures = observeFailures(page);
   for (const route of routes) {
     await page.goto(route.path);
@@ -56,11 +56,16 @@ test("supports direct navigation, refresh, one h1, and local-only placeholders",
     await expect(page).toHaveTitle(route.title);
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     await expect(page.getByRole("heading", { level: 1, name: route.heading })).toBeVisible();
-    if (route.path === "/") {
+    if (route.state === "search") {
       await expect(page.getByText("Development fixture search — no live sources are contacted.")).toBeVisible();
+    } else if (route.state === "library") {
+      await expect(page.getByText("Development library fixtures")).toBeVisible();
+      await expect(page.getByText("No live Jellyfin server or production library is contacted.")).toBeVisible();
     } else {
       await expect(page.getByText("No application data or backend connection is active here.")).toBeVisible();
     }
+    const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(hasOverflow).toBe(false);
   }
   assertNoFailures();
 });

@@ -1,20 +1,17 @@
 import { createBrowserRouter, type RouteObject } from "react-router-dom";
 import { AppShell } from "../components/layout/AppShell";
 import { AdminPlaceholderPage } from "../pages/AdminPlaceholderPage";
-import { MissingPlaceholderPage } from "../pages/MissingPlaceholderPage";
-import { MoviesPlaceholderPage } from "../pages/MoviesPlaceholderPage";
+import { MissingPage, MoviesPage, RecentPage, TvPage } from "../pages/LibraryRoutePages";
 import { NotFoundPage } from "../pages/NotFoundPage";
-import { RecentPlaceholderPage } from "../pages/RecentPlaceholderPage";
 import { SearchPage } from "../pages/SearchPage";
-import { TvPlaceholderPage } from "../pages/TvPlaceholderPage";
 import { routeMetadata } from "./route-metadata";
 
 const pages = {
   search: <SearchPage />,
-  movies: <MoviesPlaceholderPage />,
-  tv: <TvPlaceholderPage />,
-  missing: <MissingPlaceholderPage />,
-  recent: <RecentPlaceholderPage />,
+  movies: <MoviesPage />,
+  tv: <TvPage />,
+  missing: <MissingPage />,
+  recent: <RecentPage />,
   admin: <AdminPlaceholderPage />,
 } as const;
 
