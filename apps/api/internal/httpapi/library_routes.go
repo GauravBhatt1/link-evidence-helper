@@ -8,6 +8,7 @@ import (
 	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/adminauth"
 	libraryservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/library"
 	searchservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/search"
+	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/sourceadmin"
 )
 
 // HandlerWithJobsAndLibrary enables the deterministic library API alongside
@@ -16,11 +17,17 @@ func HandlerWithJobsAndLibrary(searcher searchservice.Searcher, jobs JobBackend,
 	return HandlerWithServices(searcher, jobs, library, nil)
 }
 
-// HandlerWithServices composes all currently supported API boundaries. The
-// admin route exists only as a session probe and is fail-closed when verifier
-// is nil; future administrative mutations must be mounted behind the same
-// verifier boundary.
+// HandlerWithServices composes the public API boundaries and administrator
+// session probe. Source administration remains disabled unless callers use
+// HandlerWithServicesAndSources and explicitly provide a registry.
 func HandlerWithServices(searcher searchservice.Searcher, jobs JobBackend, library libraryservice.Repository, verifier *adminauth.Verifier) http.Handler {
+	return HandlerWithServicesAndSources(searcher, jobs, library, verifier, nil)
+}
+
+// HandlerWithServicesAndSources composes all currently supported development
+// API boundaries. Source mutations remain fail-closed unless both verifier and
+// registry are configured by the runtime.
+func HandlerWithServicesAndSources(searcher searchservice.Searcher, jobs JobBackend, library libraryservice.Repository, verifier *adminauth.Verifier, registry sourceadmin.Registry) http.Handler {
 	api := &apiHandler{searcher: searcher, jobs: jobs}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", api.health)
@@ -29,6 +36,8 @@ func HandlerWithServices(searcher searchservice.Searcher, jobs JobBackend, libra
 	mux.HandleFunc("/api/v1/jobs/resolution", api.createResolutionJob)
 	mux.HandleFunc("/api/v1/jobs/", api.jobResource)
 	mux.HandleFunc("/api/v1/admin/session", api.adminSession(verifier))
+	mux.HandleFunc("/api/v1/admin/sources", api.sourceCollection(verifier, registry))
+	mux.HandleFunc("/api/v1/admin/sources/", api.sourceResource(verifier, registry))
 	return api.securityHeaders(mux)
 }
 
