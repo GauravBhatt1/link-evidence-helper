@@ -100,7 +100,7 @@ describe("SearchPage", () => {
 
     await submitAlias(user, "Example Film");
     expect(notice()).toBeVisible();
-    expect(screen.getByText("Searching development fixtures…")).toBeVisible();
+    expect(screen.getByText("Searching…")).toBeVisible();
     await screen.findByText(/Example Film 2024/);
     expect(notice()).toBeVisible();
     await user.click(screen.getByRole("button", { name: /choose releases for example film/i }));
