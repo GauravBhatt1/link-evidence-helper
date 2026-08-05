@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 const identifierPattern = /^[a-z0-9][a-z0-9._:-]{7,127}$/;
 const sourceIdentifierPattern = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const hostPattern = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -192,7 +194,8 @@ function uniqueHosts(value: unknown, field: string, requiredHost: string): strin
   const hosts = new Set<string>([requiredHost]);
   for (const entry of value) {
     const host = canonicalHost(requiredString(entry, field, 253));
-    if (!hostPattern.test(host) && !isIPLiteral(host)) {
+    const looksLikeIP = host.includes(":") || /^(?:\d{1,3}\.){3}\d{1,3}$/u.test(host);
+    if ((!hostPattern.test(host) && !looksLikeIP) || (looksLikeIP && isIP(host) === 0)) {
       invalid(`${field} contains an invalid host`);
     }
     hosts.add(host);
@@ -212,10 +215,6 @@ function boundedInteger(value: unknown, field: string, minimum: number, maximum:
 
 function canonicalHost(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/u, "").replace(/^\[|\]$/gu, "");
-}
-
-function isIPLiteral(value: string): boolean {
-  return /^(?:\d{1,3}\.){3}\d{1,3}$/u.test(value) || value.includes(":");
 }
 
 function invalid(message: string): never {
