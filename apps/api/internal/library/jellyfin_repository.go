@@ -13,6 +13,7 @@ type JellyfinRepository struct {
 	now      func() time.Time
 
 	mu          sync.Mutex
+	cacheReady  bool
 	cachedItems []Item
 	cachedState JellyfinStatus
 	expiresAt   time.Time
@@ -69,7 +70,7 @@ func (repository *JellyfinRepository) snapshot(ctx context.Context) ([]Item, Jel
 	if err := ctx.Err(); err != nil {
 		return nil, JellyfinStatus{}, err
 	}
-	if len(repository.cachedItems) > 0 && repository.now().Before(repository.expiresAt) {
+	if repository.cacheReady && repository.now().Before(repository.expiresAt) {
 		return cloneItems(repository.cachedItems), repository.cachedState, nil
 	}
 
@@ -91,6 +92,7 @@ func (repository *JellyfinRepository) snapshot(ctx context.Context) ([]Item, Jel
 		seen[item.ItemID] = struct{}{}
 	}
 
+	repository.cacheReady = true
 	repository.cachedItems = cloneItems(items)
 	repository.cachedState = status
 	repository.expiresAt = repository.now().Add(repository.cacheTTL)
