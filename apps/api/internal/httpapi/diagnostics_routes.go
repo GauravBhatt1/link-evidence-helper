@@ -31,8 +31,9 @@ func (api *apiHandler) diagnostics(verifier *adminauth.Verifier, provider Diagno
 			writeError(writer, http.StatusServiceUnavailable, "diagnostics_unavailable", "Diagnostics is not enabled.", requestID)
 			return
 		}
-		if err := verifier.VerifyRequest(request); err != nil {
-			writeError(writer, http.StatusUnauthorized, "unauthorized", "Administrator authorization is required.", requestID)
+		if !verifier.VerifyAuthorization(request.Header.Get("Authorization")) {
+			writer.Header().Set("WWW-Authenticate", `Bearer realm="admin"`)
+			writeError(writer, http.StatusUnauthorized, "unauthorized", "Administrator authentication is required.", requestID)
 			return
 		}
 
