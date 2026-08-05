@@ -1,4 +1,10 @@
-import { chromium, type Browser, type BrowserType, type Page } from "@playwright/test";
+import {
+  chromium,
+  type Browser,
+  type BrowserContext,
+  type BrowserType,
+  type Page,
+} from "@playwright/test";
 
 import {
   BrowserWorkerError,
@@ -72,13 +78,15 @@ export class BrowserSearchExecutor {
       });
       context.setDefaultTimeout(task.timeoutMs);
       context.setDefaultNavigationTimeout(task.timeoutMs);
+      await installNetworkRestrictions(context, policy);
       const page = await context.newPage();
-      await installRequestPolicy(page, policy);
+      context.on("page", (openedPage) => {
+        if (openedPage !== page) {
+          void openedPage.close().catch(() => undefined);
+        }
+      });
       page.on("download", (download) => {
         void download.cancel().catch(() => undefined);
-      });
-      page.on("popup", (popup) => {
-        void popup.close().catch(() => undefined);
       });
 
       try {
@@ -120,11 +128,25 @@ export class BrowserSearchExecutor {
   }
 }
 
-async function installRequestPolicy(
-  page: Page,
+async function installNetworkRestrictions(
+  context: BrowserContext,
   policy: Awaited<ReturnType<typeof prepareNetworkPolicy>>,
 ): Promise<void> {
-  await page.route("**/*", async (route) => {
+  await context.addInitScript(() => {
+    for (const name of ["WebSocket", "EventSource", "RTCPeerConnection", "webkitRTCPeerConnection"] as const) {
+      try {
+        Object.defineProperty(globalThis, name, {
+          configurable: false,
+          enumerable: false,
+          value: undefined,
+          writable: false,
+        });
+      } catch {
+        // The browser context route policy remains the outer network boundary.
+      }
+    }
+  });
+  await context.route("**/*", async (route) => {
     const request = route.request();
     try {
       assertAllowedResourceURL(request.url(), policy);
@@ -137,6 +159,9 @@ async function installRequestPolicy(
       return;
     }
     await route.continue();
+  });
+  await context.routeWebSocket("**/*", async (webSocket) => {
+    await webSocket.close({ code: 1008, reason: "Blocked by browser worker policy" });
   });
 }
 
