@@ -49,7 +49,7 @@ test.describe("development Go API library integration", () => {
 
     await page.goto("/library/missing");
     await expect(page.getByRole("heading", { level: 2, name: "Paper City" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 2, name: "Signal House" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Signal House", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Signal House — S01E02" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Horizon Gate" })).toHaveCount(0);
 
