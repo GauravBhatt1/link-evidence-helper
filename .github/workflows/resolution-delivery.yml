@@ -5,9 +5,13 @@ on:
     paths:
       - "apps/api/**"
       - "apps/worker/**"
+      - "apps/web/**"
+      - "packages/contracts/**"
       - "packages/jobqueue/**"
       - "go.work"
       - "go.work.sum"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - ".github/workflows/resolution-delivery.yml"
   push:
     branches:
@@ -15,9 +19,13 @@ on:
     paths:
       - "apps/api/**"
       - "apps/worker/**"
+      - "apps/web/**"
+      - "packages/contracts/**"
       - "packages/jobqueue/**"
       - "go.work"
       - "go.work.sum"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - ".github/workflows/resolution-delivery.yml"
 
 permissions:
@@ -26,7 +34,7 @@ permissions:
 jobs:
   resolution-delivery:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     services:
       redis:
         image: redis:7.4.2-alpine
@@ -42,6 +50,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.23.12"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10.18.3"
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: pnpm
+      - name: Install pinned frontend dependencies
+        run: pnpm install --frozen-lockfile
       - name: Verify Go formatting
         run: |
           files="$(gofmt -l apps/worker packages/jobqueue)"
@@ -55,6 +73,10 @@ jobs:
         run: |
           (cd packages/jobqueue && go test -race ./...)
           (cd apps/worker && go test -race ./...)
+      - name: Typecheck and test resolution frontend
+        run: |
+          pnpm --filter @link-evidence/web typecheck
+          pnpm --filter @link-evidence/web test
       - name: Build API and worker
         run: |
           (cd apps/api && go build -o /tmp/link-evidence-api ./cmd/server)
@@ -116,6 +138,25 @@ jobs:
           PY
           python3 /tmp/link-evidence-range-server.py >/tmp/link-evidence-range-server.log 2>&1 &
           file_pid=$!
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              -H 'Range: bytes=0-0' \
+              'http://127.0.0.1:8791/Example.Film.2024.1080p.mkv?token=ci-opaque' \
+              >/tmp/range-ready.bin; then
+              break
+            fi
+            if ! kill -0 "$file_pid" 2>/dev/null; then
+              cat /tmp/link-evidence-range-server.log
+              exit 1
+            fi
+            if test "$attempt" -eq 30; then
+              cat /tmp/link-evidence-range-server.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+          test "$(wc -c </tmp/range-ready.bin)" -eq 1
 
           cat >/tmp/link-evidence-resolution-catalog.json <<'JSON'
           {
