@@ -75,19 +75,25 @@ type variantFields struct {
 	approxSize         string
 }
 
+type variantLocation struct {
+	content *Content
+	index   int
+}
+
 var (
-	metadataTokens = regexp.MustCompile(`(?i)\b(download|movie|esub|480p|720p|1080p|2160p|4k|uhd|fhd|web[- ]?dl|web[- ]?rip|bluray|brrip|hdrip|x26[45]|hevc|10bit|dual audio|multi audio|hindi dubbed|hindi|english|tamil|telugu|malayalam|kannada|season|series|episode|ep)\b`)
-	yearPattern    = regexp.MustCompile(`\b(19|20)[0-9]{2}\b`)
-	sizePattern    = regexp.MustCompile(`(?i)\b[0-9]+(\.[0-9]+)?\s*(KB|MB|GB|TB)\b`)
-	nonAlphaNum    = regexp.MustCompile(`[^a-z0-9]+`)
-	qualityPattern = regexp.MustCompile(`(?i)\b(480p|720p|1080p|2160p|4k|uhd|fhd)\b`)
-	releasePattern = regexp.MustCompile(`(?i)\b(web[- ]?dl|web[- ]?rip|bluray|brrip|hdrip|dvdrip)\b`)
-	seasonPattern  = regexp.MustCompile(`(?i)\b(season\s*|s)0?([0-9]{1,2})\b`)
-	episodePattern = regexp.MustCompile(`(?i)\b(episode\s*|ep\s*|e)0?([0-9]{1,3})\b`)
-	packPattern    = regexp.MustCompile(`(?i)\b(zip|complete|pack)\b`)
-	tvPattern      = regexp.MustCompile(`(?i)\b(season|series|s[0-9]{1,2})\b`)
-	dualPattern    = regexp.MustCompile(`(?i)\bdual\b`)
-	multiPattern   = regexp.MustCompile(`(?i)\bmulti\b`)
+	metadataTokens       = regexp.MustCompile(`(?i)\b(download|movie|esub|480p|720p|1080p|2160p|4k|uhd|fhd|web[- ]?dl|web[- ]?rip|bluray|brrip|hdrip|x26[45]|hevc|10bit|dual audio|multi audio|hindi dubbed|hindi|english|tamil|telugu|malayalam|kannada|season|series|episode|ep)\b`)
+	yearPattern          = regexp.MustCompile(`\b(19|20)[0-9]{2}\b`)
+	sizePattern          = regexp.MustCompile(`(?i)\b[0-9]+(\.[0-9]+)?\s*(KB|MB|GB|TB)\b`)
+	nonAlphaNum          = regexp.MustCompile(`[^a-z0-9]+`)
+	qualityPattern       = regexp.MustCompile(`(?i)\b(480p|720p|1080p|2160p|4k|uhd|fhd)\b`)
+	releasePattern       = regexp.MustCompile(`(?i)\b(web[- ]?dl|web[- ]?rip|bluray|brrip|hdrip|dvdrip)\b`)
+	seasonPattern        = regexp.MustCompile(`(?i)\b(season\s*|s)0?([0-9]{1,2})\b`)
+	episodePattern       = regexp.MustCompile(`(?i)\b(episode\s*|ep\s*|e)0?([0-9]{1,3})\b`)
+	compactEpisodePattern = regexp.MustCompile(`(?i)\bs0?([0-9]{1,2})e0?([0-9]{1,3})\b`)
+	packPattern          = regexp.MustCompile(`(?i)\b(zip|complete|pack)\b`)
+	tvPattern            = regexp.MustCompile(`(?i)\b(season|series|s[0-9]{1,2}(?:e[0-9]{1,3})?)\b`)
+	dualPattern          = regexp.MustCompile(`(?i)\bdual\b`)
+	multiPattern         = regexp.MustCompile(`(?i)\bmulti\b`)
 )
 
 var qualityAliases = map[string]string{
@@ -110,7 +116,7 @@ func NormalizedTitle(value string) string {
 func Aggregate(rows []Candidate) []Content {
 	contents := make([]*Content, 0)
 	contentsByIdentity := map[string]*Content{}
-	variantsByIdentity := map[string]*ReleaseVariant{}
+	variantsByIdentity := map[string]variantLocation{}
 
 	for priority, row := range rows {
 		title := strings.TrimSpace(row.Title)
@@ -162,9 +168,10 @@ func Aggregate(rows []Candidate) []Content {
 			optionalInt(fields.season),
 			optionalInt(fields.episode),
 		)
-		variant := variantsByIdentity[variantIdentity]
-		if variant == nil {
-			variant = &ReleaseVariant{
+		location, found := variantsByIdentity[variantIdentity]
+		var variant *ReleaseVariant
+		if !found {
+			content.ReleaseVariants = append(content.ReleaseVariants, ReleaseVariant{
 				VariantID:          stableID("variant", content.ContentID, fields.language, fields.audioVariant, fields.quality, fields.releaseType, fields.packType, optionalInt(fields.season), optionalInt(fields.episode)),
 				Language:           fields.language,
 				AudioVariant:       fields.audioVariant,
@@ -176,11 +183,12 @@ func Aggregate(rows []Candidate) []Content {
 				Episode:            fields.episode,
 				ApproxSize:         fields.approxSize,
 				Sources:            []SourceCandidate{},
-			}
-			content.ReleaseVariants = append(content.ReleaseVariants, *variant)
-			variant = &content.ReleaseVariants[len(content.ReleaseVariants)-1]
-			variantsByIdentity[variantIdentity] = variant
+			})
+			location = variantLocation{content: content, index: len(content.ReleaseVariants) - 1}
+			variantsByIdentity[variantIdentity] = location
+			variant = &content.ReleaseVariants[location.index]
 		} else {
+			variant = &location.content.ReleaseVariants[location.index]
 			for _, quality := range fields.availableQualities {
 				if !contains(variant.AvailableQualities, quality) {
 					variant.AvailableQualities = append(variant.AvailableQualities, quality)
@@ -246,8 +254,13 @@ func deriveVariant(row Candidate) variantFields {
 	} else if multiPattern.MatchString(label) {
 		audioVariant = "Multi Audio"
 	}
-	season := matchedNumber(seasonPattern, label)
-	episode := matchedNumber(episodePattern, label)
+	season, episode := compactEpisodeNumbers(label)
+	if season == nil {
+		season = matchedNumber(seasonPattern, label)
+	}
+	if episode == nil {
+		episode = matchedNumber(episodePattern, label)
+	}
 	packType := "single"
 	if episode != nil {
 		packType = "episode"
@@ -269,6 +282,19 @@ func deriveVariant(row Candidate) variantFields {
 		episode:            episode,
 		approxSize:         strings.TrimSpace(sizePattern.FindString(label)),
 	}
+}
+
+func compactEpisodeNumbers(value string) (*int, *int) {
+	match := compactEpisodePattern.FindStringSubmatch(value)
+	if len(match) < 3 {
+		return nil, nil
+	}
+	season, seasonErr := strconv.Atoi(match[1])
+	episode, episodeErr := strconv.Atoi(match[2])
+	if seasonErr != nil || episodeErr != nil {
+		return nil, nil
+	}
+	return &season, &episode
 }
 
 func availableQualities(tokens []string) []string {
