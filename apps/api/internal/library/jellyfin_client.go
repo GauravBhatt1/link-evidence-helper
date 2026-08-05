@@ -121,7 +121,7 @@ func (client *JellyfinClient) Snapshot(ctx context.Context) ([]Item, JellyfinSta
 
 			count := len(page.Items)
 			startIndex += count
-			if count == 0 || count < client.pageSize || (page.TotalRecordCount > 0 && startIndex >= page.TotalRecordCount) {
+			if count == 0 || count < client.pageSize || startIndex >= page.TotalRecordCount {
 				break
 			}
 		}
@@ -210,7 +210,16 @@ func (client *JellyfinClient) fetchItemsPage(ctx context.Context, parentID strin
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return jellyfinItemsResponse{}, ErrJellyfinInvalidResponse
 	}
-	if payload.TotalRecordCount < 0 || payload.StartIndex < 0 || len(payload.Items) > client.pageSize {
+	if payload.TotalRecordCount < 0 || payload.StartIndex != startIndex || len(payload.Items) > client.pageSize {
+		return jellyfinItemsResponse{}, ErrJellyfinInvalidResponse
+	}
+	if payload.TotalRecordCount > client.maxItems {
+		return jellyfinItemsResponse{}, ErrJellyfinTooManyItems
+	}
+	if payload.TotalRecordCount == 0 && len(payload.Items) > 0 {
+		return jellyfinItemsResponse{}, ErrJellyfinInvalidResponse
+	}
+	if startIndex+len(payload.Items) > payload.TotalRecordCount {
 		return jellyfinItemsResponse{}, ErrJellyfinInvalidResponse
 	}
 	return payload, nil
