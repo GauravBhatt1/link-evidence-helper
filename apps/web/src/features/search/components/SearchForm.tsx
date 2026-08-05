@@ -56,7 +56,7 @@ export function SearchForm({
         {error && <p id="search-query-error" className="field-error" role="alert">{error}</p>}
       </div>
       <button className="search-submit" type="submit" disabled={submitDisabled} aria-busy={busy}>
-        Search
+        {busy ? "Searching…" : "Search"}
       </button>
     </form>
   );
