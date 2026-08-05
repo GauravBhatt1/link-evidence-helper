@@ -18,17 +18,20 @@ type BrowserLauncher = Pick<BrowserType<Browser>, "launch">;
 
 export type BrowserExecutorOptions = {
   readonly allowPrivate?: boolean;
+  readonly chromiumSandbox?: boolean;
   readonly resolver?: DNSResolver;
   readonly launcher?: BrowserLauncher;
 };
 
 export class BrowserSearchExecutor {
   readonly #allowPrivate: boolean;
+  readonly #chromiumSandbox: boolean;
   readonly #resolver?: DNSResolver;
   readonly #launcher: BrowserLauncher;
 
   constructor(options: BrowserExecutorOptions = {}) {
     this.#allowPrivate = options.allowPrivate ?? false;
+    this.#chromiumSandbox = options.chromiumSandbox ?? true;
     this.#resolver = options.resolver;
     this.#launcher = options.launcher ?? chromium;
   }
@@ -47,7 +50,7 @@ export class BrowserSearchExecutor {
       browser = await this.#launcher.launch({
         headless: true,
         args: [...policy.chromiumArguments],
-        chromiumSandbox: true,
+        chromiumSandbox: this.#chromiumSandbox,
       });
       if (signal) {
         abortHandler = () => {
