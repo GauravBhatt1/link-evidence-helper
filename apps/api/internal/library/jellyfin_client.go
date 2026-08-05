@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"mime"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -24,11 +25,9 @@ type JellyfinClient struct {
 	maxItems         int
 	maxResponseBytes int64
 	resolver         IPResolver
-	dialer           interface {
-		DialContext(context.Context, string, string) (net.Conn, error)
-	}
-	now        func() time.Time
-	httpClient *http.Client
+	dialer           *net.Dialer
+	now              func() time.Time
+	httpClient       *http.Client
 }
 
 type jellyfinItemsResponse struct {
@@ -176,6 +175,9 @@ func (client *JellyfinClient) fetchItemsPage(ctx context.Context, parentID strin
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return jellyfinItemsResponse{}, ctxErr
+		}
+		if errors.Is(err, ErrJellyfinUnsafeTarget) {
+			return jellyfinItemsResponse{}, ErrJellyfinUnsafeTarget
 		}
 		return jellyfinItemsResponse{}, ErrJellyfinUnavailable
 	}
