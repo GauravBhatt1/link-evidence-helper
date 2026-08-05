@@ -76,6 +76,31 @@ func TestJellyfinRepositoryFiltersAndCachesSnapshot(t *testing.T) {
 	}
 }
 
+func TestJellyfinRepositoryCachesEmptySnapshot(t *testing.T) {
+	now := time.Date(2026, 8, 5, 15, 0, 0, 0, time.UTC)
+	source := &countingJellyfinSource{
+		status: JellyfinStatus{Configured: true, Mode: JellyfinConnected, LastSyncedAt: &now},
+	}
+	repository, err := NewJellyfinRepository(source, time.Minute)
+	if err != nil {
+		t.Fatalf("NewJellyfinRepository() error = %v", err)
+	}
+	repository.now = func() time.Time { return now }
+
+	for _, view := range []View{ViewMovies, ViewTV, ViewRecent} {
+		response, err := repository.List(context.Background(), view)
+		if err != nil {
+			t.Fatalf("List(%s) error = %v", view, err)
+		}
+		if len(response.Items) != 0 || response.Summary.Total != 0 {
+			t.Fatalf("List(%s) response = %#v", view, response)
+		}
+	}
+	if source.calls.Load() != 1 {
+		t.Fatalf("Snapshot calls = %d, want 1", source.calls.Load())
+	}
+}
+
 func TestJellyfinRepositoryRejectsInvalidSnapshots(t *testing.T) {
 	now := time.Date(2026, 8, 5, 15, 0, 0, 0, time.UTC)
 	tests := []struct {
