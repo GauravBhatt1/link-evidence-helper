@@ -1,0 +1,244 @@
+name: Resolution delivery workflow
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/**"
+      - "apps/worker/**"
+      - "packages/jobqueue/**"
+      - "go.work"
+      - "go.work.sum"
+      - ".github/workflows/resolution-delivery.yml"
+  push:
+    branches:
+      - restructure/integration
+    paths:
+      - "apps/api/**"
+      - "apps/worker/**"
+      - "packages/jobqueue/**"
+      - "go.work"
+      - "go.work.sum"
+      - ".github/workflows/resolution-delivery.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  resolution-delivery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      redis:
+        image: redis:7.4.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+      - name: Verify Go formatting
+        run: |
+          files="$(gofmt -l apps/worker packages/jobqueue)"
+          if test -n "$files"; then
+            printf 'Go files require gofmt:\n%s\n' "$files" >&2
+            exit 1
+          fi
+      - name: Test worker and queue with race detector
+        env:
+          LINK_EVIDENCE_TEST_REDIS_ADDR: 127.0.0.1:6379
+        run: |
+          (cd packages/jobqueue && go test -race ./...)
+          (cd apps/worker && go test -race ./...)
+      - name: Build API and worker
+        run: |
+          (cd apps/api && go build -o /tmp/link-evidence-api ./cmd/server)
+          (cd apps/worker && go build -o /tmp/link-evidence-worker ./cmd/worker)
+      - name: Verify queued resolution and Delivery Links
+        run: |
+          set -euo pipefail
+          prefix="leh:resolution-ci:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}"
+          api_pid=""
+          worker_pid=""
+          file_pid=""
+
+          cleanup() {
+            status=$?
+            trap - EXIT
+            for pid in "$worker_pid" "$api_pid" "$file_pid"; do
+              if test -n "$pid"; then
+                kill "$pid" 2>/dev/null || true
+              fi
+            done
+            for pid in "$worker_pid" "$api_pid" "$file_pid"; do
+              if test -n "$pid"; then
+                wait "$pid" 2>/dev/null || true
+              fi
+            done
+            for port in 8780 8791; do
+              if test -n "$(ss -ltn "sport = :${port}" | tail -n +2)"; then
+                echo "Port ${port} remained open after cleanup" >&2
+                status=1
+              fi
+            done
+            exit "$status"
+          }
+          trap cleanup EXIT
+
+          cat >/tmp/link-evidence-range-server.py <<'PY'
+          from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+          class Handler(BaseHTTPRequestHandler):
+              def do_GET(self):
+                  if self.path != '/Example.Film.2024.1080p.mkv?token=ci-opaque':
+                      self.send_error(404)
+                      return
+                  if self.headers.get('Range') != 'bytes=0-0':
+                      self.send_error(416)
+                      return
+                  self.send_response(206)
+                  self.send_header('Content-Type', 'video/x-matroska')
+                  self.send_header('Content-Disposition', 'attachment; filename="Example.Film.2024.1080p.mkv"')
+                  self.send_header('Content-Range', 'bytes 0-0/1073741824')
+                  self.send_header('Content-Length', '1')
+                  self.end_headers()
+                  self.wfile.write(b'x')
+
+              def log_message(self, *_args):
+                  pass
+
+          ThreadingHTTPServer(('127.0.0.1', 8791), Handler).serve_forever()
+          PY
+          python3 /tmp/link-evidence-range-server.py >/tmp/link-evidence-range-server.log 2>&1 &
+          file_pid=$!
+
+          cat >/tmp/link-evidence-resolution-catalog.json <<'JSON'
+          {
+            "version": 1,
+            "variants": [
+              {
+                "contentId": "content_3b750f8edc77152e",
+                "variantId": "variant_051fab7b083f979a",
+                "qualities": ["1080p"],
+                "sources": [
+                  {
+                    "sourceId": "source_eadce85bb1968618",
+                    "priority": 0,
+                    "url": "http://127.0.0.1:8791/Example.Film.2024.1080p.mkv?token=ci-opaque",
+                    "filename": "Example.Film.2024.1080p.mkv",
+                    "size": "1 GB",
+                    "quality": "1080p"
+                  }
+                ]
+              }
+            ]
+          }
+          JSON
+
+          env \
+            LINK_EVIDENCE_SEARCH_MODE=fixture \
+            LINK_EVIDENCE_API_ADDR=127.0.0.1:8780 \
+            LINK_EVIDENCE_FIXTURE_DIR="$GITHUB_WORKSPACE/packages/testing/fixtures" \
+            LINK_EVIDENCE_REDIS_ADDR=127.0.0.1:6379 \
+            LINK_EVIDENCE_JOB_PREFIX="$prefix" \
+            /tmp/link-evidence-api >/tmp/link-evidence-api.log 2>&1 &
+          api_pid=$!
+
+          env \
+            LINK_EVIDENCE_REDIS_ADDR=127.0.0.1:6379 \
+            LINK_EVIDENCE_JOB_PREFIX="$prefix" \
+            LINK_EVIDENCE_WORKER_CONCURRENCY=2 \
+            LINK_EVIDENCE_RESOLUTION_CATALOG=/tmp/link-evidence-resolution-catalog.json \
+            LINK_EVIDENCE_RESOLUTION_ALLOW_PRIVATE=true \
+            LINK_EVIDENCE_RESOLUTION_TIMEOUT_MS=3000 \
+            /tmp/link-evidence-worker >/tmp/link-evidence-worker.log 2>&1 &
+          worker_pid=$!
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8780/healthz >/tmp/health.json; then
+              break
+            fi
+            if ! kill -0 "$api_pid" 2>/dev/null || ! kill -0 "$worker_pid" 2>/dev/null || ! kill -0 "$file_pid" 2>/dev/null; then
+              cat /tmp/link-evidence-api.log /tmp/link-evidence-worker.log /tmp/link-evidence-range-server.log
+              exit 1
+            fi
+            if test "$attempt" -eq 30; then
+              exit 1
+            fi
+            sleep 1
+          done
+
+          curl --fail --silent --show-error \
+            -D /tmp/create.headers \
+            -H 'Content-Type: application/json' \
+            -H 'Idempotency-Key: resolution-ci-0001' \
+            --data '{"contentId":"content_3b750f8edc77152e","variantId":"variant_051fab7b083f979a","quality":"1080p"}' \
+            http://127.0.0.1:8780/api/v1/jobs/resolution \
+            >/tmp/create.json
+          job_id="$(python3 -c 'import json; print(json.load(open("/tmp/create.json"))["jobId"])')"
+
+          for attempt in $(seq 1 50); do
+            curl --fail --silent --show-error \
+              "http://127.0.0.1:8780/api/v1/jobs/${job_id}" \
+              >/tmp/status.json
+            state="$(python3 -c 'import json; print(json.load(open("/tmp/status.json"))["state"])')"
+            if test "$state" = verified; then
+              break
+            fi
+            if test "$state" = failed || test "$state" = blocked || test "$state" = cancelled; then
+              cat /tmp/status.json /tmp/link-evidence-api.log /tmp/link-evidence-worker.log
+              exit 1
+            fi
+            if test "$attempt" -eq 50; then
+              cat /tmp/status.json /tmp/link-evidence-api.log /tmp/link-evidence-worker.log
+              exit 1
+            fi
+            sleep 0.1
+          done
+
+          curl --fail --silent --show-error \
+            "http://127.0.0.1:8780/api/v1/jobs/${job_id}/events" \
+            >/tmp/events.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          created = json.loads(Path('/tmp/create.json').read_text())
+          status = json.loads(Path('/tmp/status.json').read_text())
+          events = json.loads(Path('/tmp/events.json').read_text())
+
+          assert created['kind'] == 'resolution'
+          assert status['state'] == 'verified'
+          assert status['subscriberCount'] == 1
+          result = status['result']
+          assert result['ok'] is True and result['success'] is True
+          assert result['code'] == 'ok' and result['status'] == 'verified'
+          assert result['contentId'] == 'content_3b750f8edc77152e'
+          assert result['variantId'] == 'variant_051fab7b083f979a'
+          assert len(result['deliveryLinks']) == 1
+          link = result['deliveryLinks'][0]
+          assert link['url'] == 'http://127.0.0.1:8791/Example.Film.2024.1080p.mkv?token=ci-opaque'
+          assert link['filename'] == 'Example.Film.2024.1080p.mkv'
+          assert link['size'] == '1 GB'
+          assert link['quality'] == '1080p'
+          assert link['sourceId'] == 'source_eadce85bb1968618'
+          assert len(result['attempts']) == 1
+          assert result['attempts'][0]['status'] == 'verified'
+          assert events[0]['state'] == 'queued'
+          assert events[-1]['state'] == 'verified'
+          assert events[-1]['progress'] == 100
+          assert 'x-job-outcome: created' in Path('/tmp/create.headers').read_text().lower()
+
+          serialized = json.dumps({'created': created, 'status': status, 'events': events}).lower()
+          for forbidden in (
+              '/tmp/link-evidence-resolution-catalog.json',
+              'link_evidence_redis_password',
+              'checking development job pipeline',
+          ):
+              assert forbidden not in serialized
+          PY
