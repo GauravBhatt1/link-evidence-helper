@@ -6,28 +6,28 @@ import (
 	"net/http"
 
 	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/adminauth"
+	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/audit"
 	libraryservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/library"
 	searchservice "github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/search"
 	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/sourceadmin"
 )
 
-// HandlerWithJobsAndLibrary enables the deterministic library API alongside
-// the existing search and job routes. Admin authentication remains disabled.
 func HandlerWithJobsAndLibrary(searcher searchservice.Searcher, jobs JobBackend, library libraryservice.Repository) http.Handler {
 	return HandlerWithServices(searcher, jobs, library, nil)
 }
 
-// HandlerWithServices composes the public API boundaries and administrator
-// session probe. Source administration remains disabled unless callers use
-// HandlerWithServicesAndSources and explicitly provide a registry.
 func HandlerWithServices(searcher searchservice.Searcher, jobs JobBackend, library libraryservice.Repository, verifier *adminauth.Verifier) http.Handler {
 	return HandlerWithServicesAndSources(searcher, jobs, library, verifier, nil)
 }
 
-// HandlerWithServicesAndSources composes all currently supported development
-// API boundaries. Source mutations remain fail-closed unless both verifier and
-// registry are configured by the runtime.
 func HandlerWithServicesAndSources(searcher searchservice.Searcher, jobs JobBackend, library libraryservice.Repository, verifier *adminauth.Verifier, registry sourceadmin.Registry) http.Handler {
+	return HandlerWithServicesSourcesAndAudit(searcher, jobs, library, verifier, registry, nil)
+}
+
+// HandlerWithServicesSourcesAndAudit composes all current development API
+// boundaries. Source mutations and audit recording remain disabled unless the
+// runtime explicitly supplies their dependencies.
+func HandlerWithServicesSourcesAndAudit(searcher searchservice.Searcher, jobs JobBackend, library libraryservice.Repository, verifier *adminauth.Verifier, registry sourceadmin.Registry, recorder audit.Recorder) http.Handler {
 	api := &apiHandler{searcher: searcher, jobs: jobs}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", api.health)
@@ -36,8 +36,8 @@ func HandlerWithServicesAndSources(searcher searchservice.Searcher, jobs JobBack
 	mux.HandleFunc("/api/v1/jobs/resolution", api.createResolutionJob)
 	mux.HandleFunc("/api/v1/jobs/", api.jobResource)
 	mux.HandleFunc("/api/v1/admin/session", api.adminSession(verifier))
-	mux.HandleFunc("/api/v1/admin/sources", api.sourceCollection(verifier, registry))
-	mux.HandleFunc("/api/v1/admin/sources/", api.sourceResource(verifier, registry))
+	mux.HandleFunc("/api/v1/admin/sources", api.sourceCollection(verifier, registry, recorder))
+	mux.HandleFunc("/api/v1/admin/sources/", api.sourceResource(verifier, registry, recorder))
 	return api.securityHeaders(mux)
 }
 
