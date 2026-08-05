@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/adminauth"
+	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/audit"
 	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/sourceadmin"
 )
 
@@ -22,18 +23,24 @@ type sourceDraftRequest struct {
 	ExpectedRevision uint64 `json:"expectedRevision,omitempty"`
 }
 
-// SourceAdminHandler exposes a fail-closed, credential-free source-management
-// boundary. It is deliberately opt-in: callers must explicitly provide both a
-// verifier and a registry before any operation is available.
+// SourceAdminHandler exposes the source-management boundary without an audit
+// sink. It remains available for isolated compatibility tests.
 func SourceAdminHandler(verifier *adminauth.Verifier, registry sourceadmin.Registry) http.Handler {
+	return SourceAdminHandlerWithAudit(verifier, registry, nil)
+}
+
+// SourceAdminHandlerWithAudit exposes a fail-closed, credential-free
+// source-management boundary and records bounded mutation outcomes when a
+// recorder is explicitly supplied.
+func SourceAdminHandlerWithAudit(verifier *adminauth.Verifier, registry sourceadmin.Registry, recorder audit.Recorder) http.Handler {
 	api := &apiHandler{}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/admin/sources", api.sourceCollection(verifier, registry))
-	mux.HandleFunc("/api/v1/admin/sources/", api.sourceResource(verifier, registry))
+	mux.HandleFunc("/api/v1/admin/sources", api.sourceCollection(verifier, registry, recorder))
+	mux.HandleFunc("/api/v1/admin/sources/", api.sourceResource(verifier, registry, recorder))
 	return api.securityHeaders(mux)
 }
 
-func (api *apiHandler) sourceCollection(verifier *adminauth.Verifier, registry sourceadmin.Registry) http.HandlerFunc {
+func (api *apiHandler) sourceCollection(verifier *adminauth.Verifier, registry sourceadmin.Registry, recorder audit.Recorder) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		requestID := api.requestID()
 		writer.Header().Set("X-Request-ID", requestID)
@@ -61,6 +68,9 @@ func (api *apiHandler) sourceCollection(verifier *adminauth.Verifier, registry s
 				return
 			}
 			source, err := registry.Create(sourceadmin.Draft{ID: body.ID, DisplayName: body.DisplayName, Kind: body.Kind, Endpoint: body.Endpoint, Enabled: body.Enabled}, time.Now().UTC())
+			if !recordSourceAudit(writer, requestID, recorder, "source.create", body.ID, err) {
+				return
+			}
 			writeSourceResult(writer, requestID, source, err, http.StatusCreated)
 		default:
 			writer.Header().Set("Allow", "GET, POST")
@@ -69,7 +79,7 @@ func (api *apiHandler) sourceCollection(verifier *adminauth.Verifier, registry s
 	}
 }
 
-func (api *apiHandler) sourceResource(verifier *adminauth.Verifier, registry sourceadmin.Registry) http.HandlerFunc {
+func (api *apiHandler) sourceResource(verifier *adminauth.Verifier, registry sourceadmin.Registry, recorder audit.Recorder) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		requestID := api.requestID()
 		writer.Header().Set("X-Request-ID", requestID)
@@ -104,15 +114,40 @@ func (api *apiHandler) sourceResource(verifier *adminauth.Verifier, registry sou
 				return
 			}
 			source, err := registry.Update(id, body.ExpectedRevision, sourceadmin.Draft{ID: body.ID, DisplayName: body.DisplayName, Kind: body.Kind, Endpoint: body.Endpoint, Enabled: body.Enabled}, time.Now().UTC())
+			if !recordSourceAudit(writer, requestID, recorder, "source.update", id, err) {
+				return
+			}
 			writeSourceResult(writer, requestID, source, err, http.StatusOK)
 		case http.MethodDelete:
 			source, err := registry.Disable(id, body.ExpectedRevision, time.Now().UTC())
+			if !recordSourceAudit(writer, requestID, recorder, "source.disable", id, err) {
+				return
+			}
 			writeSourceResult(writer, requestID, source, err, http.StatusOK)
 		default:
 			writer.Header().Set("Allow", "PUT, DELETE")
 			writeError(writer, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed.", requestID)
 		}
 	}
+}
+
+func recordSourceAudit(writer http.ResponseWriter, requestID string, recorder audit.Recorder, action, sourceID string, operationErr error) bool {
+	if recorder == nil {
+		return true
+	}
+	outcome := "success"
+	if operationErr != nil {
+		outcome = "failure"
+	}
+	event, err := audit.NewEvent("evt:"+requestID+":"+action, "http:"+requestID, "admin", action, "source:"+sourceID, outcome, time.Now().UTC())
+	if err == nil {
+		err = recorder.Record(event)
+	}
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "audit_unavailable", "The source operation could not be audited.", requestID)
+		return false
+	}
+	return true
 }
 
 func authorizeAdmin(writer http.ResponseWriter, request *http.Request, requestID string, verifier *adminauth.Verifier) bool {
