@@ -1,0 +1,45 @@
+name: Browser worker
+
+on:
+  pull_request:
+    paths:
+      - "apps/browser-worker/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/browser-worker.yml"
+  push:
+    branches:
+      - "restructure/integration"
+    paths:
+      - "apps/browser-worker/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/browser-worker.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  browser-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10.18.3"
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: pnpm
+      - name: Install exact workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck browser worker
+        run: pnpm --filter @link-evidence/browser-worker typecheck
+      - name: Build browser worker
+        run: pnpm --filter @link-evidence/browser-worker build
+      - name: Install Chromium
+        run: pnpm --filter @link-evidence/browser-worker exec playwright install --with-deps chromium
+      - name: Test browser worker
+        run: pnpm --filter @link-evidence/browser-worker test
