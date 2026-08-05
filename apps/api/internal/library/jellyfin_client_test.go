@@ -142,8 +142,8 @@ func TestJellyfinClientUsesSafeErrorsAndBoundsResponses(t *testing.T) {
 		limit     int64
 	}{
 		{
-			name: "unauthorized",
-			handler: func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusUnauthorized) },
+			name:      "unauthorized",
+			handler:   func(writer http.ResponseWriter, _ *http.Request) { writer.WriteHeader(http.StatusUnauthorized) },
 			wantError: ErrJellyfinUnauthorized,
 		},
 		{
@@ -161,7 +161,7 @@ func TestJellyfinClientUsesSafeErrorsAndBoundsResponses(t *testing.T) {
 				_, _ = writer.Write([]byte(`{"Items":[]}` + strings.Repeat(" ", 2048)))
 			},
 			wantError: ErrJellyfinInvalidResponse,
-			limit: 1024,
+			limit:     1024,
 		},
 	}
 	for _, test := range tests {

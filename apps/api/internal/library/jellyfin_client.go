@@ -32,8 +32,8 @@ type JellyfinClient struct {
 
 type jellyfinItemsResponse struct {
 	Items            []jellyfinItem `json:"Items"`
-	TotalRecordCount int             `json:"TotalRecordCount"`
-	StartIndex       int             `json:"StartIndex"`
+	TotalRecordCount int            `json:"TotalRecordCount"`
+	StartIndex       int            `json:"StartIndex"`
 }
 
 type jellyfinItem struct {

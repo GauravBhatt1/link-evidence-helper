@@ -19,9 +19,9 @@ func fixtureRepository(t *testing.T) *FixtureRepository {
 func TestFixtureRepositoryFiltersAndSortsViews(t *testing.T) {
 	repository := fixtureRepository(t)
 	tests := []struct {
-		view       View
-		wantCount  int
-		firstItem  string
+		view      View
+		wantCount int
+		firstItem string
 	}{
 		{view: ViewMovies, wantCount: 3, firstItem: "Archive Zero"},
 		{view: ViewTV, wantCount: 3, firstItem: "Signal House"},
