@@ -50,7 +50,7 @@ test("runs the multi-quality fixture workflow with persistent disclosure", async
   await page.getByRole("radio", { name: "1080p", exact: true }).check();
   await expect(findLinks).toBeEnabled();
   await findLinks.click();
-  await expect(page.getByText("Selection is ready. Link resolution is not connected in Milestone 3.")).toBeVisible();
+  await expect(page.getByText("Selection is ready. Start the app in API mode to resolve links.")).toBeVisible();
   await expect(page.getByText(fixtureNotice)).toBeVisible();
   await expect(page.getByText(/Delivery Links|Checking source|Download|Copy/i)).toHaveCount(0);
   expect(await page.locator("img").count()).toBe(0);
