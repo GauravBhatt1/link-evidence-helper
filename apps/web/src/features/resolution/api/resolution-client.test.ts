@@ -11,6 +11,8 @@ import {
 const jobId = "job_0123456789abcdef0123456789abcdef";
 const now = "2026-08-05T00:00:00Z";
 
+type FetchCall = readonly [input: RequestInfo | URL, init?: RequestInit];
+
 function job(overrides: Partial<Job> = {}): Job {
   return {
     jobId,
@@ -31,19 +33,28 @@ function jsonResponse(payload: unknown, status = 200): Response {
   });
 }
 
+function trackedFetch(handler: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) {
+  const calls: FetchCall[] = [];
+  const implementation: typeof fetch = async (input, init) => {
+    calls.push([input, init]);
+    return handler(input, init);
+  };
+  return { calls, fetch: vi.fn(implementation) as typeof fetch };
+}
+
 describe("ResolutionClient", () => {
   it("creates a strict same-origin resolution job", async () => {
-    const fetchMock = vi.fn(async () => jsonResponse(job(), 202));
-    const client = new ResolutionClient(fetchMock as typeof fetch);
+    const mock = trackedFetch(async () => jsonResponse(job(), 202));
+    const client = new ResolutionClient(mock.fetch);
     const result = await client.create(
       { contentId: "content_12345678", variantId: "variant_12345678", quality: "1080p" },
       "resolution-request-0001",
     );
 
     expect(result.jobId).toBe(jobId);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [path, init] = fetchMock.mock.calls[0]!;
-    expect(path).toBe("/api/v1/jobs/resolution");
+    expect(mock.calls).toHaveLength(1);
+    const [requestPath, init] = mock.calls[0]!;
+    expect(requestPath).toBe("/api/v1/jobs/resolution");
     expect(init).toMatchObject({
       method: "POST",
       cache: "no-store",
@@ -63,12 +74,12 @@ describe("ResolutionClient", () => {
   });
 
   it("gets and unsubscribes using encoded validated job identifiers", async () => {
-    const fetchMock = vi.fn(async () => jsonResponse(job()));
-    const client = new ResolutionClient(fetchMock as typeof fetch);
+    const mock = trackedFetch(async () => jsonResponse(job()));
+    const client = new ResolutionClient(mock.fetch);
     await client.get(jobId);
     await client.unsubscribe(jobId, "resolution-request-0001");
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(`/api/v1/jobs/${jobId}`);
-    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+    expect(mock.calls[0]?.[0]).toBe(`/api/v1/jobs/${jobId}`);
+    expect(mock.calls[1]?.[1]).toMatchObject({
       method: "DELETE",
       headers: expect.objectContaining({ "Idempotency-Key": "resolution-request-0001" }),
     });
@@ -109,21 +120,21 @@ describe("ResolutionClient", () => {
   });
 
   it("uses safe server errors and rejects non-JSON responses", async () => {
-    const safeClient = new ResolutionClient(vi.fn(async () => jsonResponse({
+    const safeClient = new ResolutionClient(trackedFetch(async () => jsonResponse({
       ok: false,
       error: "Select a quality before resolving links.",
       code: "quality_required",
-    }, 400)) as unknown as typeof fetch);
+    }, 400)).fetch);
     await expect(safeClient.get(jobId)).rejects.toMatchObject({
       code: "quality_required",
       status: 400,
       message: "Select a quality before resolving links.",
     });
 
-    const htmlClient = new ResolutionClient(vi.fn(async () => new Response("<html>secret</html>", {
+    const htmlClient = new ResolutionClient(trackedFetch(async () => new Response("<html>secret</html>", {
       status: 502,
       headers: { "Content-Type": "text/html" },
-    })) as unknown as typeof fetch);
+    })).fetch);
     await expect(htmlClient.get(jobId)).rejects.toMatchObject({
       code: "invalid_content_type",
       status: 502,
