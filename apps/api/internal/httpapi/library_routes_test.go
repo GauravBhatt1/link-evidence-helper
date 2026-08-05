@@ -35,7 +35,7 @@ func TestLibraryRouteReturnsCanonicalView(t *testing.T) {
 	repository := &libraryTestRepository{response: libraryservice.Response{
 		OK: true, Success: true, Code: "ok", View: libraryservice.ViewMovies,
 		GeneratedAt: generatedAt, Items: []libraryservice.Item{},
-		Summary: libraryservice.Summary{},
+		Summary:  libraryservice.Summary{},
 		Jellyfin: libraryservice.JellyfinStatus{Configured: false, Mode: libraryservice.JellyfinDisabled},
 	}}
 	handler := HandlerWithJobsAndLibrary(libraryTestSearcher{}, nil, repository)
