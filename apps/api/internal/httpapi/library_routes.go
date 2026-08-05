@@ -26,8 +26,15 @@ func HandlerWithServices(searcher searchservice.Searcher, jobs JobBackend, libra
 
 // HandlerWithServicesAndSources composes all currently supported development
 // API boundaries. Source mutations remain fail-closed unless both verifier and
-// registry are configured by the runtime.
+// registry are configured by the runtime. Diagnostics remain disabled.
 func HandlerWithServicesAndSources(searcher searchservice.Searcher, jobs JobBackend, library libraryservice.Repository, verifier *adminauth.Verifier, registry sourceadmin.Registry) http.Handler {
+	return HandlerWithServicesSourcesAndDiagnostics(searcher, jobs, library, verifier, registry, nil)
+}
+
+// HandlerWithServicesSourcesAndDiagnostics composes all development API
+// boundaries. Diagnostics and source administration remain fail-closed unless
+// their dependencies are supplied explicitly by the runtime.
+func HandlerWithServicesSourcesAndDiagnostics(searcher searchservice.Searcher, jobs JobBackend, library libraryservice.Repository, verifier *adminauth.Verifier, registry sourceadmin.Registry, diagnosticProvider DiagnosticsProvider) http.Handler {
 	api := &apiHandler{searcher: searcher, jobs: jobs}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", api.health)
@@ -38,6 +45,7 @@ func HandlerWithServicesAndSources(searcher searchservice.Searcher, jobs JobBack
 	mux.HandleFunc("/api/v1/admin/session", api.adminSession(verifier))
 	mux.HandleFunc("/api/v1/admin/sources", api.sourceCollection(verifier, registry))
 	mux.HandleFunc("/api/v1/admin/sources/", api.sourceResource(verifier, registry))
+	mux.HandleFunc("/api/v1/admin/diagnostics", api.diagnostics(verifier, diagnosticProvider))
 	return api.securityHeaders(mux)
 }
 
