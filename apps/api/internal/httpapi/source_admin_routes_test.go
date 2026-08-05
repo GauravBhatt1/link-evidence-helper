@@ -22,7 +22,9 @@ func TestSourceAdminHandlerFailsClosed(t *testing.T) {
 
 func TestSourceAdminHandlerRequiresBearerToken(t *testing.T) {
 	verifier, err := adminauth.NewVerifier("this-is-a-long-development-admin-token")
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	handler := SourceAdminHandler(verifier, sourceadmin.NewMemoryRegistry())
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/admin/sources", nil)
 	response := httptest.NewRecorder()
@@ -35,7 +37,9 @@ func TestSourceAdminHandlerRequiresBearerToken(t *testing.T) {
 func TestSourceAdminCreateAndRevisionConflict(t *testing.T) {
 	const token = "this-is-a-long-development-admin-token"
 	verifier, err := adminauth.NewVerifier(token)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	handler := SourceAdminHandler(verifier, sourceadmin.NewMemoryRegistry())
 
 	create := `{"id":"example","displayName":"Example","kind":"http-json","endpoint":"https://example.test/","enabled":true}`
@@ -65,14 +69,18 @@ func TestSourceAdminCreateAndRevisionConflict(t *testing.T) {
 func TestSourceAdminRejectsQueryAndUnknownFields(t *testing.T) {
 	const token = "this-is-a-long-development-admin-token"
 	verifier, err := adminauth.NewVerifier(token)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	handler := SourceAdminHandler(verifier, sourceadmin.NewMemoryRegistry())
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/admin/sources?token=secret", nil)
 	request.Header.Set("Authorization", "Bearer "+token)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusBadRequest { t.Fatalf("query status = %d", response.Code) }
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("query status = %d", response.Code)
+	}
 
 	body := `{"id":"example","displayName":"Example","kind":"http-json","endpoint":"https://example.test/","enabled":true,"headers":{"Authorization":"secret"}}`
 	request = httptest.NewRequest(http.MethodPost, "/api/v1/admin/sources", strings.NewReader(body))
@@ -80,6 +88,10 @@ func TestSourceAdminRejectsQueryAndUnknownFields(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusBadRequest { t.Fatalf("unknown field status = %d", response.Code) }
-	if strings.Contains(response.Body.String(), "secret") { t.Fatal("error response leaked rejected secret") }
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("unknown field status = %d", response.Code)
+	}
+	if strings.Contains(response.Body.String(), "secret") {
+		t.Fatal("error response leaked rejected secret")
+	}
 }
