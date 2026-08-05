@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { ResolutionResult } from "../../../types/contracts";
 import type { ResolutionPhase } from "../hooks/use-resolution";
+import "../styles/resolution.css";
 
 export function ResolutionPanel({
   phase,
