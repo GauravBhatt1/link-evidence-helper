@@ -148,6 +148,7 @@ export function useResolution({
       if (activeRef.current?.generation === generation) activeRef.current = null;
     } catch (error) {
       if (active.controller.signal.aborted || activeRef.current?.generation !== generation) return;
+      unsubscribe(active);
       activeRef.current = null;
       const message = error instanceof Error && error.message
         ? error.message
@@ -163,7 +164,7 @@ export function useResolution({
         });
       }
     }
-  }, [client, maximumDurationMs, pollIntervalMs, stopActive]);
+  }, [client, maximumDurationMs, pollIntervalMs, stopActive, unsubscribe]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -196,16 +197,26 @@ function terminalPhase(state: Job["state"]): ResolutionPhase {
 
 function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(resolve, Math.max(0, milliseconds));
+    let settled = false;
+    const cleanup = () => signal.removeEventListener("abort", abort);
+    const complete = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();
+    };
     const abort = () => {
+      if (settled) return;
+      settled = true;
       window.clearTimeout(timer);
+      cleanup();
       reject(new DOMException("Aborted", "AbortError"));
     };
+    const timer = window.setTimeout(complete, Math.max(0, milliseconds));
     if (signal.aborted) {
       abort();
       return;
     }
     signal.addEventListener("abort", abort, { once: true });
-    window.setTimeout(() => signal.removeEventListener("abort", abort), Math.max(0, milliseconds) + 1);
   });
 }
