@@ -47,7 +47,10 @@ test("extracts allowed results, removes fragments, deduplicates, and drops block
     settleMs: 0,
     maxResults: 10,
   });
-  const output = await new BrowserSearchExecutor({ allowPrivate: true }).execute(task);
+  const output = await new BrowserSearchExecutor({
+    allowPrivate: true,
+    chromiumSandbox: false,
+  }).execute(task);
   expect(output.results).toEqual([{
     sourceId: "source-one",
     sourceName: "Source One",
@@ -74,6 +77,8 @@ test("honors cancellation before browser startup", async () => {
     settleMs: 0,
     maxResults: 10,
   });
-  await expect(new BrowserSearchExecutor({ allowPrivate: true }).execute(task, controller.signal))
-    .rejects.toMatchObject({ code: "cancelled" });
+  await expect(new BrowserSearchExecutor({
+    allowPrivate: true,
+    chromiumSandbox: false,
+  }).execute(task, controller.signal)).rejects.toMatchObject({ code: "cancelled" });
 });
