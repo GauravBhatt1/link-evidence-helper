@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://link-evidence-helper.invalid/schema/library-item.schema.json",
+  "title": "Library item",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "itemId",
+    "title",
+    "mediaType",
+    "libraryState",
+    "dateAdded",
+    "updatedAt",
+    "missing",
+    "jellyfin"
+  ],
+  "properties": {
+    "itemId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "contentId": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 },
+    "tmdbId": { "type": ["string", "null"], "pattern": "^[0-9]+$" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 300 },
+    "year": { "type": ["integer", "null"], "minimum": 1874, "maximum": 2200 },
+    "mediaType": { "enum": ["movie", "series", "season", "episode"] },
+    "season": { "type": ["integer", "null"], "minimum": 0, "maximum": 10000 },
+    "episode": { "type": ["integer", "null"], "minimum": 0, "maximum": 10000 },
+    "poster": { "type": ["string", "null"], "maxLength": 2048 },
+    "libraryState": { "enum": ["available", "missing", "partial", "unknown"] },
+    "missing": { "type": "boolean" },
+    "dateAdded": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "jellyfin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configured", "present"],
+      "properties": {
+        "configured": { "type": "boolean" },
+        "present": { "type": "boolean" },
+        "itemId": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 },
+        "serverId": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 },
+        "lastSyncedAt": { "type": ["string", "null"], "format": "date-time" }
+      }
+    }
+  }
+}
