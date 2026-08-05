@@ -40,10 +40,10 @@ var (
 // derive a request URL from Endpoint and the normalized query. Parse receives a
 // bounded in-memory response body and must not perform any network access.
 type Source struct {
-	ID                string
-	Name              string
-	Rank              int
-	Endpoint          string
+	ID                 string
+	Name               string
+	Rank               int
+	Endpoint           string
 	BuildURL           func(endpoint, query string) (string, error)
 	Parse              func(*http.Response) ([]Result, error)
 	AllowedResultHosts map[string]struct{}

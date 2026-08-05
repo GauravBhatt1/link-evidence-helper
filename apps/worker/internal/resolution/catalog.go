@@ -18,10 +18,10 @@ const (
 )
 
 var (
-	ErrInvalidCatalog  = errors.New("resolution: invalid catalog")
+	ErrInvalidCatalog   = errors.New("resolution: invalid catalog")
 	ErrSelectionMissing = errors.New("resolution: selection not found")
-	ErrQualityRequired = errors.New("resolution: quality selection required")
-	identifierPattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
+	ErrQualityRequired  = errors.New("resolution: quality selection required")
+	identifierPattern   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 )
 
 type CatalogFile struct {

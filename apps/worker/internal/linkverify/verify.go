@@ -109,7 +109,7 @@ func (verifier Verifier) Verify(ctx context.Context, candidate Candidate) (Deliv
 	request.Header.Set("User-Agent", "link-evidence-helper-verifier/next")
 
 	policy := &networkPolicy{
-		resolver:      verifier.Resolver,
+		resolver:     verifier.Resolver,
 		allowPrivate: verifier.AllowPrivate,
 		origins:      allowedOrigins,
 	}
@@ -225,7 +225,7 @@ func initialOrigin(parsed *url.URL) string {
 }
 
 type networkPolicy struct {
-	resolver      Resolver
+	resolver     Resolver
 	allowPrivate bool
 	origins      map[string]struct{}
 }

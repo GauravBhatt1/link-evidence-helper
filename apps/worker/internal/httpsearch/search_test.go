@@ -205,7 +205,7 @@ func TestSearchRejectsCrossHostRequestAndResultURLs(t *testing.T) {
 	response, err = engine.Search(context.Background(), "query", []Source{{
 		ID: "unsafe-request", Name: "Unsafe request", Endpoint: server.URL,
 		BuildURL: func(_, _ string) (string, error) { return "https://other.example/search", nil },
-		Parse: parseJSON,
+		Parse:    parseJSON,
 	}})
 	if err != nil {
 		t.Fatal(err)
