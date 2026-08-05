@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -17,10 +18,10 @@ import (
 )
 
 type output struct {
-	Mode            string                   `json:"mode"`
-	Query           string                   `json:"query"`
+	Mode            string                     `json:"mode"`
+	Query           string                     `json:"query"`
 	Contents        []contentaggregate.Content `json:"contents"`
-	PartialFailures []httpsearch.SourceError `json:"partialFailures"`
+	PartialFailures []httpsearch.SourceError   `json:"partialFailures"`
 }
 
 func main() {
@@ -60,7 +61,7 @@ func main() {
 		MaxResultsPerSource: httpsearch.DefaultMaxResultsPerSource,
 		Backoff:             httpsearch.NewBackoff(30*time.Second, 10*time.Minute),
 	}
-	response, err := engine.Search(flag.CommandLine.Context(), *query, sources)
+	response, err := engine.Search(context.Background(), *query, sources)
 	if err != nil {
 		log.Fatal(err)
 	}
