@@ -17,11 +17,14 @@ function renderCard(active = false) {
       selectedQuality=""
       helper="Select a release to continue."
       findEnabled={false}
+      findBusy={false}
       intentNotice=""
+      resolution={null}
       onToggle={onToggle}
       onSelectVariant={vi.fn()}
       onSelectQuality={vi.fn()}
       onFind={vi.fn()}
+      onCancelResolution={vi.fn()}
     />,
   );
   return { ...result, onToggle, viewModel };
