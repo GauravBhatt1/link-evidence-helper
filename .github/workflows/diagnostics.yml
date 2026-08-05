@@ -1,0 +1,36 @@
+name: Diagnostics safety
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/internal/diagnostics/**'
+      - '.github/workflows/diagnostics.yml'
+  push:
+    branches:
+      - restructure/integration
+    paths:
+      - 'apps/api/internal/diagnostics/**'
+      - '.github/workflows/diagnostics.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagnostics-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - run: go test -race ./internal/diagnostics
+      - run: go vet ./internal/diagnostics
