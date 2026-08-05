@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"time"
 
@@ -98,8 +97,8 @@ func (executor Executor) Execute(ctx context.Context, job jobqueue.Job, reporter
 		duration := boundedDurationMS(time.Since(started))
 		if verifyErr == nil {
 			attempts = append(attempts, resolutionAttempt{
-				SourceID: source.SourceID,
-				Status:   "verified",
+				SourceID:   source.SourceID,
+				Status:     "verified",
 				DurationMS: duration,
 			})
 			result := resolutionResult{
@@ -240,4 +239,3 @@ func boundedDurationMS(duration time.Duration) int {
 }
 
 var _ jobqueue.Executor = Executor{}
-var _ = fmt.Sprintf
