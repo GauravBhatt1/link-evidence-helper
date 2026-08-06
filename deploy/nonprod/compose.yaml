@@ -1,0 +1,75 @@
+name: link-evidence-helper-nonprod
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/nonprod/Dockerfile.api
+    restart: unless-stopped
+    init: true
+    read_only: true
+    user: "65532:65532"
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    environment:
+      APP_ENV: nonproduction
+      HTTP_ADDR: 0.0.0.0:8080
+      POSTGRES_ENABLED: "false"
+      REDIS_ADDR: redis:6379
+    expose:
+      - "8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [backend]
+
+  redis:
+    image: redis:7.4.1-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--protected-mode", "yes"]
+    restart: unless-stopped
+    read_only: true
+    user: "999:999"
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /data:rw,noexec,nosuid,nodev,size=64m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [backend]
+
+  postgres:
+    image: postgres:17.2-alpine
+    profiles: ["postgres"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: link_evidence
+      POSTGRES_USER: link_evidence
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U link_evidence -d link_evidence"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+
+networks:
+  backend:
+    internal: true
+
+volumes:
+  postgres_data:
+
+secrets:
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_FILE:?set POSTGRES_PASSWORD_FILE to a non-repository secret file}
