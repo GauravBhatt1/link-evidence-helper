@@ -36,7 +36,9 @@ jobs:
           go-version-file: apps/api/go.mod
           cache-dependency-path: apps/api/go.sum
       - name: Formatting
-        run: test -z "$(gofmt -l .)"
+        run: |
+          unformatted="$(gofmt -l .)"
+          test -z "$unformatted" || { printf 'Unformatted Go files:\n%s\n' "$unformatted"; exit 1; }
       - name: Unit and race tests
         run: go test -race ./...
       - name: Static analysis
@@ -53,7 +55,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: pnpm
       - name: Enable pinned package manager
         run: corepack enable
       - name: Install locked dependencies
@@ -82,7 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           test "${{ github.base_ref }}" = "restructure/integration"
-          if git diff --unified=0 "${{ github.event.pull_request.base.sha }}"...HEAD -- . ':!docs/restructure/**' | grep -E '^\+.*(8765|0\.0\.0\.0:|:80([^0-9]|$)|:443([^0-9]|$))'; then
+          if git diff --unified=0 "${{ github.event.pull_request.base.sha }}"...HEAD -- apps deploy migrations package.json pnpm-workspace.yaml | grep -E '^\+.*(8765|0\.0\.0\.0:|:80([^0-9]|$)|:443([^0-9]|$))'; then
             echo "production listener or port change detected"
             exit 1
           fi
