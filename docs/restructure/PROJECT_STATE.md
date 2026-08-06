@@ -37,42 +37,35 @@ Completed architecture and migration design, canonical contracts, isolated React
 
 Key cumulative Delivery Links integration commit: `02d49d5bf97f20e0e9f7595971e17cd9c424761c`.
 
-### Milestone 9 — library domain foundation
+### Milestones 9–11 — library domain, API/UI, and Jellyfin connector
 
-- Pull request: `#9`
-- Added versioned library contracts and validated Go domain models for Movies, TV, Missing, Recently Added, seasons, episodes, and future Jellyfin boundaries.
-- No live integration, persistence, production data, or external requests.
+- Pull requests: `#9`, `#10`, and `#11`
+- Added versioned library contracts, deterministic fixtures, repository boundaries, strict same-origin library APIs, typed React views, and an explicit opt-in Jellyfin connector.
+- Jellyfin access is bounded, redirect-safe, proxy-isolated, credential-free in URLs, cache-aware, cancellation-aware, and disabled unless runtime configuration is supplied.
 
-### Milestone 10 — fixture-backed library API and React views
+### Milestones 12–14 — admin authentication, audit contracts, and source registry
 
-- Pull request: `#10`
-- Added deterministic shared fixtures, repository boundaries, strict same-origin library API, typed React transport, responsive library views, accessibility coverage, and privacy tests.
+- Pull requests: `#13`, `#14`, `#15`, and `#16`
+- Added runtime-only administrator bearer authentication, constant-time verification, fail-closed session handling, bounded secret-safe audit events, and a concurrency-safe source registry with optimistic revisions.
+- Tokens, cookies, headers, arbitrary metadata, request bodies, and production source credentials are excluded from committed state and audit payloads.
 
-### Milestone 11 — explicit secure Jellyfin connector
+### Milestone 15 — authenticated source-management HTTP boundary
 
-- Pull request: `#11`
-- Added opt-in runtime-only Jellyfin configuration, bounded pagination, canonical mapping, DNS and redirect safety, proxy isolation, response limits, caching, cancellation, deterministic mock-server tests, and operator documentation.
-- Fixture mode remains the default; no live server or credential is committed or contacted by CI.
+- Pull requests: `#21` and `#22`
+- Added fail-closed administrator authorization, strict JSON/content-type/body-size handling, unknown-field rejection, deterministic revision-conflict responses, query-parameter rejection, and an explicit disabled-by-default development runtime switch.
+- No live source configuration, durable persistence, production routing, or deployment is enabled.
 
-### Milestone 12 — administrator authentication boundary
+### Milestone 16 — secret-safe diagnostics boundary
 
-- Pull requests: `#13` and follow-up `#16`
-- Added runtime-only administrator bearer-token configuration, strict parsing, constant-time verification, fail-closed session endpoint, disabled-by-default behavior, route/runtime/security tests, dedicated CI, and secret-safe operator documentation.
-- Tokens are not accepted through query strings, cookies, local storage, committed files, or logs.
+- Pull requests: `#20` and `#25`
+- Added allowlisted diagnostic snapshots and an administrator-only diagnostics endpoint that remains disabled unless an explicit provider is supplied.
+- Provider failures map to generic responses; URLs, hostnames, credentials, headers, cookies, and arbitrary backend details are not exposed.
 
-### Milestone 13 — secret-safe audit event foundation
+### Milestone 17 — bounded audit recording and source-mutation outcomes
 
-- Pull request: `#14`
-- Added bounded administrative audit events with allowlisted actor, action, resource, and outcome values.
-- Arbitrary metadata, headers, bodies, URLs, credentials, cookies, and tokens are excluded by construction.
-- No production logging sink or durable database is enabled yet.
-
-### Milestone 14 — bounded source-management registry foundation
-
-- Pull request: `#15`
-- Integrated as: `a8a4208bac59709b97a9bfd57be3db87a0f89f9e`
-- Added concurrency-safe list/create/update/disable operations, optimistic revisions, deterministic ordering, credential-free endpoint contracts, strict kind and URL validation, UTC normalization, race-enabled tests, and dedicated CI.
-- The in-memory registry is non-durable and is not wired into runtime implicitly; no live source configuration or mutation route is enabled.
+- Pull requests: `#24` and `#27`
+- Added a bounded concurrency-safe in-memory audit recorder and source create/update/disable outcome recording.
+- Audit storage remains non-durable and excludes request bodies, endpoints, headers, cookies, tokens, credentials, and arbitrary metadata by construction.
 
 ## Current integration branch
 
@@ -80,9 +73,13 @@ Key cumulative Delivery Links integration commit: `02d49d5bf97f20e0e9f7595971e17
 
 Current recorded implementation commit:
 
-`a8a4208bac59709b97a9bfd57be3db87a0f89f9e`
+`5c0749393ab17c7f0cfcfa926dfda9519a43dedf`
 
 This branch is the cumulative non-production integration line for all remaining work.
+
+## Current focused work
+
+Pull request `#28` on `restructure/postgres-schema-foundation` adds the first PostgreSQL migration foundation for credential-free administrative sources and bounded audit events. It embeds versioned up/down SQL without applying migrations implicitly and adds path-scoped schema safety tests. It must not be merged until all relevant CI is green.
 
 ## Current production boundary
 
@@ -92,13 +89,11 @@ The known production service remains the existing Python application on port 876
 
 ## Remaining work
 
-1. Authenticated and authorized source-management HTTP routes with strict request bounds, optimistic concurrency responses, CSRF-safe same-origin behavior, and audit-event emission
-2. Diagnostics and operational read models that remain secret-safe and disabled unless explicitly configured
-3. PostgreSQL durable schema, repositories, migrations, transaction boundaries, and SQLite import/rollback tooling
-4. Production Docker images and Compose topology, health/readiness checks, Caddy routing, secrets handling, and least-privilege runtime settings
-5. Structured observability, metrics, tracing boundaries, backup, restore, and recovery drills
-6. Full behavioral parity, load, security, migration, rollback, and release-candidate verification
-7. Final controlled deployment and traffic switch after explicit user action
+1. Complete PostgreSQL migrations, durable repositories, transaction boundaries, migration locking, and SQLite import/rollback tooling
+2. Add production Docker images and Compose topology, health/readiness checks, Caddy routing, secret handling, and least-privilege runtime settings
+3. Add structured observability, metrics and tracing boundaries, backup, restore, and recovery drills
+4. Complete behavioral parity, load, security, migration, rollback, and release-candidate verification
+5. Perform the final controlled deployment and traffic switch only after explicit user action
 
 ## Working method
 
@@ -110,4 +105,4 @@ The known production service remains the existing Python application on port 876
 
 ## Next action
 
-Create a focused branch from `restructure/integration` for authenticated source-management HTTP routes. Reuse the existing fail-closed administrator verifier, bounded source registry, and secret-safe audit event contract. Add strict JSON and body-size limits, reject query-string credentials and unsupported content types, map revision conflicts deterministically, keep the registry disabled unless explicitly supplied, and cover unauthorized, malformed, conflict, race, and secret-leak regression cases. Do not add live sources, persistence, production routing, deployment, VPS access, or port 8765 changes.
+Finish and verify pull request `#28`. After it is green and merged, create a focused PostgreSQL repository branch that adds explicit runtime-only database configuration, bounded connection settings, transactional source-registry persistence, deterministic optimistic-concurrency behavior, integration tests against an ephemeral PostgreSQL service, and fail-closed startup behavior. Do not add production credentials, execute migrations against a live database, deploy, modify `master`, access the VPS, or change port 8765.
