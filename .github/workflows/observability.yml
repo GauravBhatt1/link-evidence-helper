@@ -1,0 +1,46 @@
+name: Observability safety
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/internal/observability/**"
+      - "docs/restructure/OBSERVABILITY_BOUNDARY.md"
+      - "docs/restructure/PROJECT_STATE.md"
+      - ".github/workflows/observability.yml"
+  push:
+    branches:
+      - "restructure/integration"
+    paths:
+      - "apps/api/internal/observability/**"
+      - "docs/restructure/OBSERVABILITY_BOUNDARY.md"
+      - "docs/restructure/PROJECT_STATE.md"
+      - ".github/workflows/observability.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  observability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+      - name: Verify Go formatting
+        run: |
+          files="$(gofmt -l apps/api/internal/observability)"
+          if test -n "$files"; then
+            printf 'Go files require gofmt:\n%s\n' "$files" >&2
+            exit 1
+          fi
+      - name: Test bounded observability contracts
+        run: go test -race ./internal/observability
+        working-directory: apps/api
+      - name: Reject sensitive observability struct fields
+        run: |
+          if grep -RniE '^\s*(RawURL|RawPath|Authorization|Cookie|RequestBody|ConnectionString|Token|Password|Email|UserID)\s+' apps/api/internal/observability --include='*.go' | grep -v '_test.go'; then
+            echo 'Sensitive or high-cardinality observability field detected.' >&2
+            exit 1
+          fi
