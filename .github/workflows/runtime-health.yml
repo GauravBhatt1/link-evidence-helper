@@ -1,0 +1,35 @@
+name: Runtime health boundary
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/internal/runtimehealth/**"
+      - ".github/workflows/runtime-health.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - name: Formatting
+        run: test -z "$(gofmt -l internal/runtimehealth)"
+      - name: Unit tests
+        run: go test -race ./internal/runtimehealth
+      - name: Static analysis
+        run: go vet ./internal/runtimehealth
+      - name: Secret-leak regression
+        run: |
+          if grep -nE 'Password|Authorization|Cookie|Bearer|APIKey|Secret|ConnectionString' internal/runtimehealth/handler.go; then
+            echo "credential-shaped field found in runtime health production contract"
+            exit 1
+          fi
