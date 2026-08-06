@@ -1,0 +1,46 @@
+name: PostgreSQL migration runner safety
+
+on:
+  pull_request:
+    branches:
+      - restructure/integration
+    paths:
+      - "apps/api/internal/storage/migrations/**"
+      - "apps/api/internal/storage/postgres/migration_store.go"
+      - ".github/workflows/postgres-migration-runner.yml"
+      - "apps/api/go.mod"
+      - "apps/api/go.sum"
+  push:
+    branches:
+      - restructure/integration
+    paths:
+      - "apps/api/internal/storage/migrations/**"
+      - "apps/api/internal/storage/postgres/migration_store.go"
+      - ".github/workflows/postgres-migration-runner.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: postgres-migration-runner-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - name: Verify formatting
+        run: test -z "$(gofmt -l internal/storage/migrations internal/storage/postgres/migration_store.go)"
+      - name: Vet storage packages
+        run: go vet ./internal/storage/...
+      - name: Run migration safety tests with race detector
+        run: go test -race ./internal/storage/migrations ./internal/storage/postgres
