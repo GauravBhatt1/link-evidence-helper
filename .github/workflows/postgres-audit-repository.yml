@@ -1,0 +1,42 @@
+name: PostgreSQL audit repository
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/internal/storage/postgres/audit_repository.go'
+      - 'apps/api/internal/storage/postgres/audit_repository_test.go'
+      - 'apps/api/internal/audit/**'
+      - 'apps/api/go.mod'
+      - 'apps/api/go.sum'
+      - '.github/workflows/postgres-audit-repository.yml'
+  push:
+    branches:
+      - 'restructure/postgres-audit-repository'
+    paths:
+      - 'apps/api/internal/storage/postgres/audit_repository.go'
+      - 'apps/api/internal/storage/postgres/audit_repository_test.go'
+      - 'apps/api/internal/audit/**'
+      - 'apps/api/go.mod'
+      - 'apps/api/go.sum'
+      - '.github/workflows/postgres-audit-repository.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - run: gofmt -w internal/storage/postgres/audit_repository.go internal/storage/postgres/audit_repository_test.go
+      - run: git diff --exit-code
+      - run: go test -race ./internal/storage/postgres ./internal/audit
+      - run: go vet ./internal/storage/postgres ./internal/audit
