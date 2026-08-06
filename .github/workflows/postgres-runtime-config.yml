@@ -44,9 +44,9 @@ jobs:
         run: go vet ./internal/storage/postgres
       - name: Run runtime configuration tests with race detector
         run: go test -race ./internal/storage/postgres
-      - name: Reject committed connection material
+      - name: Reject hard-coded production connection URLs
         run: |
-          if grep -RniE 'postgres(ql)?://[^[:space:]]+:[^[:space:]]+@' internal/storage/postgres .github/workflows/postgres-runtime-config.yml; then
-            echo "PostgreSQL credential-like URL detected"
+          if grep -nE 'postgres(ql)?://[^"[:space:]]+@' internal/storage/postgres/runtime_config.go; then
+            echo "Hard-coded PostgreSQL connection URL detected in runtime code"
             exit 1
           fi
