@@ -271,7 +271,7 @@ def combined_sources() -> list[dict[str, Any]]:
     return sorted(rows, key=lambda row: (not row["enabled"], row["name"].lower()))
 
 
-HTML = """<!doctype html>
+HTML = r"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
