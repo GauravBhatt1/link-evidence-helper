@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1.7
+FROM golang:1.23.12-bookworm AS build
+
+WORKDIR /src
+COPY apps/api/go.mod apps/api/go.sum ./apps/api/
+COPY packages/jobqueue/go.mod packages/jobqueue/go.sum ./packages/jobqueue/
+RUN --mount=type=cache,target=/go/pkg/mod \
+    cd apps/api && go mod download
+
+COPY apps/api ./apps/api
+COPY packages/jobqueue ./packages/jobqueue
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    cd apps/api && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags='-s -w' -o /out/link-evidence-api ./cmd/server
+
+FROM gcr.io/distroless/static-debian12:nonroot
+WORKDIR /app
+COPY --from=build /out/link-evidence-api /app/link-evidence-api
+COPY packages/testing/fixtures /app/fixtures
+
+ENV LINK_EVIDENCE_API_ADDR=0.0.0.0:8780 \
+    LINK_EVIDENCE_ALLOW_PUBLIC_LISTEN=true \
+    LINK_EVIDENCE_FIXTURE_DIR=/app/fixtures \
+    LINK_EVIDENCE_SEARCH_MODE=fixture \
+    LINK_EVIDENCE_LIBRARY_MODE=fixture \
+    LINK_EVIDENCE_SOURCE_ADMIN_MODE=disabled
+
+EXPOSE 8780
+USER nonroot:nonroot
+ENTRYPOINT ["/app/link-evidence-api"]
