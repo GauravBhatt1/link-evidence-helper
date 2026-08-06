@@ -15,12 +15,37 @@ func TestInitialMigrationContainsRequiredTablesAndConstraints(t *testing.T) {
 		"CREATE TABLE admin_sources",
 		"CREATE TABLE admin_audit_events",
 		"admin_sources_revision_positive",
+		"admin_sources_display_name_safe",
+		"admin_sources_endpoint_length",
+		"admin_sources_endpoint_authority",
+		"admin_sources_endpoint_no_userinfo",
+		"admin_sources_endpoint_no_query",
+		"admin_sources_endpoint_no_fragment",
 		"admin_audit_action_allowed",
 		"admin_audit_outcome_allowed",
 		"timestamptz",
 	} {
 		if !strings.Contains(sql, required) {
 			t.Fatalf("migration missing %q", required)
+		}
+	}
+}
+
+func TestSourceSchemaMatchesCredentialFreeDomainBoundary(t *testing.T) {
+	content, err := Files.ReadFile("0001_admin_sources_audit.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sql := string(content)
+	for _, required := range []string{
+		"position('@' IN split_part(endpoint, '/', 3)) = 0",
+		"position('?' IN endpoint) = 0",
+		"position('#' IN endpoint) = 0",
+		"kind IN ('http-json', 'http-html', 'browser-html')",
+		"revision > 0",
+	} {
+		if !strings.Contains(sql, required) {
+			t.Fatalf("source schema is missing domain safety expression %q", required)
 		}
 	}
 }
