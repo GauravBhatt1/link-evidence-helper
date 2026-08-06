@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	ErrChecksumDrift    = errors.New("migration checksum drift")
+	ErrChecksumDrift   = errors.New("migration checksum drift")
 	ErrMigrationLocked = errors.New("migration lock unavailable")
 	ErrInvalidHistory  = errors.New("invalid migration history")
 )
