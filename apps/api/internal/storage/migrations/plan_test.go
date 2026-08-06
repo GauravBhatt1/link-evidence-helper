@@ -65,7 +65,7 @@ func TestPlanRejectsVersionGaps(t *testing.T) {
 
 func TestPlanRejectsMismatchedPairNames(t *testing.T) {
 	filesystem := fstest.MapFS{
-		"0001_create.up.sql":   {Data: []byte("SELECT 1;")},
+		"0001_create.up.sql":    {Data: []byte("SELECT 1;")},
 		"0001_destroy.down.sql": {Data: []byte("SELECT 1;")},
 	}
 	_, err := planFromFS(filesystem, DirectionUp)
