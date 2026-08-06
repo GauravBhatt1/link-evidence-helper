@@ -42,18 +42,25 @@ Completed architecture and migration design, canonical contracts, isolated React
 - Context-aware durable source/audit repository interfaces and explicit atomic transaction boundaries.
 - Transactional PostgreSQL source registry and bounded PostgreSQL audit repository.
 - Explicit disabled-by-default PostgreSQL runtime configuration validation without implicit connections or migration execution.
-- Pull request `#41`: deterministic dry-run SQLite source import and reverse-order rollback planning with fixture-only tests. It opens no database, reads no live file, executes no SQL, and mutates no repository.
+- Deterministic dry-run SQLite source import, reverse-order rollback planning, and tamper-evident review sealing without database access or execution.
+
+### Milestones 26–27 — runtime and container safety foundations
+
+- Secret-safe liveness and bounded readiness handlers with deterministic, generic responses.
+- Multi-stage distroless non-root API and worker images.
+- Loopback-only non-production Compose topology with internal Redis, optional PostgreSQL, runtime-injected secrets, read-only filesystems, dropped capabilities, no-new-privileges, bounded tmpfs mounts, health checks, image-build validation, and no production listener.
 
 ## Active checkpoint
 
-Branch `restructure/runtime-health-boundary` adds a secret-safe HTTP health boundary for the future Go runtime:
+Branch `restructure/caddy-routing-foundation` adds a repository-only Caddy preview boundary:
 
-- stable liveness responses that do not depend on external systems
-- bounded readiness checks supplied explicitly by runtime composition
-- generic unavailable responses that never expose backend errors or connection details
-- query rejection, GET/HEAD-only behavior, no-store headers, deterministic check ordering, race-enabled tests, and focused CI
+- loopback-only preview listener on port `18781`
+- routing exclusively to the future Go API over the Compose frontend network
+- Caddy admin API and automatic HTTPS disabled
+- no hostname, DNS provider, certificate issuer, credentials, production listener, or traffic switch
+- security headers, unsafe-method rejection, active upstream health checking, static safety checks, Caddy validation, and merged Compose validation in focused CI
 
-The package is not mounted into a production server and does not open Redis, PostgreSQL, SQLite, network, or VPS connections.
+This checkpoint does not deploy Caddy, request certificates, update DNS, access the VPS, modify production traffic, or touch port `8765`.
 
 ## Current integration branch
 
@@ -61,7 +68,7 @@ The package is not mounted into a production server and does not open Redis, Pos
 
 Current recorded implementation commit:
 
-`8cb6140dbc19f6432af16a1ecafe4bb2782ead4f`
+`6b5a11de842b617aec43604b830df819e2da9e1e`
 
 This branch is the cumulative non-production integration line for all remaining work.
 
@@ -73,9 +80,9 @@ The known production service remains the existing Python application on port 876
 
 ## Remaining work
 
-1. Merge the runtime health boundary only after all relevant CI is green, then build production Docker images and a non-production Compose topology with least-privilege defaults and explicit secrets injection
-2. Add Caddy configuration templates and routing verification without switching live traffic
-3. Add structured observability, metrics, tracing boundaries, backup, restore, and recovery drills
+1. Merge the Caddy routing foundation only after every relevant CI check is green
+2. Add structured observability, metrics, and tracing boundaries without sensitive labels or payload capture
+3. Add backup, restore, and recovery drill definitions with destructive actions disabled by default
 4. Complete behavioral parity, load, security, migration, rollback, and release-candidate verification
 5. Perform final controlled deployment and traffic switch only after explicit user action
 
@@ -89,4 +96,4 @@ The known production service remains the existing Python application on port 876
 
 ## Next action
 
-Open the runtime-health pull request, merge it only after every relevant check is green, then create a focused branch for production-oriented but non-deployed container images and Compose topology. Keep all services bound away from the existing production listener, require runtime-injected secrets, use read-only filesystems and non-root users where practical, and add configuration validation tests. Do not deploy, modify `master`, access the VPS, switch routing, add credentials, import live data, or touch port 8765.
+Open the Caddy routing pull request and merge it only after every relevant check is green. Then create a focused observability boundary with structured secret-safe logging, bounded metrics, and tracing interfaces that do not record URLs, headers, request bodies, cookies, tokens, connection strings, or arbitrary labels. Do not deploy, modify `master`, access the VPS, switch routing, add credentials, import live data, request certificates, change DNS, or touch port `8765`.
