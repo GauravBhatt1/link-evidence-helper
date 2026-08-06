@@ -1,0 +1,91 @@
+name: link-evidence-helper-nonproduction
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    image: link-evidence-helper-api:nonproduction
+    restart: "no"
+    init: true
+    read_only: true
+    user: "65532:65532"
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    environment:
+      LINK_EVIDENCE_API_ADDR: 0.0.0.0:8780
+      LINK_EVIDENCE_ALLOW_PUBLIC_LISTEN: "true"
+      LINK_EVIDENCE_FIXTURE_DIR: /app/fixtures
+      LINK_EVIDENCE_SEARCH_MODE: fixture
+      LINK_EVIDENCE_LIBRARY_MODE: fixture
+      LINK_EVIDENCE_SOURCE_ADMIN_MODE: disabled
+      LINK_EVIDENCE_REDIS_ADDR: redis:6379
+      LINK_EVIDENCE_ALLOW_REMOTE_REDIS: "true"
+      LINK_EVIDENCE_JOB_PREFIX: nonproduction:link-evidence
+    ports:
+      - "127.0.0.1:8780:8780"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - app
+
+  redis:
+    image: redis:7.4.1-alpine
+    restart: "no"
+    read_only: true
+    user: "999:999"
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--protected-mode", "yes"]
+    tmpfs:
+      - /data:size=64m,mode=0700,uid=999,gid=999
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - app
+
+  postgres:
+    image: postgres:17.2-alpine
+    profiles: ["postgres"]
+    restart: "no"
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_DB: link_evidence
+      POSTGRES_USER: link_evidence
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      - /run/postgresql:size=8m,mode=0775,uid=70,gid=70
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U link_evidence -d link_evidence"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - app
+
+networks:
+  app:
+    internal: true
+
+volumes:
+  postgres_data:
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
