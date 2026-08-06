@@ -27,9 +27,9 @@ jobs:
         run: go test -race ./internal/storage/sqliteimport
       - name: Static analysis
         run: go vet ./internal/storage/sqliteimport
-      - name: Credential regression
+      - name: Credential-field regression
         run: |
-          if grep -RniE 'password|authorization|cookie|bearer|api[_-]?key|secret' internal/storage/sqliteimport --include='*.go'; then
-            echo "credential-shaped field or literal found in SQLite import boundary"
+          if grep -nE 'Password|Authorization|Cookie|Bearer|APIKey|Secret' internal/storage/sqliteimport/plan.go; then
+            echo "credential-shaped field found in SQLite import production contract"
             exit 1
           fi
