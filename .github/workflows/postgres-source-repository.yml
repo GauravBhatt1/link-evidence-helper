@@ -1,0 +1,41 @@
+name: PostgreSQL source repository safety
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/internal/storage/postgres/**"
+      - "apps/api/internal/sourceadmin/**"
+      - ".github/workflows/postgres-source-repository.yml"
+  push:
+    branches:
+      - "restructure/integration"
+    paths:
+      - "apps/api/internal/storage/postgres/**"
+      - "apps/api/internal/sourceadmin/**"
+      - ".github/workflows/postgres-source-repository.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-source-repository:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.12"
+      - name: Verify formatting
+        run: |
+          files="$(gofmt -l apps/api/internal/storage/postgres/*.go)"
+          if test -n "$files"; then
+            printf 'Go files require gofmt:\n%s\n' "$files" >&2
+            exit 1
+          fi
+      - name: Vet persistence packages
+        run: go vet ./internal/storage/postgres ./internal/sourceadmin
+        working-directory: apps/api
+      - name: Test transactional repository
+        run: go test -race ./internal/storage/postgres ./internal/sourceadmin
+        working-directory: apps/api
