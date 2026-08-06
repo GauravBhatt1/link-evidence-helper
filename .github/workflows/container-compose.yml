@@ -13,7 +13,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     env:
-      LINK_EVIDENCE_ADMIN_TOKEN: ci-only-placeholder-token
+      LINK_EVIDENCE_ADMIN_TOKEN: ci-only-placeholder-token-32-bytes-minimum
       LINK_EVIDENCE_POSTGRES_PASSWORD: ci-only-placeholder-password
     steps:
       - uses: actions/checkout@v4
