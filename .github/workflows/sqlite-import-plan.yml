@@ -1,0 +1,31 @@
+name: SQLite import planning safety
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/internal/storage/sqliteimport/**'
+      - '.github/workflows/sqlite-import-plan.yml'
+  push:
+    branches:
+      - restructure/integration
+    paths:
+      - 'apps/api/internal/storage/sqliteimport/**'
+      - '.github/workflows/sqlite-import-plan.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - run: go test -race ./internal/storage/sqliteimport
+      - run: go vet ./internal/storage/sqliteimport
