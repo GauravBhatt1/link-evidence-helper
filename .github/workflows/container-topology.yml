@@ -1,0 +1,49 @@
+name: Container topology safety
+
+on:
+  pull_request:
+    branches: [restructure/integration]
+    paths:
+      - 'deploy/**'
+      - 'apps/api/**'
+      - 'packages/jobqueue/**'
+      - 'packages/testing/fixtures/**'
+      - '.github/workflows/container-topology.yml'
+  push:
+    branches: [restructure/integration]
+    paths:
+      - 'deploy/**'
+      - 'apps/api/**'
+      - 'packages/jobqueue/**'
+      - 'packages/testing/fixtures/**'
+      - '.github/workflows/container-topology.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate safety invariants
+        run: python deploy/validate_topology.py
+      - name: Validate Compose model
+        run: |
+          mkdir -p deploy/secrets
+          printf 'ci-placeholder-not-a-real-secret\n' > deploy/secrets/postgres_password.txt
+          docker compose -f deploy/compose.nonproduction.yaml config --quiet
+          rm -f deploy/secrets/postgres_password.txt
+      - name: Build API image
+        run: docker build --file deploy/Dockerfile.api --tag link-evidence-helper-api:ci .
+      - name: Verify image runs as non-root
+        run: |
+          uid=$(docker run --rm --entrypoint /busybox/sh link-evidence-helper-api:ci -c 'id -u' 2>/dev/null || true)
+          if [ -n "$uid" ] && [ "$uid" = "0" ]; then
+            echo 'container unexpectedly runs as root' >&2
+            exit 1
+          fi
