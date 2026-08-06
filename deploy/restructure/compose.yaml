@@ -1,0 +1,98 @@
+name: link-evidence-restructure
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/restructure/Dockerfile.api
+    environment:
+      LINK_EVIDENCE_API_ADDR: 0.0.0.0:8780
+      LINK_EVIDENCE_ALLOW_PUBLIC_LISTEN: "true"
+      LINK_EVIDENCE_SEARCH_MODE: fixture
+      LINK_EVIDENCE_LIBRARY_MODE: fixture
+      LINK_EVIDENCE_FIXTURE_DIR: /opt/link-evidence/fixtures
+      LINK_EVIDENCE_REDIS_ADDR: redis:6379
+      LINK_EVIDENCE_ALLOW_REMOTE_REDIS: "true"
+      LINK_EVIDENCE_ADMIN_TOKEN: ${LINK_EVIDENCE_ADMIN_TOKEN:?runtime admin token is required}
+    volumes:
+      - ../../packages/testing/fixtures:/opt/link-evidence/fixtures:ro
+    ports:
+      - "127.0.0.1:${LINK_EVIDENCE_PREVIEW_PORT:-18780}:8780"
+    depends_on:
+      redis:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks: [frontend, backend]
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/restructure/Dockerfile.worker
+    environment:
+      LINK_EVIDENCE_REDIS_ADDR: redis:6379
+      LINK_EVIDENCE_ALLOW_REMOTE_REDIS: "true"
+      LINK_EVIDENCE_FIXTURE_DIR: /opt/link-evidence/fixtures
+    volumes:
+      - ../../packages/testing/fixtures:/opt/link-evidence/fixtures:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks: [backend]
+
+  redis:
+    image: redis:7.4.2-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    read_only: true
+    tmpfs:
+      - /data:size=128m,mode=0700
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks: [backend]
+
+  postgres:
+    image: postgres:17.5-alpine
+    profiles: [durable]
+    environment:
+      POSTGRES_DB: ${LINK_EVIDENCE_POSTGRES_DB:-link_evidence}
+      POSTGRES_USER: ${LINK_EVIDENCE_POSTGRES_USER:-link_evidence}
+      POSTGRES_PASSWORD: ${LINK_EVIDENCE_POSTGRES_PASSWORD:?runtime PostgreSQL password is required for durable profile}
+    volumes:
+      - restructure-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks: [backend]
+
+networks:
+  frontend: {}
+  backend:
+    internal: true
+
+volumes:
+  restructure-postgres: {}
