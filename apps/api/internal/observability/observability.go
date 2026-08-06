@@ -92,10 +92,10 @@ type Logger interface {
 type MetricName string
 
 const (
-	MetricRequestsTotal      MetricName = "requests_total"
-	MetricRequestDuration    MetricName = "request_duration"
-	MetricDependencyReady    MetricName = "dependency_ready"
-	MetricJobsInFlight       MetricName = "jobs_in_flight"
+	MetricRequestsTotal   MetricName = "requests_total"
+	MetricRequestDuration MetricName = "request_duration"
+	MetricDependencyReady MetricName = "dependency_ready"
+	MetricJobsInFlight    MetricName = "jobs_in_flight"
 )
 
 // Metric is intentionally label-free. Dimensions are represented only by
@@ -149,16 +149,21 @@ type Tracer interface {
 
 // No-op implementations provide a safe disabled-by-default runtime.
 type NopLogger struct{}
+
 func (NopLogger) Log(context.Context, Event) {}
 
 type NopMetrics struct{}
+
 func (NopMetrics) Record(context.Context, Metric) {}
 
 type NopTracer struct{}
+
 func (NopTracer) Start(ctx context.Context, _ SpanName) (context.Context, Span) {
 	return ctx, nopSpan{}
 }
+
 type nopSpan struct{}
+
 func (nopSpan) End(Outcome) {}
 
 func validEventName(value EventName) bool {
