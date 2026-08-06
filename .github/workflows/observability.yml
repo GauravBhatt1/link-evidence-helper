@@ -1,0 +1,35 @@
+name: Secret-safe observability
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/internal/observability/**"
+      - ".github/workflows/observability.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - name: Formatting
+        run: test -z "$(gofmt -l internal/observability)"
+      - name: Unit tests
+        run: go test -race ./internal/observability
+      - name: Static analysis
+        run: go vet ./internal/observability
+      - name: Secret and free-form field regression
+        run: |
+          if grep -nE 'json.RawMessage|map\[string\]|Message[[:space:]]+string|Metadata|Labels|Attributes|URL[[:space:]]+string|Headers|Body[[:space:]]+|Cookie|Token[[:space:]]+string|ConnectionString|Password|Authorization|Bearer|APIKey|Secret' internal/observability/observability.go; then
+            echo "sensitive or free-form telemetry field found"
+            exit 1
+          fi
