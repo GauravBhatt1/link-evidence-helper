@@ -1,0 +1,33 @@
+name: Container and Compose safety
+
+on:
+  pull_request:
+    paths:
+      - "deploy/restructure/**"
+      - ".github/workflows/container-compose.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      LINK_EVIDENCE_ADMIN_TOKEN: ci-only-placeholder-token
+      LINK_EVIDENCE_POSTGRES_PASSWORD: ci-only-placeholder-password
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose model
+        run: docker compose -f deploy/restructure/compose.yaml --profile durable config --quiet
+      - name: Reject production listener and committed secrets
+        run: |
+          ! grep -RInE '(^|[^0-9])8765([^0-9]|$)' deploy/restructure
+          ! grep -RInE '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|ghp_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,})' deploy/restructure
+      - name: Build API image
+        run: docker build -f deploy/restructure/Dockerfile.api -t link-evidence-api:ci .
+      - name: Build worker image
+        run: docker build -f deploy/restructure/Dockerfile.worker -t link-evidence-worker:ci .
+      - name: Verify non-root images
+        run: |
+          test "$(docker image inspect link-evidence-api:ci --format '{{.Config.User}}')" = "nonroot:nonroot"
+          test "$(docker image inspect link-evidence-worker:ci --format '{{.Config.User}}')" = "nonroot:nonroot"
