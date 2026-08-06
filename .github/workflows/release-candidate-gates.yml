@@ -1,0 +1,44 @@
+name: Release candidate gates
+
+on:
+  pull_request:
+    branches:
+      - restructure/integration
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'deploy/restructure/**'
+      - 'scripts/restructure/**'
+      - 'docs/restructure/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/release-candidate-gates.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install browser runtime
+        run: npx playwright install --with-deps chromium
+      - name: Run release-candidate gates
+        run: bash scripts/restructure/verify_release_candidate.sh
