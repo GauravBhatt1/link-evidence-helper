@@ -44,25 +44,26 @@ Completed architecture and migration design, canonical contracts, isolated React
 - Explicit disabled-by-default PostgreSQL runtime configuration validation without implicit connections or migration execution.
 - Deterministic dry-run SQLite source import, reverse-order rollback planning, and tamper-evident review sealing without database access or execution.
 
-### Milestones 26–29 — runtime, container, preview routing, and observability safety
+### Milestones 26–30 — runtime and operational safety foundations
 
 - Secret-safe liveness and bounded readiness handlers with deterministic, generic responses.
 - Multi-stage distroless non-root API and worker images.
 - Loopback-only non-production Compose topology with internal Redis, optional PostgreSQL, runtime-injected secrets, read-only filesystems, dropped capabilities, no-new-privileges, bounded tmpfs mounts, health checks, image-build validation, and no production listener.
 - Repository-only Caddy preview routing on loopback port `18781`, with automatic HTTPS and the Caddy admin API disabled, unsafe methods rejected, and no production hostname, certificate, DNS, or traffic changes.
-- Closed, bounded structured logging, metrics, and tracing contracts with no exporters, arbitrary labels, remote endpoints, or network connections.
+- Closed, bounded structured logging, metrics, tracing, and request-correlation contracts.
+- Deterministic backup manifests, integrity verification, retention planning, and always-non-executable restore plans without database, filesystem, or production access.
 
 ## Active checkpoint
 
-Branch `restructure/backup-recovery-foundation` adds repository-only backup and recovery safety contracts:
+Branch `restructure/release-candidate-gate` adds a repository-wide, fail-closed release-candidate verification workflow:
 
-- bounded, deterministic backup manifests
-- closed artifact kinds with byte-size and SHA-256 integrity metadata
-- deterministic retention keep/delete planning with no deletion execution
-- restore plans that are always non-executable
-- focused tests, CI, and operator documentation
+- race-enabled Go tests, formatting, vet, and API/worker builds
+- locked TypeScript workspace installation, typechecking, contract tests, and React tests
+- isolated Playwright browser-worker build and test execution
+- diff checks rejecting production listeners, port `8765`, credential-shaped additions, and false deployment claims
+- operator documentation separating repository readiness from controlled VPS deployment
 
-This checkpoint does not connect to PostgreSQL or SQLite, execute backup tools, read production data, copy or delete files, restore a database, configure storage, deploy, access the VPS, modify production traffic, or touch port `8765`.
+This checkpoint does not deploy, publish images, connect to production databases, access the VPS, modify `master`, change DNS or certificates, switch traffic, expose credentials, or touch port `8765`.
 
 ## Current integration branch
 
@@ -70,7 +71,7 @@ This checkpoint does not connect to PostgreSQL or SQLite, execute backup tools, 
 
 Current recorded implementation commit:
 
-`270098d01f0f9ba7a2ed7842b6bf4313596f8c81`
+`4a787ec7466ac6907f7180b846e6c2b592a1cce7`
 
 This branch is the cumulative non-production integration line for all remaining work.
 
@@ -82,9 +83,9 @@ The known production service remains the existing Python application on port 876
 
 ## Remaining work
 
-1. Merge the backup and recovery foundation only after every relevant CI check is green
-2. Complete behavioral parity, load, security, migration, rollback, and release-candidate verification
-3. Perform final controlled deployment and traffic switch only after explicit user action
+1. Merge the release-candidate gate only after every relevant CI check is green
+2. Add or close any behavioral-parity gaps exposed by the repository-wide gate
+3. Perform migration, restore, rollback, listener, volume, credential, and traffic-switch verification only during the explicit controlled deployment step
 
 ## Working method
 
@@ -96,4 +97,4 @@ The known production service remains the existing Python application on port 876
 
 ## Next action
 
-Open the backup and recovery pull request and merge it only after every relevant check is green. Then create focused behavioral parity and release-candidate verification gates covering the Go API, worker, browser fallback, React workflow, migration rehearsal, rollback evidence, and security boundaries. Do not deploy, modify `master`, access the VPS, switch routing, add credentials, import live data, request certificates, change DNS, or touch port `8765`.
+Open the release-candidate gate pull request and merge it only after every relevant check is green. Fix any repository-only failures on focused branches. Do not deploy, modify `master`, access the VPS, switch routing, add credentials, import live data, request certificates, change DNS, or touch port `8765`.
