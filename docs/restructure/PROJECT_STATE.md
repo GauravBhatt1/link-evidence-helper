@@ -51,23 +51,24 @@ Added a fail-closed runtime-only administrator bearer-token boundary, bounded se
 - Pull request `#24`: bounded concurrency-safe in-memory audit recorder.
 - Pull request `#27`: secret-safe audit outcome recording for authenticated source create, update, and disable operations.
 
-### Milestone 19 — PostgreSQL schema migration foundation
+### Milestones 19–22 — PostgreSQL persistence foundations
 
-Added versioned reversible PostgreSQL migrations for credential-free administrative sources and bounded audit events. Database constraints enforce allowlisted kinds/actions/outcomes, optimistic revisions, safe endpoint structure, UTC-aware timestamps, and exclusion of credential-bearing fields. Migrations are embedded but never applied implicitly; no connection string or production database is configured.
+- Versioned reversible PostgreSQL migrations for credential-free administrative sources and bounded audit events, with database constraints for allowlisted values, optimistic revisions, safe endpoint structure, UTC-aware timestamps, and exclusion of credential-bearing fields.
+- Pull request `#30`: deterministic migration planner that validates paired contiguous up/down migrations and exposes checksum-addressed forward and rollback plans without opening a database or executing SQL.
+- Pull request `#31`: context-aware durable source/audit repository interfaces and an explicit atomic transaction boundary, with PostgreSQL selection and connection opening kept outside package initialization.
+- Pull request `#33`: transactional PostgreSQL source registry with bounded query timeouts, domain validation, normalized endpoints, optimistic revision updates, deterministic conflict mapping, explicit commit/rollback behavior, unique-violation mapping, and a database/sql adapter that never opens a connection implicitly.
 
-No production source configuration, live infrastructure probing, deployment, routing, or VPS mutation is enabled by these checkpoints.
+The overlapping draft repository implementation in pull request `#32` was closed as superseded. PostgreSQL runtime selection remains disabled; no driver connection string, credentials, production data, deployment, or migration execution is configured.
 
 ## Current integration branch
 
 `restructure/integration`
 
+Current recorded implementation commit:
+
+`1fb57ea1c43182e6a41908aebebff85b06d7e389`
+
 This branch is the cumulative non-production integration line for all remaining work.
-
-## Current focused work
-
-Branch `restructure/postgres-source-repository` adds an explicit PostgreSQL implementation of the administrative source registry. It provides bounded query timeouts, normalized domain validation, optimistic revision updates, deterministic not-found/conflict mapping, transaction commit/rollback boundaries, unique-violation mapping, a database/sql adapter that never opens a connection implicitly, race-enabled tests, and dedicated path-scoped CI.
-
-The adapter is not wired into runtime and cannot connect without an explicitly supplied database pool. No credentials, connection strings, production data, deployment configuration, or migration execution are included.
 
 ## Current production boundary
 
@@ -77,7 +78,7 @@ The known production service remains the existing Python application on port 876
 
 ## Remaining work
 
-1. Complete PostgreSQL audit repository, migration locking/runner, runtime configuration boundary, and SQLite import/rollback tooling
+1. Bounded PostgreSQL audit repository, migration runner/locking, runtime configuration boundary, and SQLite import/rollback tooling
 2. Production Docker images and Compose topology, health/readiness checks, Caddy routing, secrets handling, and least-privilege runtime settings
 3. Structured observability, metrics, tracing boundaries, backup, restore, and recovery drills
 4. Full behavioral parity, load, security, migration, rollback, and release-candidate verification
@@ -93,4 +94,4 @@ The known production service remains the existing Python application on port 876
 
 ## Next action
 
-Complete and merge the focused PostgreSQL source repository only after all relevant CI is green. Then create a separate focused branch for the bounded PostgreSQL audit repository and explicit migration runner/locking boundary. Keep all PostgreSQL runtime selection disabled by default, do not add a driver connection string or production credentials, and do not touch `master`, the VPS, production traffic, or port 8765.
+Create a focused branch from `restructure/integration` for the bounded PostgreSQL audit repository and explicit migration runner/locking boundary. Persist only the validated audit contract, keep transaction ownership explicit, reject checksum drift, ensure one-runner-at-a-time migration execution, and preserve reversible plans. Keep database runtime selection disabled by default; do not add production credentials, import live data, deploy, modify `master`, access the VPS, change production routing, or touch port 8765.
