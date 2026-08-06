@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"link-evidence-helper/apps/api/internal/storage/migrations"
+	"github.com/GauravBhatt1/link-evidence-helper/apps/api/internal/storage/migrations"
 )
 
 const migrationAdvisoryLockID int64 = 721946310784512903
