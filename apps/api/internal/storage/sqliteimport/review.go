@@ -2,6 +2,7 @@ package sqliteimport
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"strings"
@@ -43,9 +44,9 @@ func NewReview(plan Plan, reviewer string, now time.Time) (Review, error) {
 	}, nil
 }
 
-// Verify confirms that the reviewed plan is byte-for-byte equivalent at the
-// normalized contract level. Any source, ordering, timestamp, or rollback
-// mutation invalidates the review.
+// Verify confirms that the reviewed plan is equivalent at the normalized
+// contract level. Any source, ordering, timestamp, or rollback mutation
+// invalidates the review.
 func (review Review) Verify(plan Plan) error {
 	if review.ReviewedAt.IsZero() || strings.TrimSpace(review.Reviewer) == "" || len(review.Reviewer) > maxReviewerLength {
 		return ErrInvalidReview
@@ -73,14 +74,19 @@ func planHash(plan Plan) (string, error) {
 	}
 
 	h := sha256.New()
+	writeUint64 := func(value uint64) {
+		var encoded [8]byte
+		binary.BigEndian.PutUint64(encoded[:], value)
+		_, _ = h.Write(encoded[:])
+	}
 	writeField := func(value string) {
 		// Length-prefix every field to avoid delimiter ambiguity.
-		h.Write([]byte{byte(len(value) >> 24), byte(len(value) >> 16), byte(len(value) >> 8), byte(len(value))})
-		h.Write([]byte(value))
+		writeUint64(uint64(len(value)))
+		_, _ = h.Write([]byte(value))
 	}
 
 	writeField(plan.CreatedAt.UTC().Format(time.RFC3339Nano))
-	writeField(string(rune(len(plan.Sources))))
+	writeUint64(uint64(len(plan.Sources)))
 	for _, step := range plan.Sources {
 		writeField(step.Draft.ID)
 		writeField(step.Draft.DisplayName)
@@ -92,7 +98,7 @@ func planHash(plan Plan) (string, error) {
 			writeField("0")
 		}
 	}
-	writeField(string(rune(len(plan.Rollback))))
+	writeUint64(uint64(len(plan.Rollback)))
 	for _, step := range plan.Rollback {
 		writeField(step.SourceID)
 	}
