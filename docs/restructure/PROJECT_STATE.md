@@ -53,9 +53,9 @@ Completed architecture and migration design, canonical contracts, isolated React
 - Closed, bounded structured logging, metrics, tracing, and request-correlation contracts.
 - Deterministic backup manifests, integrity verification, retention planning, and always-non-executable restore plans without database, filesystem, or production access.
 
-## Active checkpoint
+### Milestone 31 — repository-wide release-candidate gate
 
-Branch `restructure/release-candidate-gate` adds a repository-wide, fail-closed release-candidate verification workflow:
+Completed and merged the fail-closed release-candidate verification workflow:
 
 - race-enabled Go tests, formatting, vet, and API/worker builds
 - locked TypeScript workspace installation, typechecking, contract tests, and React tests
@@ -63,7 +63,13 @@ Branch `restructure/release-candidate-gate` adds a repository-wide, fail-closed 
 - diff checks rejecting production listeners, port `8765`, credential-shaped additions, and false deployment claims
 - operator documentation separating repository readiness from controlled VPS deployment
 
-This checkpoint does not deploy, publish images, connect to production databases, access the VPS, modify `master`, change DNS or certificates, switch traffic, expose credentials, or touch port `8765`.
+The release-candidate workflow and all relevant checks passed before merge into `restructure/integration`.
+
+## Current checkpoint
+
+The repository restructuring line is ready for controlled deployment verification. No additional repository-only production requirement is currently known to be incomplete.
+
+Repository readiness does not mean production has been changed. The final deployment remains intentionally blocked on production-only verification and explicit operator action.
 
 ## Current integration branch
 
@@ -71,30 +77,52 @@ This checkpoint does not deploy, publish images, connect to production databases
 
 Current recorded implementation commit:
 
-`4a787ec7466ac6907f7180b846e6c2b592a1cce7`
+`e599fc1785af74e02c0cfbf373c732c53a07959a`
 
-This branch is the cumulative non-production integration line for all remaining work.
+This branch is the cumulative non-production release-candidate line.
 
 ## Current production boundary
 
 The default branch is `master`. No restructuring work has been merged to `master`, deployed, or routed to production.
 
-The known production service remains the existing Python application on port 8765. GitHub cannot independently verify the current VPS listener, container identity, local database, credentials, or mounted volumes; those checks must be executed on the VPS during release-candidate and final-cutover verification.
+The known production service remains the existing Python application on port 8765. GitHub cannot independently verify the current VPS listener, container identity, local database, credentials, mounted volumes, DNS, TLS state, backup destinations, or rollback behavior. Those checks must be executed on the VPS during the controlled deployment window.
+
+## External deployment requirements
+
+The next stage requires operator-controlled access to the production environment and runtime-only values. Do not commit any of these values to Git.
+
+Required verification and inputs:
+
+1. Confirm the current Python service, container/process identity, listener, health endpoint, volumes, database path, and rollback command.
+2. Create and verify a fresh production backup using the documented backup and integrity process.
+3. Supply runtime-only configuration for PostgreSQL, Redis, Jellyfin, administrator authentication, Caddy hostname/TLS, and any approved source integrations.
+4. Run migration planning and dry-run import checks before any durable write.
+5. Start the release candidate on non-production listeners and validate health, readiness, parity, browser fallback, Delivery Links, Jellyfin, admin operations, observability, backup, restore planning, and load behavior.
+6. Execute rollback rehearsal without deleting or overwriting the existing production service or volumes.
+7. Switch traffic only after all checks pass, then monitor and retain the old Python service for immediate rollback.
 
 ## Remaining work
 
-1. Merge the release-candidate gate only after every relevant CI check is green
-2. Add or close any behavioral-parity gaps exposed by the repository-wide gate
-3. Perform migration, restore, rollback, listener, volume, credential, and traffic-switch verification only during the explicit controlled deployment step
+Only production-environment execution remains:
+
+- VPS inventory and secret-safe runtime configuration
+- backup and restore verification
+- migration dry run and controlled migration
+- side-by-side release-candidate startup
+- behavioral parity and load verification against the production oracle
+- rollback rehearsal
+- explicit traffic-switch decision
+
+These tasks cannot be truthfully completed from GitHub alone and must not be simulated or represented as already deployed.
 
 ## Working method
 
-- Continue through internal checkpoints without requiring milestone approvals.
-- Use focused branches and pull requests into `restructure/integration`.
-- Require green relevant CI before each integration merge.
-- Keep `master` and production untouched until a final release candidate is complete.
-- Stop only for an actual external blocker, missing production-only information, or the final VPS deployment/cutover action.
+- Keep `master` and production untouched until the controlled deployment step.
+- Never commit production credentials or copied production data.
+- Use the existing Python service as the behavioral oracle and rollback target.
+- Stop immediately on backup, migration, parity, readiness, security, load, or rollback failure.
+- Switch traffic only after explicit operator-controlled verification.
 
 ## Next action
 
-Open the release-candidate gate pull request and merge it only after every relevant check is green. Fix any repository-only failures on focused branches. Do not deploy, modify `master`, access the VPS, switch routing, add credentials, import live data, request certificates, change DNS, or touch port `8765`.
+Perform the documented controlled VPS deployment-readiness checklist with production access and runtime-only configuration. Do not merge to `master`, replace the live service, change DNS/certificates, or touch port `8765` before the side-by-side release candidate, backup, migration, parity, load, and rollback checks have all passed.
