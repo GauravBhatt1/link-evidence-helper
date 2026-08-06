@@ -1,0 +1,33 @@
+name: Observability boundary
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/internal/observability/**"
+      - ".github/workflows/observability-boundary.yml"
+      - "docs/restructure/PROJECT_STATE.md"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - name: Format check
+        run: test -z "$(gofmt -l internal/observability)"
+      - name: Unit and race tests
+        run: go test -race ./internal/observability
+      - name: Reject sensitive observability vocabulary
+        run: >-
+          ! grep -RInE
+          '(authorization|cookie|request[_ -]?body|connection[_ -]?string|signed[_ -]?url|api[_ -]?key|password|bearer[[:space:]]|postgres://|redis://)'
+          internal/observability/*.go
