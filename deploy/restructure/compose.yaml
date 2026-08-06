@@ -54,6 +54,7 @@ services:
 
   redis:
     image: redis:7.4.2-alpine
+    user: redis
     command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
