@@ -1,0 +1,103 @@
+name: Release candidate gate
+
+on:
+  pull_request:
+    branches:
+      - restructure/integration
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "migrations/**"
+      - "deploy/**"
+      - "docs/restructure/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/release-candidate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-candidate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go-verification:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - name: Formatting
+        run: test -z "$(gofmt -l .)"
+      - name: Unit and race tests
+        run: go test -race ./...
+      - name: Static analysis
+        run: go vet ./...
+      - name: Build API and worker
+        run: |
+          go build ./cmd/server
+          go build ./cmd/worker
+
+  frontend-and-browser-verification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Enable pinned package manager
+        run: corepack enable
+      - name: Install locked dependencies
+        run: corepack pnpm@10.18.3 install --frozen-lockfile
+      - name: Typecheck all workspaces
+        run: corepack pnpm@10.18.3 --recursive typecheck
+      - name: Contract tests
+        run: corepack pnpm@10.18.3 --filter @link-evidence/contracts test
+      - name: Web unit tests
+        run: corepack pnpm@10.18.3 --filter @link-evidence/web test
+      - name: Browser worker build
+        run: corepack pnpm@10.18.3 --filter @link-evidence/browser-worker build
+      - name: Install Playwright Chromium
+        run: corepack pnpm@10.18.3 --filter @link-evidence/browser-worker exec playwright install --with-deps chromium
+      - name: Browser worker tests
+        run: corepack pnpm@10.18.3 --filter @link-evidence/browser-worker test
+
+  repository-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reject production branch or listener changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.base_ref }}" = "restructure/integration"
+          if git diff --unified=0 "${{ github.event.pull_request.base.sha }}"...HEAD -- . ':!docs/restructure/**' | grep -E '^\+.*(8765|0\.0\.0\.0:|:80([^0-9]|$)|:443([^0-9]|$))'; then
+            echo "production listener or port change detected"
+            exit 1
+          fi
+      - name: Reject committed credential material
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --unified=0 "${{ github.event.pull_request.base.sha }}"...HEAD | grep -Ei '^\+.*(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|postgres(ql)?://[^[:space:]]+:[^[:space:]@]+@|authorization:[[:space:]]*bearer[[:space:]]+[A-Za-z0-9._-]+|cookie:[[:space:]]*[^[:space:]])'; then
+            echo "credential-shaped material detected"
+            exit 1
+          fi
+      - name: Verify release state remains non-deploying
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'default branch is `master`' docs/restructure/PROJECT_STATE.md
+          grep -q 'No restructuring work has been merged to `master`, deployed, or routed to production' docs/restructure/PROJECT_STATE.md
+          grep -q 'port 8765' docs/restructure/PROJECT_STATE.md
