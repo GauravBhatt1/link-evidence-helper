@@ -1,0 +1,41 @@
+name: Caddy routing safety
+
+on:
+  pull_request:
+    paths:
+      - "deploy/restructure/Caddyfile.preview"
+      - "deploy/restructure/compose.caddy.yaml"
+      - "deploy/restructure/README.md"
+      - ".github/workflows/caddy-routing.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      LINK_EVIDENCE_ADMIN_TOKEN: ci-only-placeholder-token
+      LINK_EVIDENCE_POSTGRES_PASSWORD: ci-only-placeholder-password
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Caddyfile
+        run: >-
+          docker run --rm
+          -v "$PWD/deploy/restructure/Caddyfile.preview:/etc/caddy/Caddyfile:ro"
+          caddy:2.10.0-alpine
+          caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - name: Validate merged Compose model
+        run: >-
+          docker compose
+          -f deploy/restructure/compose.yaml
+          -f deploy/restructure/compose.caddy.yaml
+          config --quiet
+      - name: Enforce preview-only routing boundary
+        run: |
+          grep -Fq '127.0.0.1:${LINK_EVIDENCE_CADDY_PREVIEW_PORT:-18781}:8080' deploy/restructure/compose.caddy.yaml
+          grep -Fq 'reverse_proxy api:8780' deploy/restructure/Caddyfile.preview
+          grep -Fq 'auto_https off' deploy/restructure/Caddyfile.preview
+          grep -Fq 'admin off' deploy/restructure/Caddyfile.preview
+          ! grep -RInE '(^|[^0-9])8765([^0-9]|$)' deploy/restructure/Caddyfile.preview deploy/restructure/compose.caddy.yaml
+          ! grep -RInE '(acme|tls[[:space:]]|cloudflare|route53|digitalocean|api[_-]?token|password|secret)' deploy/restructure/Caddyfile.preview

@@ -1,0 +1,31 @@
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	log {
+		output stdout
+		format json
+	}
+
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Cache-Control "no-store"
+	}
+
+	@unsafe_methods method TRACE CONNECT
+	respond @unsafe_methods 405
+
+	reverse_proxy api:8780 {
+		health_uri /health/live
+		health_interval 10s
+		health_timeout 3s
+		lb_try_duration 2s
+		lb_try_interval 250ms
+	}
+}
