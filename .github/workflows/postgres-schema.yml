@@ -1,22 +1,22 @@
-name: PostgreSQL schema safety
+name: PostgreSQL persistence safety
 
 on:
   pull_request:
     paths:
-      - "apps/api/internal/storage/migrations/**"
+      - "apps/api/internal/storage/**"
       - ".github/workflows/postgres-schema.yml"
   push:
     branches:
       - "restructure/integration"
     paths:
-      - "apps/api/internal/storage/migrations/**"
+      - "apps/api/internal/storage/**"
       - ".github/workflows/postgres-schema.yml"
 
 permissions:
   contents: read
 
 jobs:
-  postgres-schema:
+  postgres-persistence:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -26,11 +26,11 @@ jobs:
           go-version: "1.23.12"
       - name: Verify formatting
         run: |
-          files="$(gofmt -l apps/api/internal/storage/migrations/*.go)"
+          files="$(gofmt -l apps/api/internal/storage)"
           if test -n "$files"; then
             printf 'Go files require gofmt:\n%s\n' "$files" >&2
             exit 1
           fi
-      - name: Test migration contract
-        run: go test -race ./internal/storage/migrations
+      - name: Test persistence contracts
+        run: go test -race ./internal/storage/...
         working-directory: apps/api
