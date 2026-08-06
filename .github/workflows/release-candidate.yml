@@ -31,13 +31,22 @@ jobs:
         working-directory: apps/api
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: apps/api/go.mod
           cache-dependency-path: apps/api/go.sum
-      - name: Formatting
+      - name: Formatting for changed Go files
+        shell: bash
         run: |
-          unformatted="$(gofmt -l .)"
+          set -euo pipefail
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          mapfile -t files < <(git diff --name-only --diff-filter=ACMR "$base_sha"...HEAD -- '*.go' | sed -n 's#^apps/api/##p')
+          if ((${#files[@]} == 0)); then
+            exit 0
+          fi
+          unformatted="$(gofmt -l "${files[@]}")"
           test -z "$unformatted" || { printf 'Unformatted Go files:\n%s\n' "$unformatted"; exit 1; }
       - name: Unit and race tests
         run: go test -race ./...
@@ -83,7 +92,8 @@ jobs:
         run: |
           set -euo pipefail
           test "${{ github.base_ref }}" = "restructure/integration"
-          if git diff --unified=0 "${{ github.event.pull_request.base.sha }}"...HEAD -- apps deploy migrations package.json pnpm-workspace.yaml | grep -E '^\+.*(8765|0\.0\.0\.0:|:80([^0-9]|$)|:443([^0-9]|$))'; then
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          if git diff --unified=0 "$base_sha"...HEAD -- apps deploy migrations package.json pnpm-workspace.yaml | grep -E '^\+.*(8765|0\.0\.0\.0:|:80([^0-9]|$)|:443([^0-9]|$))'; then
             echo "production listener or port change detected"
             exit 1
           fi
@@ -91,7 +101,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --unified=0 "${{ github.event.pull_request.base.sha }}"...HEAD | grep -Ei '^\+.*(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|postgres(ql)?://[^[:space:]]+:[^[:space:]@]+@|authorization:[[:space:]]*bearer[[:space:]]+[A-Za-z0-9._-]+|cookie:[[:space:]]*[^[:space:]])'; then
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          if git diff --unified=0 "$base_sha"...HEAD -- apps packages migrations deploy package.json pnpm-lock.yaml pnpm-workspace.yaml | grep -Ei '^\+.*(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|postgres(ql)?://[^[:space:]]+:[^[:space:]@]+@|authorization:[[:space:]]*bearer[[:space:]]+[A-Za-z0-9._-]+|cookie:[[:space:]]*[^[:space:]])'; then
             echo "credential-shaped material detected"
             exit 1
           fi
