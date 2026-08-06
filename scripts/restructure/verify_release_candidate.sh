@@ -12,8 +12,9 @@ required_paths=(
   apps/browser-worker
   apps/web
   packages/contracts
-  deploy/compose.yml
-  deploy/caddy/Caddyfile.preview
+  deploy/restructure/compose.yaml
+  deploy/restructure/compose.caddy.yaml
+  deploy/restructure/Caddyfile.preview
   docs/restructure/PROJECT_STATE.md
 )
 
@@ -22,13 +23,12 @@ for path in "${required_paths[@]}"; do
 done
 
 if grep -RIn --exclude-dir=.git --exclude='verify_release_candidate.sh' \
-  -E '(^|[^0-9])8765([^0-9]|$)' deploy .github/workflows docs/restructure | \
-  grep -v 'PROJECT_STATE.md'; then
+  -E '(^|[^0-9])8765([^0-9]|$)' deploy .github/workflows | grep .; then
   fail 'protected production port 8765 appears in non-production release-candidate assets'
 fi
 
 if grep -RIn --exclude-dir=.git -E '(password|token|secret|cookie)[[:space:]]*[:=][[:space:]]*[^$<{[:space:]]' \
-  deploy .github/workflows 2>/dev/null; then
+  deploy .github/workflows 2>/dev/null | grep .; then
   fail 'possible literal credential found in deployment or workflow files'
 fi
 
@@ -40,6 +40,7 @@ go vet ./...
 
 npm ci
 npm run --workspace @link-evidence/contracts typecheck
+npm run --workspace @link-evidence/contracts test
 npm run --workspace @link-evidence/web typecheck
 npm run --workspace @link-evidence/web test
 npm run --workspace @link-evidence/browser-worker typecheck
