@@ -31,39 +31,29 @@ Deliver one production-ready repository and deployment path for the existing lin
 
 ## Completed checkpoints
 
-### Milestones 0–8 — architecture, contracts, UI, search, jobs, browser fallback, and Delivery Links
+### Milestones 0–18 — architecture through authenticated operations
 
-Completed architecture and migration design, canonical contracts, isolated React shell, fixture search workflow, loopback-only Go Search API, Redis job foundation, hardened HTTP-first shadow search, isolated Playwright fallback, and verified resolution/Delivery Links workflow.
+Completed architecture and migration design, canonical contracts, isolated React shell, fixture search workflow, loopback-only Go Search API, Redis job foundation, hardened HTTP-first shadow search, isolated Playwright fallback, verified Delivery Links workflow, library contracts and fixture views, secure Jellyfin connector boundaries, fail-closed administrator authentication, bounded secret-safe audit events, source administration, diagnostics, and mutation auditing.
 
-### Milestones 9–11 — library domain, fixture views, and secure Jellyfin connector
+### Milestones 19–25 — PostgreSQL and legacy import safety foundations
 
-Added versioned library contracts, fixture-backed API and React views, and an explicit runtime-only Jellyfin connector with bounded pagination, DNS and redirect safety, response limits, caching, cancellation, and mock-server coverage. Fixture mode remains the default; no live credentials or production data are committed.
-
-### Milestones 12–14 — administrator authentication, audit events, and source registry
-
-Added a fail-closed runtime-only administrator bearer-token boundary, bounded secret-safe audit events, and a concurrency-safe non-durable source registry with optimistic revisions and credential-free endpoint contracts.
-
-### Milestones 15–18 — authenticated source administration and operational read boundaries
-
-- Pull request `#21`: authenticated source-management HTTP routes with strict JSON/content-type/body limits, query rejection, deterministic conflicts, and secret-leak tests.
-- Pull request `#22`: explicit development-only source-admin runtime mounting, disabled by default and requiring administrator authentication.
-- Pull requests `#20` and `#25`: bounded diagnostics snapshot foundation and authenticated diagnostics HTTP boundary, both disabled unless explicitly supplied.
-- Pull request `#24`: bounded concurrency-safe in-memory audit recorder.
-- Pull request `#27`: secret-safe audit outcome recording for authenticated source create, update, and disable operations.
-
-### Milestones 19–23 — PostgreSQL persistence foundations
-
-- Versioned reversible PostgreSQL migrations for credential-free administrative sources and bounded audit events, with database constraints for allowlisted values, optimistic revisions, safe endpoint structure, UTC-aware timestamps, and exclusion of credential-bearing fields.
-- Pull request `#30`: deterministic migration planner that validates paired contiguous up/down migrations and exposes checksum-addressed forward and rollback plans without opening a database or executing SQL.
-- Pull request `#31`: context-aware durable source/audit repository interfaces and an explicit atomic transaction boundary, with PostgreSQL selection and connection opening kept outside package initialization.
-- Pull request `#33`: transactional PostgreSQL source registry with bounded query timeouts, domain validation, normalized endpoints, optimistic revision updates, deterministic conflict mapping, explicit commit/rollback behavior, unique-violation mapping, and a database/sql adapter that never opens a connection implicitly.
-- Pull request `#36`: bounded PostgreSQL audit repository that revalidates the secret-safe audit contract, normalizes timestamps to UTC, maps duplicate event identifiers deterministically, and accepts only an explicitly injected pool or transaction.
-
-The overlapping draft repository implementations in pull requests `#32` and `#35` were closed as superseded. PostgreSQL runtime selection remains disabled; no driver connection string, credentials, production data, deployment, or migration execution is configured.
+- Versioned reversible PostgreSQL migrations for credential-free administrative sources and bounded audit events.
+- Deterministic checksum-addressed migration planning and locked serializable migration execution.
+- Context-aware durable source/audit repository interfaces and explicit atomic transaction boundaries.
+- Transactional PostgreSQL source registry and bounded PostgreSQL audit repository.
+- Explicit disabled-by-default PostgreSQL runtime configuration validation without implicit connections or migration execution.
+- Pull request `#41`: deterministic dry-run SQLite source import and reverse-order rollback planning with fixture-only tests. It opens no database, reads no live file, executes no SQL, and mutates no repository.
 
 ## Active checkpoint
 
-Pull request `#37` adds the explicit migration runner and PostgreSQL advisory-lock store. It validates contiguous durable history, rejects checksum drift before mutation, applies only missing migrations, rolls back exactly the latest migration, uses a dedicated connection-scoped non-blocking advisory lock, and wraps every migration plus history update in a serializable transaction. Runtime invocation remains absent and disabled by default until this pull request passes all relevant CI and is merged.
+Branch `restructure/runtime-health-boundary` adds a secret-safe HTTP health boundary for the future Go runtime:
+
+- stable liveness responses that do not depend on external systems
+- bounded readiness checks supplied explicitly by runtime composition
+- generic unavailable responses that never expose backend errors or connection details
+- query rejection, GET/HEAD-only behavior, no-store headers, deterministic check ordering, race-enabled tests, and focused CI
+
+The package is not mounted into a production server and does not open Redis, PostgreSQL, SQLite, network, or VPS connections.
 
 ## Current integration branch
 
@@ -71,7 +61,7 @@ Pull request `#37` adds the explicit migration runner and PostgreSQL advisory-lo
 
 Current recorded implementation commit:
 
-`a10b6f63d688171b3af1cac5e115f86f611ed6d1`
+`8cb6140dbc19f6432af16a1ecafe4bb2782ead4f`
 
 This branch is the cumulative non-production integration line for all remaining work.
 
@@ -83,11 +73,11 @@ The known production service remains the existing Python application on port 876
 
 ## Remaining work
 
-1. Complete and merge the migration runner/locking checkpoint, then add a disabled-by-default PostgreSQL runtime configuration boundary and SQLite import/rollback tooling
-2. Production Docker images and Compose topology, health/readiness checks, Caddy routing, secrets handling, and least-privilege runtime settings
-3. Structured observability, metrics, tracing boundaries, backup, restore, and recovery drills
-4. Full behavioral parity, load, security, migration, rollback, and release-candidate verification
-5. Final controlled deployment and traffic switch after explicit user action
+1. Merge the runtime health boundary only after all relevant CI is green, then build production Docker images and a non-production Compose topology with least-privilege defaults and explicit secrets injection
+2. Add Caddy configuration templates and routing verification without switching live traffic
+3. Add structured observability, metrics, tracing boundaries, backup, restore, and recovery drills
+4. Complete behavioral parity, load, security, migration, rollback, and release-candidate verification
+5. Perform final controlled deployment and traffic switch only after explicit user action
 
 ## Working method
 
@@ -99,4 +89,4 @@ The known production service remains the existing Python application on port 876
 
 ## Next action
 
-Finish pull request `#37`, merge it only after all relevant CI is green, then create a focused branch for an explicit disabled-by-default PostgreSQL runtime configuration boundary. The runtime boundary must validate configuration without logging connection strings, must not connect implicitly during package initialization, and must keep migration execution as a separate operator action. After that, add dry-run-first SQLite import and rollback tooling with fixture-only tests. Do not add production credentials, import live data, deploy, modify `master`, access the VPS, change production routing, or touch port 8765.
+Open the runtime-health pull request, merge it only after every relevant check is green, then create a focused branch for production-oriented but non-deployed container images and Compose topology. Keep all services bound away from the existing production listener, require runtime-injected secrets, use read-only filesystems and non-root users where practical, and add configuration validation tests. Do not deploy, modify `master`, access the VPS, switch routing, add credentials, import live data, or touch port 8765.
