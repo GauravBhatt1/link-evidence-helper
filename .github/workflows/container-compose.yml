@@ -31,3 +31,8 @@ jobs:
         run: |
           test "$(docker image inspect link-evidence-api:ci --format '{{.Config.User}}')" = "nonroot:nonroot"
           test "$(docker image inspect link-evidence-worker:ci --format '{{.Config.User}}')" = "nonroot:nonroot"
+      - name: Rehearse isolated Compose startup
+        env:
+          LINK_EVIDENCE_PREVIEW_PORT: "18781"
+          COMPOSE_PROJECT_NAME: link-evidence-restructure-ci
+        run: sh deploy/restructure/smoke.sh
