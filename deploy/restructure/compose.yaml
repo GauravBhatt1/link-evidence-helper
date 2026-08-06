@@ -62,7 +62,7 @@ services:
       retries: 12
     read_only: true
     tmpfs:
-      - /data:size=128m,mode=0700
+      - /data:size=128m,mode=1777
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
