@@ -1,0 +1,41 @@
+name: Backup and recovery safety
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/internal/recovery/**"
+      - ".github/workflows/recovery.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - name: Formatting
+        run: test -z "$(gofmt -l internal/recovery)"
+      - name: Unit tests
+        run: go test -race ./internal/recovery
+      - name: Static analysis
+        run: go vet ./internal/recovery
+      - name: Destructive execution regression
+        run: |
+          if grep -RInE 'os\.Remove|os\.RemoveAll|DROP[[:space:]]|TRUNCATE[[:space:]]|DELETE[[:space:]]+FROM|Exec(Context)?\(' internal/recovery; then
+            echo "destructive recovery execution path found"
+            exit 1
+          fi
+      - name: Secret field regression
+        run: |
+          if grep -RInE '^[[:space:]]*(Password|Token|Secret|Authorization|Cookie|Header|ConnectionString|DSN|URL)[[:space:]]+' internal/recovery; then
+            echo "sensitive recovery field found"
+            exit 1
+          fi
