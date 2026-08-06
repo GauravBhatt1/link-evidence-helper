@@ -214,7 +214,7 @@ func (tx *fakeTx) QueryRowContext(ctx context.Context, query string, args ...any
 	}
 	return tx.queryRow(ctx, query, args...)
 }
-func (tx *fakeTx) Commit() error { tx.commits++; return nil }
+func (tx *fakeTx) Commit() error   { tx.commits++; return nil }
 func (tx *fakeTx) Rollback() error { tx.rollbacks++; return nil }
 
 type fakeRow struct {
@@ -266,5 +266,6 @@ type postgresError struct {
 	state   string
 	message string
 }
+
 func (err postgresError) Error() string    { return err.message }
 func (err postgresError) SQLState() string { return err.state }
