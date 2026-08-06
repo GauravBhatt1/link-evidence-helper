@@ -1,0 +1,35 @@
+name: SQLite import safety
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/internal/storage/sqliteimport/**"
+      - ".github/workflows/sqlite-import.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - name: Formatting
+        run: test -z "$(gofmt -l internal/storage/sqliteimport)"
+      - name: Unit tests
+        run: go test -race ./internal/storage/sqliteimport
+      - name: Static analysis
+        run: go vet ./internal/storage/sqliteimport
+      - name: Credential regression
+        run: |
+          if grep -RniE 'password|authorization|cookie|bearer|api[_-]?key|secret' internal/storage/sqliteimport --include='*.go'; then
+            echo "credential-shaped field or literal found in SQLite import boundary"
+            exit 1
+          fi
