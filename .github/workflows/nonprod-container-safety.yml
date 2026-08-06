@@ -1,0 +1,31 @@
+name: Non-production container safety
+
+on:
+  pull_request:
+    paths:
+      - "deploy/nonprod/**"
+      - "scripts/validate_nonprod_compose.py"
+      - ".github/workflows/nonprod-container-safety.yml"
+      - "apps/api/**"
+      - "packages/jobqueue/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate hardened topology
+        run: python3 scripts/validate_nonprod_compose.py
+      - name: Render Compose configuration
+        env:
+          POSTGRES_PASSWORD_FILE: /tmp/nonprod-postgres-password
+        run: |
+          printf 'fixture-only-not-a-secret\n' > "$POSTGRES_PASSWORD_FILE"
+          docker compose -f deploy/nonprod/compose.yaml config --quiet
+      - name: Build API image
+        run: docker build -f deploy/nonprod/Dockerfile.api -t link-evidence-api:ci .
