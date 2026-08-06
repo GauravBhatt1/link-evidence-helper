@@ -2,6 +2,7 @@ package sqliteimport
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -11,7 +12,7 @@ func TestReviewVerifiesUnchangedPlan(t *testing.T) {
 	plan, err := NewPlan([]LegacySource{{
 		ID:          "source-a",
 		DisplayName: "Source A",
-		Kind:        "http",
+		Kind:        "http-json",
 		Endpoint:    "https://example.com/path",
 		Enabled:     true,
 	}}, createdAt)
@@ -40,7 +41,7 @@ func TestReviewRejectsMutatedPlan(t *testing.T) {
 	plan, err := NewPlan([]LegacySource{{
 		ID:          "source-a",
 		DisplayName: "Source A",
-		Kind:        "http",
+		Kind:        "http-json",
 		Endpoint:    "https://example.com/path",
 		Enabled:     true,
 	}}, now)
@@ -79,13 +80,25 @@ func TestReviewRejectsInvalidMetadata(t *testing.T) {
 	}{
 		{name: "blank reviewer", reviewer: "   ", time: now},
 		{name: "zero time", reviewer: "operator"},
-		{name: "oversized reviewer", reviewer: string(make([]byte, maxReviewerLength+1)), time: now},
+		{name: "oversized reviewer", reviewer: strings.Repeat("x", maxReviewerLength+1), time: now},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if _, err := NewReview(plan, test.reviewer, test.time); !errors.Is(err, ErrInvalidReview) {
 				t.Fatalf("NewReview() error = %v, want ErrInvalidReview", err)
 			}
 		})
+	}
+}
+
+func TestReviewRejectsMalformedStoredHash(t *testing.T) {
+	now := time.Date(2026, 8, 6, 4, 0, 0, 0, time.UTC)
+	plan, err := NewPlan(nil, now)
+	if err != nil {
+		t.Fatalf("NewPlan() error = %v", err)
+	}
+	review := Review{PlanHash: strings.Repeat("z", 64), Reviewer: "operator", ReviewedAt: now}
+	if err := review.Verify(plan); !errors.Is(err, ErrInvalidReview) {
+		t.Fatalf("Verify() error = %v, want ErrInvalidReview", err)
 	}
 }
 
