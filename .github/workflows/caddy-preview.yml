@@ -1,0 +1,37 @@
+name: Caddy preview routing safety
+
+on:
+  pull_request:
+    branches: [restructure/integration]
+    paths:
+      - deploy/restructure/Caddyfile.preview
+      - packages/testing/python/test_caddy_preview.py
+      - .github/workflows/caddy-preview.yml
+  push:
+    branches: [restructure/integration]
+    paths:
+      - deploy/restructure/Caddyfile.preview
+      - packages/testing/python/test_caddy_preview.py
+      - .github/workflows/caddy-preview.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run routing safety tests
+        run: python3 -m unittest packages.testing.python.test_caddy_preview
+      - name: Validate Caddy syntax without starting a listener
+        run: |
+          docker run --rm \
+            --network none \
+            --read-only \
+            --cap-drop ALL \
+            --security-opt no-new-privileges \
+            -v "$PWD/deploy/restructure/Caddyfile.preview:/etc/caddy/Caddyfile:ro" \
+            caddy:2.10.0-alpine \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
