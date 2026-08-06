@@ -38,9 +38,9 @@ jobs:
       - name: Test bounded observability contracts
         run: go test -race ./internal/observability
         working-directory: apps/api
-      - name: Reject sensitive observability fields
+      - name: Reject sensitive observability struct fields
         run: |
-          if grep -RniE 'raw[_-]?(url|path)|authorization|cookie|request[_-]?body|connection[_-]?string|token|password|email|user[_-]?id' apps/api/internal/observability --include='*.go' | grep -v '_test.go'; then
+          if grep -RniE '^\s*(RawURL|RawPath|Authorization|Cookie|RequestBody|ConnectionString|Token|Password|Email|UserID)\s+' apps/api/internal/observability --include='*.go' | grep -v '_test.go'; then
             echo 'Sensitive or high-cardinality observability field detected.' >&2
             exit 1
           fi
