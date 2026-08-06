@@ -35,51 +35,37 @@ Deliver one production-ready repository and deployment path for the existing lin
 
 Completed architecture and migration design, canonical contracts, isolated React shell, fixture search workflow, loopback-only Go Search API, Redis job foundation, hardened HTTP-first shadow search, isolated Playwright fallback, and verified resolution/Delivery Links workflow.
 
-Key cumulative Delivery Links integration commit: `02d49d5bf97f20e0e9f7595971e17cd9c424761c`.
+### Milestones 9–11 — library domain, fixture views, and secure Jellyfin connector
 
-### Milestones 9–11 — library domain, API/UI, and Jellyfin connector
+Added versioned library contracts, fixture-backed API and React views, and an explicit runtime-only Jellyfin connector with bounded pagination, DNS and redirect safety, response limits, caching, cancellation, and mock-server coverage. Fixture mode remains the default; no live credentials or production data are committed.
 
-- Pull requests: `#9`, `#10`, and `#11`
-- Added versioned library contracts, deterministic fixtures, repository boundaries, strict same-origin library APIs, typed React views, and an explicit opt-in Jellyfin connector.
-- Jellyfin access is bounded, redirect-safe, proxy-isolated, credential-free in URLs, cache-aware, cancellation-aware, and disabled unless runtime configuration is supplied.
+### Milestones 12–14 — administrator authentication, audit events, and source registry
 
-### Milestones 12–14 — admin authentication, audit contracts, and source registry
+Added a fail-closed runtime-only administrator bearer-token boundary, bounded secret-safe audit events, and a concurrency-safe non-durable source registry with optimistic revisions and credential-free endpoint contracts.
 
-- Pull requests: `#13`, `#14`, `#15`, and `#16`
-- Added runtime-only administrator bearer authentication, constant-time verification, fail-closed session handling, bounded secret-safe audit events, and a concurrency-safe source registry with optimistic revisions.
-- Tokens, cookies, headers, arbitrary metadata, request bodies, and production source credentials are excluded from committed state and audit payloads.
+### Milestones 15–18 — authenticated source administration and operational read boundaries
 
-### Milestone 15 — authenticated source-management HTTP boundary
+- Pull request `#21`: authenticated source-management HTTP routes with strict JSON/content-type/body limits, query rejection, deterministic conflicts, and secret-leak tests.
+- Pull request `#22`: explicit development-only source-admin runtime mounting, disabled by default and requiring administrator authentication.
+- Pull requests `#20` and `#25`: bounded diagnostics snapshot foundation and authenticated diagnostics HTTP boundary, both disabled unless explicitly supplied.
+- Pull request `#24`: bounded concurrency-safe in-memory audit recorder.
+- Pull request `#27`: secret-safe audit outcome recording for authenticated source create, update, and disable operations.
 
-- Pull requests: `#21` and `#22`
-- Added fail-closed administrator authorization, strict JSON/content-type/body-size handling, unknown-field rejection, deterministic revision-conflict responses, query-parameter rejection, and an explicit disabled-by-default development runtime switch.
-- No live source configuration, durable persistence, production routing, or deployment is enabled.
-
-### Milestone 16 — secret-safe diagnostics boundary
-
-- Pull requests: `#20` and `#25`
-- Added allowlisted diagnostic snapshots and an administrator-only diagnostics endpoint that remains disabled unless an explicit provider is supplied.
-- Provider failures map to generic responses; URLs, hostnames, credentials, headers, cookies, and arbitrary backend details are not exposed.
-
-### Milestone 17 — bounded audit recording and source-mutation outcomes
-
-- Pull requests: `#24` and `#27`
-- Added a bounded concurrency-safe in-memory audit recorder and source create/update/disable outcome recording.
-- Audit storage remains non-durable and excludes request bodies, endpoints, headers, cookies, tokens, credentials, and arbitrary metadata by construction.
+No production source configuration, durable database, live infrastructure probing, deployment, routing, or VPS mutation is enabled by these checkpoints.
 
 ## Current integration branch
 
 `restructure/integration`
 
-Current recorded implementation commit:
+Current recorded implementation commit before this focused branch:
 
-`5c0749393ab17c7f0cfcfa926dfda9519a43dedf`
+`723510a2c6478c1956d83849a792e1059868db42`
 
 This branch is the cumulative non-production integration line for all remaining work.
 
 ## Current focused work
 
-Pull request `#28` on `restructure/postgres-schema-foundation` adds the first PostgreSQL migration foundation for credential-free administrative sources and bounded audit events. It embeds versioned up/down SQL without applying migrations implicitly and adds path-scoped schema safety tests. It must not be merged until all relevant CI is green.
+Pull request `#28` on `restructure/postgres-schema-foundation` adds versioned, reversible PostgreSQL migrations for credential-free administrative sources and bounded audit events. Migrations are embedded but never applied implicitly. Dedicated tests verify structural safety, reversible ordering, allowlisted values, and exclusion of secret-bearing fields.
 
 ## Current production boundary
 
@@ -89,11 +75,11 @@ The known production service remains the existing Python application on port 876
 
 ## Remaining work
 
-1. Complete PostgreSQL migrations, durable repositories, transaction boundaries, migration locking, and SQLite import/rollback tooling
-2. Add production Docker images and Compose topology, health/readiness checks, Caddy routing, secret handling, and least-privilege runtime settings
-3. Add structured observability, metrics and tracing boundaries, backup, restore, and recovery drills
-4. Complete behavioral parity, load, security, migration, rollback, and release-candidate verification
-5. Perform the final controlled deployment and traffic switch only after explicit user action
+1. Complete PostgreSQL repositories, transaction boundaries, migration locking, and SQLite import/rollback tooling
+2. Production Docker images and Compose topology, health/readiness checks, Caddy routing, secrets handling, and least-privilege runtime settings
+3. Structured observability, metrics, tracing boundaries, backup, restore, and recovery drills
+4. Full behavioral parity, load, security, migration, rollback, and release-candidate verification
+5. Final controlled deployment and traffic switch after explicit user action
 
 ## Working method
 
