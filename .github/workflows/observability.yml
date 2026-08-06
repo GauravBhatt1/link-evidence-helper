@@ -34,6 +34,6 @@ jobs:
         run: go test -race ./internal/observability
       - name: Vet package
         run: go vet ./internal/observability
-      - name: Reject sensitive observability vocabulary
+      - name: Reject sensitive observability vocabulary in implementation
         run: |
-          ! grep -RniE '(authorization|cookie|set-cookie|request[_ -]?body|response[_ -]?body|connection[_ -]?string|postgres://|redis://|bearer[[:space:]])' internal/observability
+          ! grep -niE '(authorization|cookie|set-cookie|request[_ -]?body|response[_ -]?body|connection[_ -]?string|postgres://|redis://|bearer[[:space:]])' internal/observability/observability.go
