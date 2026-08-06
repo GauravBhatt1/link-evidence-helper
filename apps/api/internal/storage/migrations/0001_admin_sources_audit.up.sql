@@ -11,8 +11,14 @@ CREATE TABLE admin_sources (
     updated_at timestamptz NOT NULL,
     CONSTRAINT admin_sources_id_format CHECK (id ~ '^[A-Za-z0-9_-]{1,80}$'),
     CONSTRAINT admin_sources_display_name_length CHECK (char_length(display_name) BETWEEN 1 AND 120),
+    CONSTRAINT admin_sources_display_name_safe CHECK (display_name = btrim(display_name) AND display_name !~ '[[:cntrl:]]'),
     CONSTRAINT admin_sources_kind_allowed CHECK (kind IN ('http-json', 'http-html', 'browser-html')),
+    CONSTRAINT admin_sources_endpoint_length CHECK (char_length(endpoint) BETWEEN 8 AND 2048),
     CONSTRAINT admin_sources_endpoint_scheme CHECK (endpoint ~ '^https?://'),
+    CONSTRAINT admin_sources_endpoint_authority CHECK (split_part(endpoint, '/', 3) <> ''),
+    CONSTRAINT admin_sources_endpoint_no_userinfo CHECK (position('@' IN split_part(endpoint, '/', 3)) = 0),
+    CONSTRAINT admin_sources_endpoint_no_query CHECK (position('?' IN endpoint) = 0),
+    CONSTRAINT admin_sources_endpoint_no_fragment CHECK (position('#' IN endpoint) = 0),
     CONSTRAINT admin_sources_revision_positive CHECK (revision > 0),
     CONSTRAINT admin_sources_time_order CHECK (updated_at >= created_at)
 );
