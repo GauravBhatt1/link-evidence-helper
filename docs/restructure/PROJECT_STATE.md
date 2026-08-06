@@ -35,44 +35,23 @@ Deliver one production-ready repository and deployment path for the existing lin
 
 Completed architecture and migration design, canonical contracts, isolated React shell, fixture search workflow, loopback-only Go Search API, Redis job foundation, hardened HTTP-first shadow search, isolated Playwright fallback, and verified resolution/Delivery Links workflow.
 
-Key cumulative Delivery Links integration commit: `02d49d5bf97f20e0e9f7595971e17cd9c424761c`.
+### Milestones 9–11 — library domain, fixture views, and secure Jellyfin connector
 
-### Milestone 9 — library domain foundation
+Added versioned library contracts, fixture-backed API and React views, and an explicit runtime-only Jellyfin connector with bounded pagination, DNS and redirect safety, response limits, caching, cancellation, and mock-server coverage. Fixture mode remains the default; no live credentials or production data are committed.
 
-- Pull request: `#9`
-- Added versioned library contracts and validated Go domain models for Movies, TV, Missing, Recently Added, seasons, episodes, and future Jellyfin boundaries.
-- No live integration, persistence, production data, or external requests.
+### Milestones 12–14 — administrator authentication, audit events, and source registry
 
-### Milestone 10 — fixture-backed library API and React views
+Added a fail-closed runtime-only administrator bearer-token boundary, bounded secret-safe audit events, and a concurrency-safe non-durable source registry with optimistic revisions and credential-free endpoint contracts.
 
-- Pull request: `#10`
-- Added deterministic shared fixtures, repository boundaries, strict same-origin library API, typed React transport, responsive library views, accessibility coverage, and privacy tests.
+### Milestones 15–18 — authenticated source administration and operational read boundaries
 
-### Milestone 11 — explicit secure Jellyfin connector
+- Pull request `#21`: authenticated source-management HTTP routes with strict JSON/content-type/body limits, query rejection, deterministic conflicts, and secret-leak tests.
+- Pull request `#22`: explicit development-only source-admin runtime mounting, disabled by default and requiring administrator authentication.
+- Pull requests `#20` and `#25`: bounded diagnostics snapshot foundation and authenticated diagnostics HTTP boundary, both disabled unless explicitly supplied.
+- Pull request `#24`: bounded concurrency-safe in-memory audit recorder.
+- Pull request `#27`: secret-safe audit outcome recording for authenticated source create, update, and disable operations.
 
-- Pull request: `#11`
-- Added opt-in runtime-only Jellyfin configuration, bounded pagination, canonical mapping, DNS and redirect safety, proxy isolation, response limits, caching, cancellation, deterministic mock-server tests, and operator documentation.
-- Fixture mode remains the default; no live server or credential is committed or contacted by CI.
-
-### Milestone 12 — administrator authentication boundary
-
-- Pull requests: `#13` and follow-up `#16`
-- Added runtime-only administrator bearer-token configuration, strict parsing, constant-time verification, fail-closed session endpoint, disabled-by-default behavior, route/runtime/security tests, dedicated CI, and secret-safe operator documentation.
-- Tokens are not accepted through query strings, cookies, local storage, committed files, or logs.
-
-### Milestone 13 — secret-safe audit event foundation
-
-- Pull request: `#14`
-- Added bounded administrative audit events with allowlisted actor, action, resource, and outcome values.
-- Arbitrary metadata, headers, bodies, URLs, credentials, cookies, and tokens are excluded by construction.
-- No production logging sink or durable database is enabled yet.
-
-### Milestone 14 — bounded source-management registry foundation
-
-- Pull request: `#15`
-- Integrated as: `a8a4208bac59709b97a9bfd57be3db87a0f89f9e`
-- Added concurrency-safe list/create/update/disable operations, optimistic revisions, deterministic ordering, credential-free endpoint contracts, strict kind and URL validation, UTC normalization, race-enabled tests, and dedicated CI.
-- The in-memory registry is non-durable and is not wired into runtime implicitly; no live source configuration or mutation route is enabled.
+No production source configuration, durable database, live infrastructure probing, deployment, routing, or VPS mutation is enabled by these checkpoints.
 
 ## Current integration branch
 
@@ -80,7 +59,7 @@ Key cumulative Delivery Links integration commit: `02d49d5bf97f20e0e9f7595971e17
 
 Current recorded implementation commit:
 
-`a8a4208bac59709b97a9bfd57be3db87a0f89f9e`
+`5c0749393ab17c7f0cfcfa926dfda9519a43dedf`
 
 This branch is the cumulative non-production integration line for all remaining work.
 
@@ -92,13 +71,11 @@ The known production service remains the existing Python application on port 876
 
 ## Remaining work
 
-1. Authenticated and authorized source-management HTTP routes with strict request bounds, optimistic concurrency responses, CSRF-safe same-origin behavior, and audit-event emission
-2. Diagnostics and operational read models that remain secret-safe and disabled unless explicitly configured
-3. PostgreSQL durable schema, repositories, migrations, transaction boundaries, and SQLite import/rollback tooling
-4. Production Docker images and Compose topology, health/readiness checks, Caddy routing, secrets handling, and least-privilege runtime settings
-5. Structured observability, metrics, tracing boundaries, backup, restore, and recovery drills
-6. Full behavioral parity, load, security, migration, rollback, and release-candidate verification
-7. Final controlled deployment and traffic switch after explicit user action
+1. PostgreSQL durable schema, repositories, migrations, transaction boundaries, and SQLite import/rollback tooling
+2. Production Docker images and Compose topology, health/readiness checks, Caddy routing, secrets handling, and least-privilege runtime settings
+3. Structured observability, metrics, tracing boundaries, backup, restore, and recovery drills
+4. Full behavioral parity, load, security, migration, rollback, and release-candidate verification
+5. Final controlled deployment and traffic switch after explicit user action
 
 ## Working method
 
@@ -110,4 +87,4 @@ The known production service remains the existing Python application on port 876
 
 ## Next action
 
-Create a focused branch from `restructure/integration` for authenticated source-management HTTP routes. Reuse the existing fail-closed administrator verifier, bounded source registry, and secret-safe audit event contract. Add strict JSON and body-size limits, reject query-string credentials and unsupported content types, map revision conflicts deterministically, keep the registry disabled unless explicitly supplied, and cover unauthorized, malformed, conflict, race, and secret-leak regression cases. Do not add live sources, persistence, production routing, deployment, VPS access, or port 8765 changes.
+Create a focused branch from `restructure/integration` for the PostgreSQL persistence foundation. Add versioned, reversible SQL migrations for administrative sources and bounded audit events; define repository interfaces and transaction boundaries without enabling a production connection; keep runtime defaults non-durable and disabled; add migration validation and repository tests against an isolated CI database; and document import/rollback constraints. Do not add real credentials, copy production data, deploy, modify `master`, access the VPS, change production routing, or touch port 8765.
