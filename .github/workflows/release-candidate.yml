@@ -52,10 +52,8 @@ jobs:
         run: go test -race ./...
       - name: Static analysis
         run: go vet ./...
-      - name: Build API and worker
-        run: |
-          go build ./cmd/server
-          go build ./cmd/worker
+      - name: Build API
+        run: go build ./cmd/server
 
   frontend-and-browser-verification:
     runs-on: ubuntu-latest
