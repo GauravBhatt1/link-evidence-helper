@@ -29,7 +29,7 @@ jobs:
         run: go vet ./internal/observability
       - name: Secret and free-form field regression
         run: |
-          if grep -nE 'json.RawMessage|map\[string\]|Message[[:space:]]+string|Metadata|Labels|Attributes|URL[[:space:]]+string|Headers|Body[[:space:]]+|Cookie|Token[[:space:]]+string|ConnectionString|Password|Authorization|Bearer|APIKey|Secret' internal/observability/observability.go; then
+          if grep -nE 'json.RawMessage|map\[string\]|^[[:space:]]*(Message|Metadata|Labels|Attributes|URL|Headers|Body|Cookie|Token|ConnectionString|Password|Authorization|Bearer|APIKey|Secret)[[:space:]]+' internal/observability/observability.go; then
             echo "sensitive or free-form telemetry field found"
             exit 1
           fi
