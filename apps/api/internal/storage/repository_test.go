@@ -27,7 +27,7 @@ func (fakeRepository) Append(context.Context, audit.Event) error { return nil }
 type fakeTransaction struct{ repository fakeRepository }
 
 func (transaction fakeTransaction) Sources() SourceRepository { return transaction.repository }
-func (transaction fakeTransaction) Audit() AuditRepository     { return transaction.repository }
+func (transaction fakeTransaction) Audit() AuditRepository    { return transaction.repository }
 
 type fakeTransactor struct{ transaction Transaction }
 
