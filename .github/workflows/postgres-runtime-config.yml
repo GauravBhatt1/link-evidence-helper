@@ -1,0 +1,52 @@
+name: PostgreSQL runtime configuration safety
+
+on:
+  pull_request:
+    branches:
+      - restructure/integration
+    paths:
+      - "apps/api/internal/storage/postgres/runtime_config.go"
+      - "apps/api/internal/storage/postgres/runtime_config_test.go"
+      - ".github/workflows/postgres-runtime-config.yml"
+      - "apps/api/go.mod"
+      - "apps/api/go.sum"
+  push:
+    branches:
+      - restructure/integration
+    paths:
+      - "apps/api/internal/storage/postgres/runtime_config.go"
+      - "apps/api/internal/storage/postgres/runtime_config_test.go"
+      - ".github/workflows/postgres-runtime-config.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: postgres-runtime-config-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - name: Verify formatting
+        run: test -z "$(gofmt -l internal/storage/postgres/runtime_config.go internal/storage/postgres/runtime_config_test.go)"
+      - name: Vet PostgreSQL storage package
+        run: go vet ./internal/storage/postgres
+      - name: Run runtime configuration tests with race detector
+        run: go test -race ./internal/storage/postgres
+      - name: Reject hard-coded production connection URLs
+        run: |
+          if grep -nE 'postgres(ql)?://[^"[:space:]]+@' internal/storage/postgres/runtime_config.go; then
+            echo "Hard-coded PostgreSQL connection URL detected in runtime code"
+            exit 1
+          fi
