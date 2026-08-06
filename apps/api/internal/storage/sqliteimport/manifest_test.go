@@ -10,8 +10,8 @@ import (
 func TestManifestIsDeterministicAndVerifiable(t *testing.T) {
 	now := time.Date(2026, 8, 6, 5, 30, 0, 0, time.FixedZone("test", 5*60*60+30*60))
 	rows := []LegacySource{
-		{ID: "source-b", DisplayName: "Source B", Kind: "html", Endpoint: "https://b.example.test/path", Enabled: true},
-		{ID: "source-a", DisplayName: "Source A", Kind: "html", Endpoint: "https://a.example.test/path", Enabled: false},
+		{ID: "source-b", DisplayName: "Source B", Kind: "http-html", Endpoint: "https://b.example.test/path", Enabled: true},
+		{ID: "source-a", DisplayName: "Source A", Kind: "http-html", Endpoint: "https://a.example.test/path", Enabled: false},
 	}
 
 	plan, err := NewPlan(rows, now)
@@ -51,7 +51,7 @@ func TestManifestIsDeterministicAndVerifiable(t *testing.T) {
 
 func TestManifestRejectsTampering(t *testing.T) {
 	plan, err := NewPlan([]LegacySource{{
-		ID: "source-a", DisplayName: "Source A", Kind: "html",
+		ID: "source-a", DisplayName: "Source A", Kind: "http-html",
 		Endpoint: "https://a.example.test/path", Enabled: true,
 	}}, time.Date(2026, 8, 6, 0, 0, 0, 0, time.UTC))
 	if err != nil {
@@ -86,7 +86,7 @@ func TestManifestRejectsInvalidStructure(t *testing.T) {
 
 func TestNewManifestDefensivelyCopiesPlan(t *testing.T) {
 	plan, err := NewPlan([]LegacySource{{
-		ID: "source-a", DisplayName: "Source A", Kind: "html",
+		ID: "source-a", DisplayName: "Source A", Kind: "http-html",
 		Endpoint: "https://a.example.test/path", Enabled: true,
 	}}, time.Date(2026, 8, 6, 0, 0, 0, 0, time.UTC))
 	if err != nil {
