@@ -12,10 +12,10 @@ func TestNormalizeEvent(t *testing.T) {
 	local := time.Date(2026, 8, 6, 13, 45, 0, 0, time.FixedZone("IST", 5*60*60+30*60))
 	event, err := NormalizeEvent(Event{
 		Timestamp: local,
-		Level: LevelInfo,
+		Level:     LevelInfo,
 		Component: "api",
 		Operation: "search.submit",
-		Outcome: OutcomeSuccess,
+		Outcome:   OutcomeSuccess,
 		RequestID: "req-123",
 	})
 	if err != nil {
@@ -27,7 +27,13 @@ func TestNormalizeEvent(t *testing.T) {
 }
 
 func TestEventRejectsUnsafeVocabulary(t *testing.T) {
-	base := Event{Timestamp: time.Now(), Level: LevelInfo, Component: "api", Operation: "search.submit", Outcome: OutcomeSuccess}
+	base := Event{
+		Timestamp: time.Now(),
+		Level:     LevelInfo,
+		Component: "api",
+		Operation: "search.submit",
+		Outcome:   OutcomeSuccess,
+	}
 	tests := []Event{
 		{Timestamp: base.Timestamp, Level: "debug", Component: base.Component, Operation: base.Operation, Outcome: base.Outcome},
 		{Timestamp: base.Timestamp, Level: base.Level, Component: "API", Operation: base.Operation, Outcome: base.Outcome},
@@ -44,8 +50,12 @@ func TestEventRejectsUnsafeVocabulary(t *testing.T) {
 
 func TestObservationValidation(t *testing.T) {
 	base := Observation{
-		Timestamp: time.Now(), Name: MetricRequestDuration, Component: "api",
-		Operation: "search.resolve", Outcome: OutcomeSuccess, Value: 0.25,
+		Timestamp: time.Now(),
+		Name:      MetricRequestDuration,
+		Component: "api",
+		Operation: "search.resolve",
+		Outcome:   OutcomeSuccess,
+		Value:     0.25,
 	}
 	if err := ValidateObservation(base); err != nil {
 		t.Fatalf("ValidateObservation() error = %v", err)
@@ -91,7 +101,10 @@ func TestNopImplementationsStillValidate(t *testing.T) {
 	}
 
 	_, span, err := (NopTracer{}).Start(ctx, SpanSpec{
-		StartedAt: time.Now(), Component: "worker", Operation: "job.execute", RequestID: "job-1",
+		StartedAt: time.Now(),
+		Component: "worker",
+		Operation: "job.execute",
+		RequestID: "job-1",
 	})
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)
