@@ -1,0 +1,15 @@
+# syntax=docker/dockerfile:1.7
+FROM golang:1.23.12-alpine AS build
+WORKDIR /src
+COPY packages/jobqueue/go.mod packages/jobqueue/go.sum ./packages/jobqueue/
+COPY apps/worker/go.mod apps/worker/go.sum ./apps/worker/
+RUN --mount=type=cache,target=/go/pkg/mod cd apps/worker && go mod download
+COPY packages/jobqueue ./packages/jobqueue
+COPY apps/worker ./apps/worker
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    cd apps/worker && CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags='-s -w' -o /out/link-evidence-worker ./cmd/worker
+
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/link-evidence-worker /usr/local/bin/link-evidence-worker
+USER nonroot:nonroot
+ENTRYPOINT ["/usr/local/bin/link-evidence-worker"]
