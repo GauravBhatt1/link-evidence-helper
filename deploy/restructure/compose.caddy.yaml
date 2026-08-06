@@ -1,0 +1,21 @@
+services:
+  caddy:
+    image: caddy:2.10.0-alpine
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    volumes:
+      - ./Caddyfile.preview:/etc/caddy/Caddyfile:ro
+    ports:
+      - "127.0.0.1:${LINK_EVIDENCE_CADDY_PREVIEW_PORT:-18781}:8080"
+    depends_on:
+      api:
+        condition: service_started
+    read_only: true
+    tmpfs:
+      - /config:size=16m,mode=0700
+      - /data:size=16m,mode=0700
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks: [frontend]
