@@ -40,10 +40,9 @@ jobs:
           rm -f deploy/secrets/postgres_password.txt
       - name: Build API image
         run: docker build --file deploy/Dockerfile.api --tag link-evidence-helper-api:ci .
-      - name: Verify image runs as non-root
+      - name: Verify image declares non-root user
         run: |
-          uid=$(docker run --rm --entrypoint /busybox/sh link-evidence-helper-api:ci -c 'id -u' 2>/dev/null || true)
-          if [ -n "$uid" ] && [ "$uid" = "0" ]; then
-            echo 'container unexpectedly runs as root' >&2
-            exit 1
-          fi
+          user=$(docker image inspect link-evidence-helper-api:ci --format '{{.Config.User}}')
+          test -n "$user"
+          test "$user" != "0"
+          test "$user" != "root"
