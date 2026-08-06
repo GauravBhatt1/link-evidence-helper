@@ -1,0 +1,39 @@
+name: Observability boundary safety
+
+on:
+  pull_request:
+    branches: [restructure/integration]
+    paths:
+      - apps/api/internal/observability/**
+      - .github/workflows/observability.yml
+  push:
+    branches: [restructure/integration]
+    paths:
+      - apps/api/internal/observability/**
+      - .github/workflows/observability.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - name: Verify formatting
+        run: test -z "$(gofmt -l internal/observability)"
+      - name: Run race-enabled tests
+        run: go test -race ./internal/observability
+      - name: Vet package
+        run: go vet ./internal/observability
+      - name: Reject sensitive observability vocabulary
+        run: |
+          ! grep -RniE '(authorization|cookie|set-cookie|request[_ -]?body|response[_ -]?body|connection[_ -]?string|postgres://|redis://|bearer[[:space:]])' internal/observability
