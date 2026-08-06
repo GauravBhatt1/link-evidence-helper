@@ -8,52 +8,48 @@ Deliver one production-ready repository and deployment path for the existing lin
 
 ## Target architecture
 
-- React + TypeScript web application for presentation and user decisions
-- Go API for contracts, validation, authentication boundaries, and job APIs
-- Go workers for HTTP-first search, resolution, integrations, and orchestration
-- TypeScript + Playwright browser workers only when JavaScript interaction is required
-- Redis for ephemeral jobs, caching, request coalescing, and coordination
+- React + TypeScript web application
+- Go API and workers
+- isolated TypeScript + Playwright browser workers
+- Redis for ephemeral coordination
 - PostgreSQL for durable application state
 - Caddy for final routing and TLS
-- Existing Python application retained until the final verified traffic switch
+- existing Python application retained until verified cutover
 
 ## Permanent safety rules
 
 - Never expose secrets, credentials, cookies, signed URLs, or production data in Git history.
 - Never delete production volumes or use destructive Git reset commands for rollback.
 - Keep live production traffic on the current Python application until full parity, health, migration, and rollback checks pass.
-- Browser automation must remain isolated from the API process.
-- Search is HTTP-first; browser execution is fallback-only.
-- Ordinary users never select sources directly.
-- One content item equals one top-level card; the active card is the workspace.
-- A release and any required quality must be selected before Find Links is enabled.
+- Browser automation remains isolated and fallback-only.
 - Do not present fixture, mock, or disconnected behavior as live production functionality.
 
 ## Completed checkpoints
 
 ### Milestones 0–18 — architecture through authenticated operations
 
-Completed architecture and migration design, canonical contracts, isolated React shell, fixture search workflow, loopback-only Go Search API, Redis job foundation, hardened HTTP-first shadow search, isolated Playwright fallback, verified Delivery Links workflow, library contracts and fixture views, secure Jellyfin connector boundaries, fail-closed administrator authentication, bounded secret-safe audit events, source administration, diagnostics, and mutation auditing.
+Completed architecture and migration design, canonical contracts, isolated React shell, fixture workflow, loopback-only Go Search API, Redis job foundation, hardened HTTP-first search, isolated browser fallback, delivery and library contracts, secure Jellyfin boundaries, fail-closed administrator authentication, bounded audit events, source administration, diagnostics, and mutation auditing.
 
-### Milestones 19–25 — PostgreSQL and legacy import safety foundations
+### Milestones 19–27 — persistence, import, and runtime safety foundations
 
-- Versioned reversible PostgreSQL migrations for credential-free administrative sources and bounded audit events.
-- Deterministic checksum-addressed migration planning and locked serializable migration execution.
-- Context-aware durable source/audit repository interfaces and explicit atomic transaction boundaries.
-- Transactional PostgreSQL source registry and bounded PostgreSQL audit repository.
-- Explicit disabled-by-default PostgreSQL runtime configuration validation without implicit connections or migration execution.
-- Pull request `#41`: deterministic dry-run SQLite source import and reverse-order rollback planning with fixture-only tests. It opens no database, reads no live file, executes no SQL, and mutates no repository.
+- Reversible PostgreSQL migrations, deterministic planning, locked serializable execution, durable repository contracts, transactional source registry, and bounded audit repository.
+- Disabled-by-default PostgreSQL runtime configuration validation without implicit connections.
+- Dry-run SQLite import and reverse-order rollback planning.
+- Tamper-evident SQLite import review sealing merged in PR `#43` after green CI.
+- Secret-safe liveness and bounded readiness boundary merged in PR `#44` after green CI.
 
 ## Active checkpoint
 
-Branch `restructure/runtime-health-boundary` adds a secret-safe HTTP health boundary for the future Go runtime:
+Branch `restructure/nonprod-container-topology` adds a production-oriented but non-deployed container foundation:
 
-- stable liveness responses that do not depend on external systems
-- bounded readiness checks supplied explicitly by runtime composition
-- generic unavailable responses that never expose backend errors or connection details
-- query rejection, GET/HEAD-only behavior, no-store headers, deterministic check ordering, race-enabled tests, and focused CI
+- multi-stage, distroless, non-root Go API image
+- isolated Compose network with no host-published ports
+- read-only filesystems, dropped capabilities, no-new-privileges, bounded tmpfs mounts, and health checks
+- disabled-by-default PostgreSQL profile with externally supplied file-backed secret
+- pinned service image versions and static configuration regression checks
+- CI that validates the topology, renders Compose configuration, and builds the API image
 
-The package is not mounted into a production server and does not open Redis, PostgreSQL, SQLite, network, or VPS connections.
+This checkpoint does not deploy, access the VPS, publish port 8765, inject a real credential, or switch traffic.
 
 ## Current integration branch
 
@@ -61,32 +57,27 @@ The package is not mounted into a production server and does not open Redis, Pos
 
 Current recorded implementation commit:
 
-`8cb6140dbc19f6432af16a1ecafe4bb2782ead4f`
-
-This branch is the cumulative non-production integration line for all remaining work.
+`e33c423acede5882080a5693495815dcdf512fe3`
 
 ## Current production boundary
 
-The default branch is `master`. No restructuring work has been merged to `master`, deployed, or routed to production.
-
-The known production service remains the existing Python application on port 8765. GitHub cannot independently verify the current VPS listener, container identity, local database, credentials, or mounted volumes; those checks must be executed on the VPS during release-candidate and final-cutover verification.
+The default branch is `master`. No restructuring work has been merged to `master`, deployed, or routed to production. The known production service remains the existing Python application on port 8765; VPS-only verification is reserved for the controlled release-candidate step.
 
 ## Remaining work
 
-1. Merge the runtime health boundary only after all relevant CI is green, then build production Docker images and a non-production Compose topology with least-privilege defaults and explicit secrets injection
-2. Add Caddy configuration templates and routing verification without switching live traffic
-3. Add structured observability, metrics, tracing boundaries, backup, restore, and recovery drills
-4. Complete behavioral parity, load, security, migration, rollback, and release-candidate verification
-5. Perform final controlled deployment and traffic switch only after explicit user action
+1. Merge the non-production container topology only after all relevant CI is green.
+2. Add Caddy templates and offline routing verification without switching live traffic.
+3. Add structured observability, metrics/tracing boundaries, backup, restore, and recovery drills.
+4. Complete behavioral parity, load, security, migration, rollback, and release-candidate verification.
+5. Perform final controlled deployment and traffic switch only after explicit user action.
 
 ## Working method
 
-- Continue through internal checkpoints without requiring milestone approvals.
+- Continue through internal checkpoints without milestone approvals.
 - Use focused branches and pull requests into `restructure/integration`.
-- Require green relevant CI before each integration merge.
-- Keep `master` and production untouched until a final release candidate is complete.
-- Stop only for an actual external blocker, missing production-only information, or the final VPS deployment/cutover action.
+- Require green relevant CI before every integration merge.
+- Keep `master`, production, secrets, the VPS, and port 8765 untouched.
 
 ## Next action
 
-Open the runtime-health pull request, merge it only after every relevant check is green, then create a focused branch for production-oriented but non-deployed container images and Compose topology. Keep all services bound away from the existing production listener, require runtime-injected secrets, use read-only filesystems and non-root users where practical, and add configuration validation tests. Do not deploy, modify `master`, access the VPS, switch routing, add credentials, import live data, or touch port 8765.
+Open and validate the non-production container-topology pull request. Merge it only after every relevant check is green, then create a focused branch for Caddy configuration templates and offline routing tests. Do not deploy, modify `master`, access the VPS, switch routing, add credentials, import live data, or touch port 8765.
