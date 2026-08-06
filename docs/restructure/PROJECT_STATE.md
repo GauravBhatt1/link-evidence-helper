@@ -51,19 +51,21 @@ Added a fail-closed runtime-only administrator bearer-token boundary, bounded se
 - Pull request `#24`: bounded concurrency-safe in-memory audit recorder.
 - Pull request `#27`: secret-safe audit outcome recording for authenticated source create, update, and disable operations.
 
-### Milestones 19–23 — PostgreSQL persistence foundations
+### Milestones 19–25 — PostgreSQL persistence and runtime safety foundations
 
 - Versioned reversible PostgreSQL migrations for credential-free administrative sources and bounded audit events, with database constraints for allowlisted values, optimistic revisions, safe endpoint structure, UTC-aware timestamps, and exclusion of credential-bearing fields.
 - Pull request `#30`: deterministic migration planner that validates paired contiguous up/down migrations and exposes checksum-addressed forward and rollback plans without opening a database or executing SQL.
 - Pull request `#31`: context-aware durable source/audit repository interfaces and an explicit atomic transaction boundary, with PostgreSQL selection and connection opening kept outside package initialization.
 - Pull request `#33`: transactional PostgreSQL source registry with bounded query timeouts, domain validation, normalized endpoints, optimistic revision updates, deterministic conflict mapping, explicit commit/rollback behavior, unique-violation mapping, and a database/sql adapter that never opens a connection implicitly.
 - Pull request `#36`: bounded PostgreSQL audit repository that revalidates the secret-safe audit contract, normalizes timestamps to UTC, maps duplicate event identifiers deterministically, and accepts only an explicitly injected pool or transaction.
+- Pull request `#37`: locked checksum-safe migration runner with contiguous history validation, pre-mutation checksum-drift rejection, ordered idempotent forward migration, latest-only rollback, dedicated advisory locking, and serializable per-migration transactions.
+- Pull request `#39`: explicit disabled-by-default PostgreSQL runtime configuration boundary with bounded pool and timeout validation, TLS-by-default policy, secret-safe summaries, no implicit connection opening, and migration execution kept as a separate operator action.
 
-The overlapping draft repository implementations in pull requests `#32` and `#35` were closed as superseded. PostgreSQL runtime selection remains disabled; no driver connection string, credentials, production data, deployment, or migration execution is configured.
+The overlapping draft repository implementations in pull requests `#32` and `#35` were closed as superseded. No production driver wiring, credentials, live data, deployment, or runtime migration invocation is configured.
 
 ## Active checkpoint
 
-Pull request `#37` adds the explicit migration runner and PostgreSQL advisory-lock store. It validates contiguous durable history, rejects checksum drift before mutation, applies only missing migrations, rolls back exactly the latest migration, uses a dedicated connection-scoped non-blocking advisory lock, and wraps every migration plus history update in a serializable transaction. Runtime invocation remains absent and disabled by default until this pull request passes all relevant CI and is merged.
+The current focused branch adds a dry-run-first SQLite import plan and rollback manifest over a credential-free extracted snapshot. It validates bounded source and audit rows, rejects credential-shaped endpoints, produces deterministic operation ordering, and does not open SQLite or PostgreSQL, execute SQL, import live data, or mutate runtime configuration.
 
 ## Current integration branch
 
@@ -71,7 +73,7 @@ Pull request `#37` adds the explicit migration runner and PostgreSQL advisory-lo
 
 Current recorded implementation commit:
 
-`a10b6f63d688171b3af1cac5e115f86f611ed6d1`
+`5e35f2aed09e44b969ba442b888d261d7a329145`
 
 This branch is the cumulative non-production integration line for all remaining work.
 
@@ -83,7 +85,7 @@ The known production service remains the existing Python application on port 876
 
 ## Remaining work
 
-1. Complete and merge the migration runner/locking checkpoint, then add a disabled-by-default PostgreSQL runtime configuration boundary and SQLite import/rollback tooling
+1. Complete the dry-run-first SQLite extraction/import/rollback tooling with fixture-only tests and an explicit non-default executor boundary
 2. Production Docker images and Compose topology, health/readiness checks, Caddy routing, secrets handling, and least-privilege runtime settings
 3. Structured observability, metrics, tracing boundaries, backup, restore, and recovery drills
 4. Full behavioral parity, load, security, migration, rollback, and release-candidate verification
@@ -99,4 +101,4 @@ The known production service remains the existing Python application on port 876
 
 ## Next action
 
-Finish pull request `#37`, merge it only after all relevant CI is green, then create a focused branch for an explicit disabled-by-default PostgreSQL runtime configuration boundary. The runtime boundary must validate configuration without logging connection strings, must not connect implicitly during package initialization, and must keep migration execution as a separate operator action. After that, add dry-run-first SQLite import and rollback tooling with fixture-only tests. Do not add production credentials, import live data, deploy, modify `master`, access the VPS, change production routing, or touch port 8765.
+Finish the SQLite import planning checkpoint, merge it only after all relevant CI is green, then add a fixture-backed extractor contract and an explicit transactional executor that remains disabled by default and emits a rollback manifest. Do not add production credentials, import live data, deploy, modify `master`, access the VPS, change production routing, or touch port 8765.
