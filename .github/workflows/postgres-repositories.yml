@@ -1,0 +1,40 @@
+name: PostgreSQL repository safety
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/internal/storage/postgres/**"
+      - ".github/workflows/postgres-repositories.yml"
+  push:
+    branches:
+      - restructure/integration
+    paths:
+      - "apps/api/internal/storage/postgres/**"
+      - ".github/workflows/postgres-repositories.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  repository-safety:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - name: Format check
+        run: test -z "$(gofmt -l internal/storage/postgres)"
+      - name: Unit tests
+        run: go test ./internal/storage/postgres
+      - name: Race tests
+        run: go test -race ./internal/storage/postgres
+      - name: Vet
+        run: go vet ./internal/storage/postgres
+      - name: Secret-shaped schema regression
+        run: |
+          ! grep -RniE 'authorization|cookie|password|api[_-]?key|bearer|request[_-]?body|headers?|signed[_-]?url' internal/storage/postgres
