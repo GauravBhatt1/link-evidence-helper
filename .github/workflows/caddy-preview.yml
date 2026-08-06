@@ -32,6 +32,8 @@ jobs:
             --read-only \
             --cap-drop ALL \
             --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,nosuid,nodev,size=16m \
+            --entrypoint /bin/sh \
             -v "$PWD/deploy/restructure/Caddyfile.preview:/etc/caddy/Caddyfile:ro" \
             caddy:2.10.0-alpine \
-            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+            -ec 'cp /usr/bin/caddy /tmp/caddy && chmod 0555 /tmp/caddy && /tmp/caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile'
