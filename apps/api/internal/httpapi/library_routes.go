@@ -36,7 +36,7 @@ func HandlerWithServicesSourcesAndAudit(searcher searchservice.Searcher, jobs Jo
 // boundaries. Diagnostics, source administration, and audit recording remain
 // fail-closed unless their dependencies are supplied explicitly by the runtime.
 func HandlerWithServicesSourcesAuditAndDiagnostics(searcher searchservice.Searcher, jobs JobBackend, library libraryservice.Repository, verifier *adminauth.Verifier, registry sourceadmin.Registry, recorder audit.Recorder, diagnosticProvider DiagnosticsProvider) http.Handler {
-	api := &apiHandler{searcher: searcher, jobs: jobs}
+	api := &apiHandler{searcher: searcher, jobs: jobs, mode: searchMode(searcher)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", api.health)
 	mux.HandleFunc("/api/v1/search", api.search)

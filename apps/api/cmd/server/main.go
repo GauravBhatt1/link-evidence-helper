@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -24,10 +25,6 @@ import (
 )
 
 func main() {
-	if mode := envOrDefault("LINK_EVIDENCE_SEARCH_MODE", "fixture"); mode != "fixture" {
-		log.Fatalf("unsupported LINK_EVIDENCE_SEARCH_MODE %q; development mode permits fixture only", mode)
-	}
-
 	address := envOrDefault("LINK_EVIDENCE_API_ADDR", "127.0.0.1:8780")
 	if !isLoopbackAddress(address) && !envBool("LINK_EVIDENCE_ALLOW_PUBLIC_LISTEN") {
 		log.Fatalf("refusing non-loopback API address %q without LINK_EVIDENCE_ALLOW_PUBLIC_LISTEN=true", address)
@@ -37,9 +34,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	catalog, err := searchservice.NewFixtureCatalog(fixtureDir)
+
+	searchMode := envOrDefault("LINK_EVIDENCE_SEARCH_MODE", "fixture")
+	searcher, err := buildSearcher(searchMode, fixtureDir)
 	if err != nil {
-		log.Fatalf("load sanitized development fixtures: %v", err)
+		log.Fatalf("enable search mode %q: %v", searchMode, err)
 	}
 
 	libraryMode := envOrDefault("LINK_EVIDENCE_LIBRARY_MODE", "fixture")
@@ -115,7 +114,11 @@ func main() {
 		log.Fatalf("unsupported LINK_EVIDENCE_SOURCE_ADMIN_MODE %q", sourceAdminMode)
 	}
 
-	handler := httpapi.HandlerWithServicesAndSources(catalog, jobs, libraryRepository, adminVerifier, sourceRegistry)
+	var jobBackend httpapi.JobBackend
+	if jobs != nil {
+		jobBackend = jobs
+	}
+	handler := httpapi.HandlerWithServicesAndSources(searcher, jobBackend, libraryRepository, adminVerifier, sourceRegistry)
 	server := &http.Server{
 		Addr:              address,
 		Handler:           handler,
@@ -137,9 +140,24 @@ func main() {
 		}
 	}()
 
-	log.Printf("development API listening on http://%s (search=fixture; library=%s; Redis jobs=%t; admin auth=%t; source admin=%s)", address, libraryMode, jobs != nil, adminVerifier != nil, sourceAdminMode)
+	log.Printf("development API listening on http://%s (search=%s; library=%s; Redis jobs=%t; admin auth=%t; source admin=%s)", address, searchMode, libraryMode, jobs != nil, adminVerifier != nil, sourceAdminMode)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
+	}
+}
+
+func buildSearcher(mode, fixtureDir string) (searchservice.Searcher, error) {
+	switch mode {
+	case "fixture":
+		return searchservice.NewFixtureCatalog(fixtureDir)
+	case "legacy-bridge":
+		return searchservice.NewLegacyBridge(searchservice.LegacyBridgeConfig{
+			BaseURL:          os.Getenv("LINK_EVIDENCE_LEGACY_BASE_URL"),
+			AllowNonLoopback: envBool("LINK_EVIDENCE_LEGACY_ALLOW_NON_LOOPBACK"),
+			Timeout:          time.Duration(envInt("LINK_EVIDENCE_LEGACY_TIMEOUT_SECONDS", 10, 1, 30)) * time.Second,
+		})
+	default:
+		return nil, fmt.Errorf("unsupported LINK_EVIDENCE_SEARCH_MODE %q", mode)
 	}
 }
 

@@ -17,11 +17,16 @@ type stubSearcher struct {
 	response contracts.SearchResponse
 	err      error
 	query    string
+	mode     string
 }
 
 func (stub *stubSearcher) Search(_ context.Context, query string) (contracts.SearchResponse, error) {
 	stub.query = query
 	return stub.response, stub.err
+}
+
+func (stub *stubSearcher) Mode() string {
+	return stub.mode
 }
 
 func TestHealthAndMethodBoundaries(t *testing.T) {
@@ -34,6 +39,15 @@ func TestHealthAndMethodBoundaries(t *testing.T) {
 	if recorder.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("health response must disable caching")
 	}
+	var health struct {
+		Mode string `json:"mode"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &health); err != nil {
+		t.Fatal(err)
+	}
+	if health.Mode != "development-fixture" {
+		t.Fatalf("health mode = %q", health.Mode)
+	}
 
 	recorder = httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/search?q=Example+Film", nil))
@@ -42,6 +56,24 @@ func TestHealthAndMethodBoundaries(t *testing.T) {
 	}
 	if recorder.Header().Get("Allow") != http.MethodGet {
 		t.Fatalf("allow header = %q", recorder.Header().Get("Allow"))
+	}
+}
+
+func TestHealthReportsSearcherMode(t *testing.T) {
+	handler := Handler(&stubSearcher{mode: "legacy-bridge"})
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("health status = %d", recorder.Code)
+	}
+	var health struct {
+		Mode string `json:"mode"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &health); err != nil {
+		t.Fatal(err)
+	}
+	if health.Mode != "legacy-bridge" {
+		t.Fatalf("health mode = %q", health.Mode)
 	}
 }
 

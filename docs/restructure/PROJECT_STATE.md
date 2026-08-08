@@ -75,6 +75,7 @@ Follow-up VPS readiness rehearsal on 2026-08-08 fixed and verified two release-c
 - The loopback Caddy preview now starts under read-only rootfs, dropped capabilities, and `no-new-privileges:true`, and proxies `/healthz` successfully on port `18781`.
 - The loopback Caddy preview now also builds and serves the React web application at `/` with same-origin API transports, while proxying `/api/*` and `/healthz` to the Go API.
 - Administrative source records now carry the credential-free HTTP JSON search mapping required for live search configuration: query parameter, optional result root, title field, URL field, and allowed result hosts.
+- The Go API can run in `legacy-bridge` search mode against the loopback Python service with `LINK_EVIDENCE_LEGACY_BASE_URL`, sanitize the legacy `/api/search` response into the canonical API contract, and report the active mode on `/healthz`.
 
 Repository readiness does not mean production has been changed. The final deployment remains intentionally blocked on live-behavior parity, production-only verification, and explicit operator action.
 
@@ -110,13 +111,13 @@ Required verification and inputs:
 
 ## Remaining work
 
-Repository-side preview routing and source configuration are now closer to the intended production shape, but the release candidate is still not a safe replacement for the live Python app because API search execution remains fixture-only. Remaining work:
+Repository-side preview routing, source configuration, and live search bridging are now closer to the intended production shape, but the release candidate is still not a safe replacement for the live Python app until resolution/download job parity and final side-by-side checks pass. Remaining work:
 
 - VPS inventory and secret-safe runtime configuration
 - backup and restore verification
 - migration dry run and controlled migration
 - side-by-side release-candidate startup
-- live search implementation and behavioral parity verification against the production oracle
+- live resolution/download-job implementation and behavioral parity verification against the production oracle
 - load verification
 - rollback rehearsal
 - explicit traffic-switch decision

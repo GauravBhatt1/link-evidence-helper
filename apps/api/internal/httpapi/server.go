@@ -50,6 +50,7 @@ func HandlerWithJobs(searcher searchservice.Searcher, jobs JobBackend) http.Hand
 type apiHandler struct {
 	searcher searchservice.Searcher
 	jobs     JobBackend
+	mode     string
 	counter  atomic.Uint64
 }
 
@@ -75,12 +76,25 @@ func (api *apiHandler) health(writer http.ResponseWriter, request *http.Request)
 	if api.jobs != nil {
 		jobsMode = "redis-development"
 	}
+	mode := api.mode
+	if mode == "" {
+		mode = searchMode(api.searcher)
+	}
 	writeJSON(writer, http.StatusOK, struct {
 		OK      bool   `json:"ok"`
 		Service string `json:"service"`
 		Mode    string `json:"mode"`
 		Jobs    string `json:"jobs"`
-	}{OK: true, Service: "link-evidence-api", Mode: "development-fixture", Jobs: jobsMode})
+	}{OK: true, Service: "link-evidence-api", Mode: mode, Jobs: jobsMode})
+}
+
+func searchMode(searcher searchservice.Searcher) string {
+	if reporter, ok := searcher.(searchservice.ModeReporter); ok {
+		if mode := strings.TrimSpace(reporter.Mode()); mode != "" {
+			return mode
+		}
+	}
+	return "development-fixture"
 }
 
 func (api *apiHandler) search(writer http.ResponseWriter, request *http.Request) {

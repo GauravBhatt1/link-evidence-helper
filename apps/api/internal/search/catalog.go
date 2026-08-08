@@ -30,6 +30,10 @@ type Searcher interface {
 	Search(ctx context.Context, query string) (contracts.SearchResponse, error)
 }
 
+type ModeReporter interface {
+	Mode() string
+}
+
 // FixtureCatalog implements Searcher with deterministic sanitized fixtures.
 type FixtureCatalog struct {
 	aliases   map[string]string
@@ -161,4 +165,8 @@ func (catalog *FixtureCatalog) Search(ctx context.Context, query string) (contra
 	}
 	response.Query = normalized
 	return response, nil
+}
+
+func (*FixtureCatalog) Mode() string {
+	return "development-fixture"
 }
