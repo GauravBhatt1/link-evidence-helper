@@ -1,0 +1,137 @@
+name: link-evidence-production
+
+services:
+  legacy:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: report-link-tools:integrated
+    command: ["python3", "web_app.py", "--host", "0.0.0.0", "--port", "8766"]
+    restart: unless-stopped
+    env_file:
+      - /home/ubuntu/.env
+    environment:
+      APP_DATA_DIR: /data
+      LIBRARY_DB_PATH: /data/library.db
+      JELLYFIN_URL: http://host.docker.internal:8096
+    expose:
+      - "8766"
+    volumes:
+      - report_link_data:/data
+      - /home/ubuntu/Cloud:/home/ubuntu/Cloud
+      - /home/ubuntu/Config/Jellyfin/data/data/jellyfin.db:/home/ubuntu/Config/Jellyfin/data/data/jellyfin.db:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [backend]
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/restructure/Dockerfile.api
+    environment:
+      LINK_EVIDENCE_API_ADDR: 0.0.0.0:8780
+      LINK_EVIDENCE_ALLOW_PUBLIC_LISTEN: "true"
+      LINK_EVIDENCE_SEARCH_MODE: legacy-bridge
+      LINK_EVIDENCE_LEGACY_BASE_URL: http://legacy:8766
+      LINK_EVIDENCE_LEGACY_ALLOW_NON_LOOPBACK: "true"
+      LINK_EVIDENCE_LEGACY_ACCESS_TOKEN: ${LINK_EVIDENCE_LEGACY_ACCESS_TOKEN:-}
+      LINK_EVIDENCE_LIBRARY_MODE: fixture
+      LINK_EVIDENCE_FIXTURE_DIR: /opt/link-evidence/fixtures
+      LINK_EVIDENCE_REDIS_ADDR: redis:6379
+      LINK_EVIDENCE_ALLOW_REMOTE_REDIS: "true"
+      LINK_EVIDENCE_ADMIN_TOKEN: ${LINK_EVIDENCE_ADMIN_TOKEN:?runtime admin token is required}
+    volumes:
+      - ../../packages/testing/fixtures:/opt/link-evidence/fixtures:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      legacy:
+        condition: service_started
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks: [frontend, backend]
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/restructure/Dockerfile.worker
+    environment:
+      LINK_EVIDENCE_REDIS_ADDR: redis:6379
+      LINK_EVIDENCE_ALLOW_REMOTE_REDIS: "true"
+      LINK_EVIDENCE_RESOLUTION_MODE: legacy-bridge
+      LINK_EVIDENCE_LEGACY_BASE_URL: http://legacy:8766
+      LINK_EVIDENCE_LEGACY_ALLOW_NON_LOOPBACK: "true"
+      LINK_EVIDENCE_LEGACY_ACCESS_TOKEN: ${LINK_EVIDENCE_LEGACY_ACCESS_TOKEN:-}
+      LINK_EVIDENCE_LEGACY_RESOLUTION_TIMEOUT_SECONDS: ${LINK_EVIDENCE_LEGACY_RESOLUTION_TIMEOUT_SECONDS:-30}
+    depends_on:
+      redis:
+        condition: service_healthy
+      legacy:
+        condition: service_started
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks: [backend]
+
+  caddy:
+    build:
+      context: ../..
+      dockerfile: deploy/restructure/Dockerfile.caddy-preview
+    image: link-evidence-caddy-production-bridge:local
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    volumes:
+      - ./Caddyfile.production-bridge:/etc/caddy/Caddyfile:ro
+    ports:
+      - "8765:8080"
+    depends_on:
+      api:
+        condition: service_started
+      legacy:
+        condition: service_started
+    read_only: true
+    tmpfs:
+      - /config:size=16m,mode=0700
+      - /data:size=16m,mode=0700
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks: [frontend, backend]
+
+  redis:
+    image: redis:7.4.2-alpine
+    user: redis
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    read_only: true
+    tmpfs:
+      - /data:size=128m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks: [backend]
+
+networks:
+  frontend: {}
+  backend:
+    internal: true
+
+volumes:
+  report_link_data:
+    external: true
+    name: report-link-tools-repo_report_link_data
