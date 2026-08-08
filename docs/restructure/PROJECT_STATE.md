@@ -76,6 +76,8 @@ Follow-up VPS readiness rehearsal on 2026-08-08 fixed and verified two release-c
 - The loopback Caddy preview now also builds and serves the React web application at `/` with same-origin API transports, while proxying `/api/*` and `/healthz` to the Go API.
 - Administrative source records now carry the credential-free HTTP JSON search mapping required for live search configuration: query parameter, optional result root, title field, URL field, and allowed result hosts.
 - The Go API can run in `legacy-bridge` search mode against the loopback Python service with `LINK_EVIDENCE_LEGACY_BASE_URL`, sanitize the legacy `/api/search` response into the canonical API contract, and report the active mode on `/healthz`.
+- The Redis worker can run in `legacy-bridge` resolution mode against the same loopback Python service, post canonical content/variant selections to `/api/find`, and map returned delivery links into the canonical resolution-result contract.
+- The containerized Caddy preview can run the React web app with live legacy search, live legacy resolution jobs, and proxied legacy TMDB poster images on loopback preview ports without touching production port `8765`.
 
 Repository readiness does not mean production has been changed. The final deployment remains intentionally blocked on live-behavior parity, production-only verification, and explicit operator action.
 
@@ -111,13 +113,13 @@ Required verification and inputs:
 
 ## Remaining work
 
-Repository-side preview routing, source configuration, and live search bridging are now closer to the intended production shape, but the release candidate is still not a safe replacement for the live Python app until resolution/download job parity and final side-by-side checks pass. Remaining work:
+Repository-side preview routing, source configuration, live search bridging, and live resolution bridging are now close to the intended production transition shape. Remaining work before `master` merge or traffic switch:
 
 - VPS inventory and secret-safe runtime configuration
 - backup and restore verification
 - migration dry run and controlled migration
 - side-by-side release-candidate startup
-- live resolution/download-job implementation and behavioral parity verification against the production oracle
+- live search and resolution behavioral parity verification against the production oracle
 - load verification
 - rollback rehearsal
 - explicit traffic-switch decision

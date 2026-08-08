@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net"
 	"os"
@@ -55,6 +56,27 @@ func main() {
 }
 
 func configuredExecutor() (jobqueue.Executor, string, error) {
+	resolutionMode := envOrDefault("LINK_EVIDENCE_RESOLUTION_MODE", "")
+	if resolutionMode == "legacy-bridge" {
+		executor, err := resolution.NewLegacyResolver(resolution.LegacyResolverConfig{
+			BaseURL:          os.Getenv("LINK_EVIDENCE_LEGACY_BASE_URL"),
+			AccessToken:      os.Getenv("LINK_EVIDENCE_LEGACY_ACCESS_TOKEN"),
+			AllowNonLoopback: os.Getenv("LINK_EVIDENCE_LEGACY_ALLOW_NON_LOOPBACK") == "true",
+			Timeout: time.Duration(envInt(
+				"LINK_EVIDENCE_LEGACY_RESOLUTION_TIMEOUT_SECONDS",
+				30,
+				1,
+				120,
+			)) * time.Second,
+		})
+		if err != nil {
+			return nil, "", err
+		}
+		return executor, "legacy-bridge", nil
+	}
+	if resolutionMode != "" && resolutionMode != "catalog" && resolutionMode != "development" {
+		return nil, "", errors.New("unsupported LINK_EVIDENCE_RESOLUTION_MODE")
+	}
 	catalogPath := strings.TrimSpace(os.Getenv("LINK_EVIDENCE_RESOLUTION_CATALOG"))
 	if catalogPath == "" {
 		stepDelay := time.Duration(envInt("LINK_EVIDENCE_DEVELOPMENT_STEP_DELAY_MS", 100, 0, 10000)) * time.Millisecond

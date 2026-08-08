@@ -24,14 +24,16 @@ var (
 
 type LegacyBridgeConfig struct {
 	BaseURL          string
+	AccessToken      string
 	AllowNonLoopback bool
 	Timeout          time.Duration
 	Client           *http.Client
 }
 
 type LegacyBridge struct {
-	baseURL *url.URL
-	client  *http.Client
+	baseURL     *url.URL
+	accessToken string
+	client      *http.Client
 }
 
 type legacySearchResponse struct {
@@ -109,7 +111,7 @@ func NewLegacyBridge(config LegacyBridgeConfig) (*LegacyBridge, error) {
 	if client == nil {
 		client = &http.Client{Timeout: timeout}
 	}
-	return &LegacyBridge{baseURL: baseURL, client: client}, nil
+	return &LegacyBridge{baseURL: baseURL, accessToken: strings.TrimSpace(config.AccessToken), client: client}, nil
 }
 
 func (*LegacyBridge) Mode() string {
@@ -134,6 +136,9 @@ func (bridge *LegacyBridge) Search(ctx context.Context, query string) (contracts
 	}
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("User-Agent", "link-evidence-helper-legacy-bridge/1.0")
+	if bridge.accessToken != "" {
+		request.Header.Set("x-app-token", bridge.accessToken)
+	}
 	response, err := bridge.client.Do(request)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {

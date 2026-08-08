@@ -19,6 +19,9 @@ func TestLegacyBridgeMapsSearchResponseToContract(t *testing.T) {
 		if request.URL.Query().Get("q") != "Ikka" {
 			t.Fatalf("query = %q", request.URL.RawQuery)
 		}
+		if request.Header.Get("x-app-token") != "runtime-token" {
+			t.Fatalf("token header = %q", request.Header.Get("x-app-token"))
+		}
 		writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = writer.Write([]byte(`{
 			"ok": true,
@@ -47,7 +50,7 @@ func TestLegacyBridgeMapsSearchResponseToContract(t *testing.T) {
 	}))
 	defer server.Close()
 
-	bridge, err := NewLegacyBridge(LegacyBridgeConfig{BaseURL: server.URL, Timeout: time.Second})
+	bridge, err := NewLegacyBridge(LegacyBridgeConfig{BaseURL: server.URL, AccessToken: "runtime-token", Timeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}

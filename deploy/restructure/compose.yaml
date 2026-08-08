@@ -8,14 +8,19 @@ services:
     environment:
       LINK_EVIDENCE_API_ADDR: 0.0.0.0:8780
       LINK_EVIDENCE_ALLOW_PUBLIC_LISTEN: "true"
-      LINK_EVIDENCE_SEARCH_MODE: fixture
-      LINK_EVIDENCE_LIBRARY_MODE: fixture
+      LINK_EVIDENCE_SEARCH_MODE: ${LINK_EVIDENCE_SEARCH_MODE:-fixture}
+      LINK_EVIDENCE_LEGACY_BASE_URL: ${LINK_EVIDENCE_LEGACY_BASE_URL:-}
+      LINK_EVIDENCE_LEGACY_ALLOW_NON_LOOPBACK: ${LINK_EVIDENCE_LEGACY_ALLOW_NON_LOOPBACK:-false}
+      LINK_EVIDENCE_LEGACY_ACCESS_TOKEN: ${LINK_EVIDENCE_LEGACY_ACCESS_TOKEN:-}
+      LINK_EVIDENCE_LIBRARY_MODE: ${LINK_EVIDENCE_LIBRARY_MODE:-fixture}
       LINK_EVIDENCE_FIXTURE_DIR: /opt/link-evidence/fixtures
       LINK_EVIDENCE_REDIS_ADDR: redis:6379
       LINK_EVIDENCE_ALLOW_REMOTE_REDIS: "true"
       LINK_EVIDENCE_ADMIN_TOKEN: ${LINK_EVIDENCE_ADMIN_TOKEN:?runtime admin token is required}
     volumes:
       - ../../packages/testing/fixtures:/opt/link-evidence/fixtures:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:${LINK_EVIDENCE_PREVIEW_PORT:-18780}:8780"
     depends_on:
@@ -28,7 +33,7 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
-    networks: [frontend, backend]
+    networks: [frontend, backend, legacy]
 
   worker:
     build:
@@ -38,8 +43,15 @@ services:
       LINK_EVIDENCE_REDIS_ADDR: redis:6379
       LINK_EVIDENCE_ALLOW_REMOTE_REDIS: "true"
       LINK_EVIDENCE_FIXTURE_DIR: /opt/link-evidence/fixtures
+      LINK_EVIDENCE_RESOLUTION_MODE: ${LINK_EVIDENCE_RESOLUTION_MODE:-development}
+      LINK_EVIDENCE_LEGACY_BASE_URL: ${LINK_EVIDENCE_LEGACY_BASE_URL:-}
+      LINK_EVIDENCE_LEGACY_ALLOW_NON_LOOPBACK: ${LINK_EVIDENCE_LEGACY_ALLOW_NON_LOOPBACK:-false}
+      LINK_EVIDENCE_LEGACY_ACCESS_TOKEN: ${LINK_EVIDENCE_LEGACY_ACCESS_TOKEN:-}
+      LINK_EVIDENCE_LEGACY_RESOLUTION_TIMEOUT_SECONDS: ${LINK_EVIDENCE_LEGACY_RESOLUTION_TIMEOUT_SECONDS:-30}
     volumes:
       - ../../packages/testing/fixtures:/opt/link-evidence/fixtures:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       redis:
         condition: service_healthy
@@ -50,7 +62,7 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
-    networks: [backend]
+    networks: [backend, legacy]
 
   redis:
     image: redis:7.4.2-alpine
@@ -92,6 +104,7 @@ services:
 
 networks:
   frontend: {}
+  legacy: {}
   backend:
     internal: true
 

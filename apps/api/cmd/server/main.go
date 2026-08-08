@@ -153,6 +153,7 @@ func buildSearcher(mode, fixtureDir string) (searchservice.Searcher, error) {
 	case "legacy-bridge":
 		return searchservice.NewLegacyBridge(searchservice.LegacyBridgeConfig{
 			BaseURL:          os.Getenv("LINK_EVIDENCE_LEGACY_BASE_URL"),
+			AccessToken:      os.Getenv("LINK_EVIDENCE_LEGACY_ACCESS_TOKEN"),
 			AllowNonLoopback: envBool("LINK_EVIDENCE_LEGACY_ALLOW_NON_LOOPBACK"),
 			Timeout:          time.Duration(envInt("LINK_EVIDENCE_LEGACY_TIMEOUT_SECONDS", 10, 1, 30)) * time.Second,
 		})

@@ -41,6 +41,10 @@
 		}
 	}
 
+	handle /index/api/tmdb-image* {
+		reverse_proxy host.docker.internal:8765
+	}
+
 	handle {
 		root * /srv/link-evidence-web
 		try_files {path} /index.html
