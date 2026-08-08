@@ -21,6 +21,61 @@
 	@unsafe_methods method TRACE CONNECT
 	respond @unsafe_methods 405
 
+	handle / {
+		redir /index/ 308
+	}
+
+	handle /library/* {
+		redir /index{uri} 308
+	}
+
+	handle /admin {
+		redir /index/admin 308
+	}
+
+	handle /index {
+		redir /index/ 308
+	}
+
+	handle /index/assets/* {
+		uri strip_prefix /index
+		root * /srv/link-evidence-web
+		file_server
+	}
+
+	handle /index/api/v1/* {
+		uri strip_prefix /index
+		reverse_proxy api:8780 {
+			health_uri /healthz
+			health_interval 10s
+			health_timeout 3s
+			lb_try_duration 2s
+			lb_try_interval 250ms
+		}
+	}
+
+	handle /index/api/tmdb-image* {
+		uri strip_prefix /index
+		reverse_proxy legacy:8766
+	}
+
+	handle /index/api/* {
+		uri strip_prefix /index
+		reverse_proxy legacy:8766
+	}
+
+	handle /index/legacy/* {
+		uri strip_prefix /index
+		reverse_proxy legacy:8766
+	}
+
+	handle /index/* {
+		uri strip_prefix /index
+		root * /srv/link-evidence-web
+		try_files {path} /index.html
+		file_server
+	}
+
 	handle /api/v1/* {
 		reverse_proxy api:8780 {
 			health_uri /healthz

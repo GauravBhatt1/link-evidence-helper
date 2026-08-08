@@ -1,3 +1,4 @@
+import { apiPath } from "../../../app/runtime-paths";
 import {
   errorResponseSchema,
   jobSchema,
@@ -44,7 +45,7 @@ export class ResolutionClient {
     signal?: AbortSignal,
   ): Promise<Job> {
     const parsedRequest = resolutionRequestSchema.parse(request);
-    return this.#requestJob("/api/v1/jobs/resolution", {
+    return this.#requestJob(apiPath("/api/v1/jobs/resolution"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -56,14 +57,14 @@ export class ResolutionClient {
   }
 
   async get(jobId: string, signal?: AbortSignal): Promise<Job> {
-    return this.#requestJob(`/api/v1/jobs/${encodeURIComponent(validJobId(jobId))}`, {
+    return this.#requestJob(apiPath(`/api/v1/jobs/${encodeURIComponent(validJobId(jobId))}`), {
       method: "GET",
       signal,
     });
   }
 
   async unsubscribe(jobId: string, idempotencyKey: string, signal?: AbortSignal): Promise<Job> {
-    return this.#requestJob(`/api/v1/jobs/${encodeURIComponent(validJobId(jobId))}`, {
+    return this.#requestJob(apiPath(`/api/v1/jobs/${encodeURIComponent(validJobId(jobId))}`), {
       method: "DELETE",
       headers: { "Idempotency-Key": idempotencyKey },
       signal,

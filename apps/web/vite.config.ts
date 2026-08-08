@@ -4,7 +4,9 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig(() => {
   const apiMode = process.env.VITE_SEARCH_TRANSPORT === "api";
+  const base = process.env.VITE_PUBLIC_BASE_PATH || "/";
   return {
+    base,
     plugins: [react(), tailwindcss()],
     server: {
       host: "127.0.0.1",

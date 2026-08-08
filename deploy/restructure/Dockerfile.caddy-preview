@@ -16,6 +16,8 @@ COPY packages/testing packages/testing
 
 ENV VITE_SEARCH_TRANSPORT=api
 ENV VITE_LIBRARY_TRANSPORT=api
+ENV VITE_PUBLIC_BASE_PATH=/index/
+ENV VITE_API_BASE_PATH=/index
 RUN corepack pnpm@10.18.3 --filter @link-evidence/web build
 
 FROM caddy:2.10.0-alpine

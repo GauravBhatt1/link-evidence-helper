@@ -1,3 +1,4 @@
+import { apiPath } from "../../../app/runtime-paths";
 import { searchResponseSchema, type SearchResponse } from "../../../types/contracts";
 import type { SearchRequest, SearchTransport } from "./search-transport";
 import { SearchTransportError } from "./search-transport-error";
@@ -15,7 +16,7 @@ export class ApiSearchTransport implements SearchTransport {
   private readonly endpoint: string;
   private readonly fetchImpl: typeof fetch;
 
-  constructor({ endpoint = "/api/v1/search", fetchImpl = fetch }: ApiSearchTransportOptions = {}) {
+  constructor({ endpoint = apiPath("/api/v1/search"), fetchImpl = fetch }: ApiSearchTransportOptions = {}) {
     this.endpoint = endpoint;
     this.fetchImpl = fetchImpl;
   }

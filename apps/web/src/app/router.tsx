@@ -28,4 +28,6 @@ export const routeObjects: RouteObject[] = [
   },
 ];
 
-export const router = createBrowserRouter(routeObjects);
+const basename = import.meta.env.BASE_URL === "/" ? undefined : import.meta.env.BASE_URL.replace(/\/$/, "");
+
+export const router = createBrowserRouter(routeObjects, { basename });

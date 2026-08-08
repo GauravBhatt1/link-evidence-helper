@@ -1,4 +1,5 @@
 import { ExternalLink, Settings, ShieldCheck } from "lucide-react";
+import { publicPath } from "../app/runtime-paths";
 import "../features/library/styles/library.css";
 
 export function AdminPlaceholderPage() {
@@ -12,7 +13,7 @@ export function AdminPlaceholderPage() {
         </div>
       </aside>
       <div className="library-grid">
-        <a className="library-card admin-link-card" href="/legacy/admin">
+        <a className="library-card admin-link-card" href={publicPath("/legacy/admin")}>
           <div className="library-poster-fallback" aria-hidden="true"><Settings /></div>
           <div className="library-card-body">
             <div className="library-card-title-row">
@@ -24,7 +25,7 @@ export function AdminPlaceholderPage() {
             </div>
           </div>
         </a>
-        <a className="library-card admin-link-card" href="/legacy/admin/sources">
+        <a className="library-card admin-link-card" href={publicPath("/legacy/admin/sources")}>
           <div className="library-poster-fallback" aria-hidden="true"><Settings /></div>
           <div className="library-card-body">
             <div className="library-card-title-row">
@@ -36,7 +37,7 @@ export function AdminPlaceholderPage() {
             </div>
           </div>
         </a>
-        <a className="library-card admin-link-card" href="/legacy/setup">
+        <a className="library-card admin-link-card" href={publicPath("/legacy/setup")}>
           <div className="library-poster-fallback" aria-hidden="true"><Settings /></div>
           <div className="library-card-body">
             <div className="library-card-title-row">

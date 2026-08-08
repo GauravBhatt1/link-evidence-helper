@@ -1,4 +1,5 @@
 import libraryFixture from "../../../../../../packages/testing/fixtures/library-response.json";
+import { apiPath } from "../../../app/runtime-paths";
 import {
   libraryResponseSchema,
   type LibraryItem,
@@ -55,7 +56,7 @@ export class FixtureLibraryTransport implements LibraryTransport {
 
 export class ApiLibraryTransport implements LibraryTransport {
   constructor(
-    private readonly endpoint = "/api/v1/library",
+    private readonly endpoint = apiPath("/api/v1/library"),
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
