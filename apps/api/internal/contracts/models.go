@@ -65,19 +65,19 @@ type LibraryItemJellyfin struct {
 }
 
 type LibraryItem struct {
-	ItemID       string               `json:"itemId"`
-	ContentID    *string              `json:"contentId"`
-	TMDBID       *string              `json:"tmdbId"`
-	Title        string               `json:"title"`
-	Year         *int                 `json:"year"`
-	MediaType    string               `json:"mediaType"`
-	Season       *int                 `json:"season"`
-	Episode      *int                 `json:"episode"`
-	Poster       *string              `json:"poster"`
-	LibraryState string               `json:"libraryState"`
-	Missing      bool                 `json:"missing"`
-	DateAdded    time.Time            `json:"dateAdded"`
-	UpdatedAt    time.Time            `json:"updatedAt"`
+	ItemID       string              `json:"itemId"`
+	ContentID    *string             `json:"contentId"`
+	TMDBID       *string             `json:"tmdbId"`
+	Title        string              `json:"title"`
+	Year         *int                `json:"year"`
+	MediaType    string              `json:"mediaType"`
+	Season       *int                `json:"season"`
+	Episode      *int                `json:"episode"`
+	Poster       *string             `json:"poster"`
+	LibraryState string              `json:"libraryState"`
+	Missing      bool                `json:"missing"`
+	DateAdded    time.Time           `json:"dateAdded"`
+	UpdatedAt    time.Time           `json:"updatedAt"`
 	Jellyfin     LibraryItemJellyfin `json:"jellyfin"`
 }
 
@@ -95,13 +95,13 @@ type LibraryJellyfinStatus struct {
 }
 
 type LibraryResponse struct {
-	OK          bool                   `json:"ok"`
-	Success     bool                   `json:"success"`
-	Code        string                 `json:"code"`
-	View        string                 `json:"view"`
-	GeneratedAt time.Time              `json:"generatedAt"`
-	Items       []LibraryItem          `json:"items"`
-	Summary     LibrarySummary         `json:"summary"`
+	OK          bool                  `json:"ok"`
+	Success     bool                  `json:"success"`
+	Code        string                `json:"code"`
+	View        string                `json:"view"`
+	GeneratedAt time.Time             `json:"generatedAt"`
+	Items       []LibraryItem         `json:"items"`
+	Summary     LibrarySummary        `json:"summary"`
 	Jellyfin    LibraryJellyfinStatus `json:"jellyfin"`
 }
 
