@@ -59,6 +59,20 @@
   box-shadow: var(--shadow-panel);
 }
 
+.admin-link-card {
+  color: inherit;
+  text-decoration: none;
+}
+
+.admin-link-card:hover {
+  border-color: var(--color-accent);
+}
+
+.admin-link-card .library-poster-fallback svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
 .library-poster-fallback {
   display: grid;
   place-items: center;

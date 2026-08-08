@@ -11,7 +11,7 @@ export function DesktopSidebar() {
       <nav aria-label="Primary navigation" className="desktop-navigation">
         {routeMetadata.map((route) => <NavItem key={route.id} route={route} />)}
       </nav>
-      <p className="development-note">React shell · Development only</p>
+      <p className="development-note">Live production console</p>
     </aside>
   );
 }

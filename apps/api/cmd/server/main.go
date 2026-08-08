@@ -69,6 +69,16 @@ func main() {
 		if err != nil {
 			log.Fatalf("enable Jellyfin library repository: %v", err)
 		}
+	case "legacy-bridge":
+		libraryRepository, err = libraryservice.NewLegacyRepository(libraryservice.LegacyRepositoryConfig{
+			BaseURL:          os.Getenv("LINK_EVIDENCE_LEGACY_BASE_URL"),
+			AccessToken:      os.Getenv("LINK_EVIDENCE_LEGACY_ACCESS_TOKEN"),
+			AllowNonLoopback: envBool("LINK_EVIDENCE_LEGACY_ALLOW_NON_LOOPBACK"),
+			Timeout:          time.Duration(envInt("LINK_EVIDENCE_LEGACY_TIMEOUT_SECONDS", 10, 1, 30)) * time.Second,
+		})
+		if err != nil {
+			log.Fatalf("enable legacy library bridge: %v", err)
+		}
 	default:
 		log.Fatalf("unsupported LINK_EVIDENCE_LIBRARY_MODE %q", libraryMode)
 	}

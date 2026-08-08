@@ -30,10 +30,10 @@ export function SearchForm({
   const submitDisabled = busy || !draft.trim();
 
   return (
-    <form className="search-form" aria-label="Development fixture search" onSubmit={submit} noValidate>
+    <form className="search-form" aria-label="Live release search" onSubmit={submit} noValidate>
       <div className="search-field">
         <label htmlFor="search-query">Movie or TV title</label>
-        <p id="search-query-hint">Use one documented fixture alias. Unknown titles return an empty result.</p>
+        <p id="search-query-hint">Search configured sources for movies, TV shows, seasons, or episodes.</p>
         <div className="search-input-wrap">
           <Search aria-hidden="true" focusable="false" />
           <input
@@ -45,7 +45,7 @@ export function SearchForm({
             aria-describedby={`search-query-hint${error ? " search-query-error" : ""}`}
             aria-invalid={Boolean(error)}
             autoComplete="off"
-            placeholder="Example Film"
+            placeholder="Ikka"
             className="search-input"
             onChange={(event) => {
               setDraft(event.target.value);

@@ -92,10 +92,10 @@ function verifiedJob(): Job {
 }
 
 describe("SearchPage", () => {
-  it("keeps the fixture disclosure visible in idle, loading, result, partial, empty, error, selection, and local-intent states", async () => {
+  it("keeps the source mode disclosure visible in idle, loading, result, partial, empty, error, selection, and local-intent states", async () => {
     const user = userEvent.setup();
     renderSearch(new FixtureSearchTransport(20));
-    const notice = () => screen.getByText("Development fixture search — no live sources are contacted.");
+    const notice = () => screen.getByText("Offline preview search.");
     expect(notice()).toBeVisible();
 
     await submitAlias(user, "Example Film");
@@ -114,10 +114,10 @@ describe("SearchPage", () => {
     await screen.findByText(/Results may be incomplete/);
     expect(notice()).toBeVisible();
     await submitAlias(user, "Unknown title");
-    await screen.findByRole("heading", { name: "No development fixture matches this search." });
+    await screen.findByRole("heading", { name: "No live source matches this search." });
     expect(notice()).toBeVisible();
     await submitAlias(user, "Fixture Error");
-    await screen.findByRole("heading", { name: "Development search unavailable" });
+    await screen.findByRole("heading", { name: "Search unavailable" });
     expect(notice()).toBeVisible();
   });
 
@@ -280,11 +280,11 @@ describe("SearchPage", () => {
     const user = userEvent.setup();
     renderSearch();
     await submitAlias(user, "Fixture Error");
-    await screen.findByRole("heading", { name: "Development search unavailable" });
+    await screen.findByRole("heading", { name: "Search unavailable" });
     const resultsRegion = screen.getByRole("region", { name: "Search results" });
     expect(resultsRegion).not.toHaveFocus();
     await user.click(screen.getByRole("button", { name: "Retry" }));
-    await screen.findByRole("heading", { name: "Development search unavailable" });
+    await screen.findByRole("heading", { name: "Search unavailable" });
     await waitFor(() => expect(resultsRegion).toHaveFocus());
   });
 

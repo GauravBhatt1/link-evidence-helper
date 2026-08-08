@@ -35,6 +35,10 @@
 		reverse_proxy legacy:8766
 	}
 
+	handle_path /legacy/* {
+		reverse_proxy legacy:8766
+	}
+
 	handle /healthz {
 		reverse_proxy api:8780 {
 			health_uri /healthz
@@ -61,6 +65,8 @@
 	}
 
 	handle {
-		reverse_proxy legacy:8766
+		root * /srv/link-evidence-web
+		try_files {path} /index.html
+		file_server
 	}
 }

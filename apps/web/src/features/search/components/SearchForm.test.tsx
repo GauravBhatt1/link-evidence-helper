@@ -32,7 +32,7 @@ describe("SearchForm and query configuration", () => {
     const onSubmit = vi.fn(async () => true);
     render(<SearchForm busy={false} externalError="" onSubmit={onSubmit} />);
     const input = screen.getByRole("searchbox", { name: "Movie or TV title" });
-    expect(input).toHaveAccessibleDescription(/documented fixture alias/i);
+    expect(input).toHaveAccessibleDescription(/configured sources/i);
     await user.type(input, "Example Film");
     expect(onSubmit).not.toHaveBeenCalled();
   });
@@ -53,7 +53,7 @@ describe("SearchForm and query configuration", () => {
     const onSubmit = vi.fn(async () => true);
     const { rerender } = render(<SearchForm busy={false} externalError="" onSubmit={onSubmit} />);
     await user.type(screen.getByRole("searchbox"), "   ");
-    fireEvent.submit(screen.getByRole("form", { name: "Development fixture search" }));
+    fireEvent.submit(screen.getByRole("form", { name: "Live release search" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Enter a title to search.");
     await user.clear(screen.getByRole("searchbox"));
     await user.type(screen.getByRole("searchbox"), "Example Film");
@@ -62,7 +62,7 @@ describe("SearchForm and query configuration", () => {
     const button = screen.getByRole("button", { name: "Search in progress…" });
     expect(input).toBeEnabled();
     expect(button).toBeDisabled();
-    fireEvent.submit(screen.getByRole("form", { name: "Development fixture search" }));
+    fireEvent.submit(screen.getByRole("form", { name: "Live release search" }));
     expect(onSubmit).not.toHaveBeenCalled();
   });
 });

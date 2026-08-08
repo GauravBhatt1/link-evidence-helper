@@ -18,11 +18,11 @@ export type RouteMetadata = {
 
 export const routeMetadata: readonly RouteMetadata[] = [
   { id: "search", path: "/", label: "Search", mobileLabel: "Search", documentTitle: "Search · FREEMIUM INDEX", heading: "Search", description: "Search releases and open verified Delivery Links.", page: "search", icon: Search, mobilePrimary: true },
-  { id: "movies", path: "/library/movies", label: "Movies", mobileLabel: "Movies", documentTitle: "Movies · FREEMIUM INDEX", heading: "Movies", description: "Browse canonical movie-library items from the selected safe data transport.", page: "movies", icon: Film, mobilePrimary: true },
-  { id: "tv", path: "/library/tv", label: "TV Shows", mobileLabel: "TV", documentTitle: "TV Shows · FREEMIUM INDEX", heading: "TV Shows", description: "Browse series, seasons, and episodes without exposing integration internals.", page: "tv", icon: Tv, mobilePrimary: true },
+  { id: "movies", path: "/library/movies", label: "Movies", mobileLabel: "Movies", documentTitle: "Movies · FREEMIUM INDEX", heading: "Movies", description: "Browse the live movie library with Jellyfin availability.", page: "movies", icon: Film, mobilePrimary: true },
+  { id: "tv", path: "/library/tv", label: "TV Shows", mobileLabel: "TV", documentTitle: "TV Shows · FREEMIUM INDEX", heading: "TV Shows", description: "Browse live series, seasons, and episodes.", page: "tv", icon: Tv, mobilePrimary: true },
   { id: "missing", path: "/library/missing", label: "Missing", mobileLabel: "Missing", documentTitle: "Missing · FREEMIUM INDEX", heading: "Missing", description: "Review missing and partially available library items.", page: "missing", icon: CircleAlert, mobilePrimary: true },
-  { id: "recent", path: "/library/recent", label: "Recently Added", mobileLabel: "Recent", documentTitle: "Recently Added · FREEMIUM INDEX", heading: "Recently Added", description: "See library items ordered by their canonical added date.", page: "recent", icon: Clock3, mobilePrimary: false },
-  { id: "admin", path: "/admin", label: "Admin", mobileLabel: "Admin", documentTitle: "Admin · FREEMIUM INDEX", heading: "Admin", description: "Admin authentication and privileged controls are not implemented yet.", page: "admin", icon: ShieldCheck, mobilePrimary: false },
+  { id: "recent", path: "/library/recent", label: "Recently Added", mobileLabel: "Recent", documentTitle: "Recently Added · FREEMIUM INDEX", heading: "Recently Added", description: "See live library items ordered by added date.", page: "recent", icon: Clock3, mobilePrimary: false },
+  { id: "admin", path: "/admin", label: "Admin", mobileLabel: "Admin", documentTitle: "Admin · FREEMIUM INDEX", heading: "Admin", description: "Open live source, Jellyfin, scan, and adapter tools.", page: "admin", icon: ShieldCheck, mobilePrimary: false },
 ] as const;
 
 export const notFoundMetadata: RouteMetadata = {

@@ -17,8 +17,8 @@ function renderLibrary(view: "movies" | "tv" | "missing" | "recent", transport: 
 describe("LibraryPage", () => {
   it("renders canonical movie cards with a persistent fixture disclosure and no remote images", async () => {
     const { container } = renderLibrary("movies");
-    expect(screen.getByText("Development library fixtures")).toBeVisible();
-    expect(screen.getByText("No live Jellyfin server or production library is contacted.")).toBeVisible();
+    expect(screen.getByText("Offline library preview")).toBeVisible();
+    expect(screen.getByText("Connect the API transport to load production library data.")).toBeVisible();
     expect(await screen.findByRole("heading", { level: 2, name: "Archive Zero" })).toBeVisible();
     expect(screen.getByRole("heading", { level: 2, name: "Horizon Gate" })).toBeVisible();
     expect(screen.getByRole("heading", { level: 2, name: "Paper City" })).toBeVisible();

@@ -6,7 +6,7 @@ export function PageHeader({ metadata }: { metadata: RouteMetadata }) {
     <header className="page-header">
       <div className="page-heading-icon" aria-hidden="true"><Icon aria-hidden="true" focusable="false" /></div>
       <div>
-        <p className="page-kicker">Development placeholder</p>
+        <p className="page-kicker">Live workspace</p>
         <h1 id="route-heading" tabIndex={-1}>{metadata.heading}</h1>
       </div>
     </header>

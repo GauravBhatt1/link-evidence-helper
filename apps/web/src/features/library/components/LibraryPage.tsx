@@ -101,11 +101,11 @@ export function LibraryPage({
       <aside className="library-mode-notice" aria-label="Library connection status">
         <Database aria-hidden="true" focusable="false" />
         <div>
-          <strong>{mode === "fixture" ? "Development library fixtures" : "Library API"}</strong>
+          <strong>{mode === "fixture" ? "Offline library preview" : "Live library and Jellyfin"}</strong>
           <p>
             {mode === "fixture"
-              ? "No live Jellyfin server or production library is contacted."
-              : "Data is loaded from the same-origin Go API."}
+              ? "Connect the API transport to load production library data."
+              : "Data is loaded from the production library bridge with Jellyfin availability."}
           </p>
         </div>
       </aside>

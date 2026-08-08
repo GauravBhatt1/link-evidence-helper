@@ -14,7 +14,7 @@ describe("safe search states", () => {
 
   it("renders a truthful empty state", () => {
     render(<SearchEmptyState query="Unknown title" />);
-    expect(screen.getByRole("heading", { name: "No development fixture matches this search." })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "No live source matches this search." })).toBeVisible();
     expect(screen.getByText(/Unknown title/)).toBeVisible();
   });
 

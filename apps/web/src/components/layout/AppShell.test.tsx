@@ -15,11 +15,13 @@ describe("AppShell", () => {
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(document.title).toBe(metadata.documentTitle);
     if (metadata.path === "/") {
-      expect(screen.getByText("Development fixture search — no live sources are contacted.")).toBeInTheDocument();
+      expect(screen.getByText("Offline preview search.")).toBeInTheDocument();
     } else if (libraryPages.has(metadata.page)) {
-      expect(await screen.findByText("Development library fixtures")).toBeInTheDocument();
+      expect(await screen.findByText("Offline library preview")).toBeInTheDocument();
+    } else if (metadata.page === "admin") {
+      expect(screen.getByText("Live admin tools")).toBeInTheDocument();
     } else {
-      expect(screen.getByText("No application data or backend connection is active here.")).toBeInTheDocument();
+      expect(screen.getByText("Use the linked live tool for advanced maintenance.")).toBeInTheDocument();
     }
   });
 
