@@ -41,6 +41,17 @@
 		}
 	}
 
+	handle /health {
+		rewrite * /healthz
+		reverse_proxy api:8780 {
+			health_uri /healthz
+			health_interval 10s
+			health_timeout 3s
+			lb_try_duration 2s
+			lb_try_interval 250ms
+		}
+	}
+
 	handle /index/api/tmdb-image* {
 		reverse_proxy host.docker.internal:8765
 	}
