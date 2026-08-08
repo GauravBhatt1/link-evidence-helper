@@ -34,7 +34,13 @@ func TestCreateValidatesNormalizesAndUsesBoundedQuery(t *testing.T) {
 		if got := args[3]; got != "https://example.invalid/" {
 			t.Fatalf("endpoint was not normalized: %#v", got)
 		}
-		if got := args[5].(time.Time); !got.Equal(now.UTC()) || got.Location() != time.UTC {
+		if got := args[4]; got != "q" {
+			t.Fatalf("query parameter was not defaulted: %#v", got)
+		}
+		if got := args[8]; got != "[]" {
+			t.Fatalf("allowed hosts were not JSON encoded: %#v", got)
+		}
+		if got := args[10].(time.Time); !got.Equal(now.UTC()) || got.Location() != time.UTC {
 			t.Fatalf("timestamp was not normalized to UTC: %v", got)
 		}
 		return sourceRow(sourceadmin.Source{
@@ -77,6 +83,9 @@ func TestUpdateCommitsExactlyOnce(t *testing.T) {
 		}
 		if args[1] != uint64(2) {
 			t.Fatalf("unexpected revision: %#v", args[1])
+		}
+		if args[5] != "q" || args[7] != "title" || args[8] != "url" || args[9] != "[]" {
+			t.Fatalf("unexpected search mapping args: %#v", args)
 		}
 		return sourceRow(sourceadmin.Source{
 			ID: "alpha", DisplayName: "Alpha 2", Kind: "http-html", Endpoint: "https://example.invalid/path",
@@ -167,7 +176,20 @@ func rowSource(id string, revision uint64) sourceadmin.Source {
 }
 
 func sourceRow(source sourceadmin.Source) Row {
-	return fakeRow{values: []any{source.ID, source.DisplayName, source.Kind, source.Endpoint, source.Enabled, source.Revision, source.CreatedAt, source.UpdatedAt}}
+	if source.QueryParameter == "" {
+		source.QueryParameter = "q"
+	}
+	if source.TitleField == "" {
+		source.TitleField = "title"
+	}
+	if source.URLField == "" {
+		source.URLField = "url"
+	}
+	return fakeRow{values: []any{
+		source.ID, source.DisplayName, source.Kind, source.Endpoint,
+		source.QueryParameter, source.ResultRoot, source.TitleField, source.URLField, allowedHostsJSON(source.AllowedResultHosts),
+		source.Enabled, source.Revision, source.CreatedAt, source.UpdatedAt,
+	}}
 }
 
 type fakeStore struct {

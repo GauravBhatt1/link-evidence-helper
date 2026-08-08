@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -42,7 +43,7 @@ func TestSourceAdminCreateAndRevisionConflict(t *testing.T) {
 	}
 	handler := SourceAdminHandler(verifier, sourceadmin.NewMemoryRegistry())
 
-	create := `{"id":"example","displayName":"Example","kind":"http-json","endpoint":"https://example.test/","enabled":true}`
+	create := `{"id":"example","displayName":"Example","kind":"http-json","endpoint":"https://example.test/","queryParameter":"query","resultRoot":"payload.items","titleField":"metadata.title","urlField":"links.url","allowedResultHosts":["cdn.example.test"],"enabled":true}`
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/sources", strings.NewReader(create))
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Content-Type", "application/json")
@@ -53,6 +54,13 @@ func TestSourceAdminCreateAndRevisionConflict(t *testing.T) {
 	}
 	if strings.Contains(response.Body.String(), token) {
 		t.Fatal("response leaked administrator token")
+	}
+	var created sourceadmin.Source
+	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.QueryParameter != "query" || created.ResultRoot != "payload.items" || created.TitleField != "metadata.title" || created.URLField != "links.url" || len(created.AllowedResultHosts) != 1 {
+		t.Fatalf("created source did not preserve search mapping: %#v", created)
 	}
 
 	update := `{"id":"example","displayName":"Example 2","kind":"http-json","endpoint":"https://example.test/","enabled":true,"expectedRevision":9}`

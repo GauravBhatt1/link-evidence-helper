@@ -4,6 +4,7 @@ package sourceadmin
 import (
 	"errors"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -16,28 +17,39 @@ var (
 	ErrSourceExists     = errors.New("source already exists")
 	ErrSourceNotFound   = errors.New("source not found")
 	ErrRevisionConflict = errors.New("source revision conflict")
+	fieldPathPattern    = regexp.MustCompile(`^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$`)
 )
 
 // Source is deliberately credential-free. Headers, cookies, tokens, request
 // bodies, scripts, and arbitrary metadata are not part of this contract.
 type Source struct {
-	ID          string    `json:"id"`
-	DisplayName string    `json:"displayName"`
-	Kind        string    `json:"kind"`
-	Endpoint    string    `json:"endpoint"`
-	Enabled     bool      `json:"enabled"`
-	Revision    uint64    `json:"revision"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID                 string    `json:"id"`
+	DisplayName        string    `json:"displayName"`
+	Kind               string    `json:"kind"`
+	Endpoint           string    `json:"endpoint"`
+	QueryParameter     string    `json:"queryParameter"`
+	ResultRoot         string    `json:"resultRoot,omitempty"`
+	TitleField         string    `json:"titleField"`
+	URLField           string    `json:"urlField"`
+	AllowedResultHosts []string  `json:"allowedResultHosts,omitempty"`
+	Enabled            bool      `json:"enabled"`
+	Revision           uint64    `json:"revision"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
 }
 
 // Draft contains the only mutable configuration accepted by the registry.
 type Draft struct {
-	ID          string
-	DisplayName string
-	Kind        string
-	Endpoint    string
-	Enabled     bool
+	ID                 string
+	DisplayName        string
+	Kind               string
+	Endpoint           string
+	QueryParameter     string
+	ResultRoot         string
+	TitleField         string
+	URLField           string
+	AllowedResultHosts []string
+	Enabled            bool
 }
 
 // Registry defines the administrative source-management boundary.
@@ -83,8 +95,10 @@ func (registry *MemoryRegistry) Create(draft Draft, now time.Time) (Source, erro
 	timestamp := now.UTC()
 	source := Source{
 		ID: normalized.ID, DisplayName: normalized.DisplayName, Kind: normalized.Kind,
-		Endpoint: normalized.Endpoint, Enabled: normalized.Enabled, Revision: 1,
-		CreatedAt: timestamp, UpdatedAt: timestamp,
+		Endpoint: normalized.Endpoint, QueryParameter: normalized.QueryParameter,
+		ResultRoot: normalized.ResultRoot, TitleField: normalized.TitleField,
+		URLField: normalized.URLField, AllowedResultHosts: append([]string(nil), normalized.AllowedResultHosts...),
+		Enabled: normalized.Enabled, Revision: 1, CreatedAt: timestamp, UpdatedAt: timestamp,
 	}
 	registry.sources[source.ID] = source
 	return source, nil
@@ -107,6 +121,11 @@ func (registry *MemoryRegistry) Update(id string, expectedRevision uint64, draft
 	current.DisplayName = normalized.DisplayName
 	current.Kind = normalized.Kind
 	current.Endpoint = normalized.Endpoint
+	current.QueryParameter = normalized.QueryParameter
+	current.ResultRoot = normalized.ResultRoot
+	current.TitleField = normalized.TitleField
+	current.URLField = normalized.URLField
+	current.AllowedResultHosts = append([]string(nil), normalized.AllowedResultHosts...)
 	current.Enabled = normalized.Enabled
 	current.Revision++
 	current.UpdatedAt = now.UTC()
@@ -155,7 +174,55 @@ func normalizeDraft(draft Draft) (Draft, error) {
 	if parsed.Path == "" {
 		parsed.Path = "/"
 	}
-	return Draft{ID: draft.ID, DisplayName: name, Kind: draft.Kind, Endpoint: parsed.String(), Enabled: draft.Enabled}, nil
+	queryParameter := strings.TrimSpace(draft.QueryParameter)
+	titleField := strings.TrimSpace(draft.TitleField)
+	urlField := strings.TrimSpace(draft.URLField)
+	resultRoot := strings.TrimSpace(draft.ResultRoot)
+	if queryParameter != draft.QueryParameter || titleField != draft.TitleField || urlField != draft.URLField || resultRoot != draft.ResultRoot {
+		return Draft{}, ErrInvalidSource
+	}
+	if queryParameter == "" {
+		queryParameter = "q"
+	}
+	if titleField == "" {
+		titleField = "title"
+	}
+	if urlField == "" {
+		urlField = "url"
+	}
+	if !safeIdentifier(queryParameter, 1, 64) || !fieldPathPattern.MatchString(titleField) || !fieldPathPattern.MatchString(urlField) {
+		return Draft{}, ErrInvalidSource
+	}
+	if resultRoot != "" && !fieldPathPattern.MatchString(resultRoot) {
+		return Draft{}, ErrInvalidSource
+	}
+	allowedHosts, err := normalizeAllowedHosts(draft.AllowedResultHosts)
+	if err != nil {
+		return Draft{}, err
+	}
+	return Draft{
+		ID: draft.ID, DisplayName: name, Kind: draft.Kind, Endpoint: parsed.String(),
+		QueryParameter: queryParameter, ResultRoot: resultRoot, TitleField: titleField,
+		URLField: urlField, AllowedResultHosts: allowedHosts, Enabled: draft.Enabled,
+	}, nil
+}
+
+func normalizeAllowedHosts(values []string) ([]string, error) {
+	seen := map[string]struct{}{}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		host := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(value), "."))
+		if host == "" || strings.ContainsAny(host, "/:@?#") || netIPLiteral(host) {
+			return nil, ErrInvalidSource
+		}
+		if _, exists := seen[host]; exists {
+			return nil, ErrInvalidSource
+		}
+		seen[host] = struct{}{}
+		result = append(result, host)
+	}
+	sort.Strings(result)
+	return result, nil
 }
 
 func safeIdentifier(value string, minimum, maximum int) bool {
@@ -177,4 +244,17 @@ func containsControl(value string) bool {
 		}
 	}
 	return false
+}
+
+func netIPLiteral(value string) bool {
+	if !strings.Contains(value, ".") && !strings.Contains(value, ":") {
+		return false
+	}
+	for _, character := range value {
+		if (character < '0' || character > '9') && character != '.' && character != ':' &&
+			(character < 'a' || character > 'f') && (character < 'A' || character > 'F') {
+			return false
+		}
+	}
+	return true
 }

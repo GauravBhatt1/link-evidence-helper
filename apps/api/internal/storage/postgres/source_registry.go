@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -14,22 +15,24 @@ import (
 )
 
 const (
-	listSourcesSQL = `SELECT id, display_name, kind, endpoint, enabled, revision, created_at, updated_at
+	listSourcesSQL = `SELECT id, display_name, kind, endpoint, query_parameter, result_root, title_field, url_field, allowed_result_hosts::text, enabled, revision, created_at, updated_at
 FROM admin_sources
 ORDER BY id ASC`
 	createSourceSQL = `INSERT INTO admin_sources
-(id, display_name, kind, endpoint, enabled, revision, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, 1, $6, $6)
-RETURNING id, display_name, kind, endpoint, enabled, revision, created_at, updated_at`
+(id, display_name, kind, endpoint, query_parameter, result_root, title_field, url_field, allowed_result_hosts, enabled, revision, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, 1, $11, $11)
+RETURNING id, display_name, kind, endpoint, query_parameter, result_root, title_field, url_field, allowed_result_hosts::text, enabled, revision, created_at, updated_at`
 	updateSourceSQL = `UPDATE admin_sources
-SET display_name = $3, kind = $4, endpoint = $5, enabled = $6,
-    revision = revision + 1, updated_at = $7
+SET display_name = $3, kind = $4, endpoint = $5, query_parameter = $6,
+    result_root = $7, title_field = $8, url_field = $9,
+    allowed_result_hosts = $10::jsonb, enabled = $11,
+    revision = revision + 1, updated_at = $12
 WHERE id = $1 AND revision = $2
-RETURNING id, display_name, kind, endpoint, enabled, revision, created_at, updated_at`
+RETURNING id, display_name, kind, endpoint, query_parameter, result_root, title_field, url_field, allowed_result_hosts::text, enabled, revision, created_at, updated_at`
 	disableSourceSQL = `UPDATE admin_sources
 SET enabled = false, revision = revision + 1, updated_at = $3
 WHERE id = $1 AND revision = $2
-RETURNING id, display_name, kind, endpoint, enabled, revision, created_at, updated_at`
+RETURNING id, display_name, kind, endpoint, query_parameter, result_root, title_field, url_field, allowed_result_hosts::text, enabled, revision, created_at, updated_at`
 	sourceExistsSQL = `SELECT EXISTS (SELECT 1 FROM admin_sources WHERE id = $1)`
 )
 
@@ -113,6 +116,8 @@ func (registry *SourceRegistry) Create(draft sourceadmin.Draft, now time.Time) (
 	defer cancel()
 	row := registry.store.QueryRowContext(ctx, createSourceSQL,
 		normalized.ID, normalized.DisplayName, normalized.Kind, normalized.Endpoint,
+		normalized.QueryParameter, normalized.ResultRoot, normalized.TitleField,
+		normalized.URLField, allowedHostsJSON(normalized.AllowedResultHosts),
 		normalized.Enabled, normalized.CreatedAt,
 	)
 	created, err := scanSource(row)
@@ -133,7 +138,9 @@ func (registry *SourceRegistry) Update(id string, expectedRevision uint64, draft
 	return registry.mutate(id, func(ctx context.Context, tx Tx) (sourceadmin.Source, error) {
 		return scanSource(tx.QueryRowContext(ctx, updateSourceSQL,
 			id, expectedRevision, normalized.DisplayName, normalized.Kind,
-			normalized.Endpoint, normalized.Enabled, normalized.UpdatedAt,
+			normalized.Endpoint, normalized.QueryParameter, normalized.ResultRoot,
+			normalized.TitleField, normalized.URLField, allowedHostsJSON(normalized.AllowedResultHosts),
+			normalized.Enabled, normalized.UpdatedAt,
 		))
 	})
 }
@@ -203,11 +210,18 @@ type scanner interface {
 
 func scanSource(row scanner) (sourceadmin.Source, error) {
 	var source sourceadmin.Source
+	var allowedHosts string
 	if err := row.Scan(
 		&source.ID, &source.DisplayName, &source.Kind, &source.Endpoint,
-		&source.Enabled, &source.Revision, &source.CreatedAt, &source.UpdatedAt,
+		&source.QueryParameter, &source.ResultRoot, &source.TitleField, &source.URLField,
+		&allowedHosts, &source.Enabled, &source.Revision, &source.CreatedAt, &source.UpdatedAt,
 	); err != nil {
 		return sourceadmin.Source{}, err
+	}
+	if allowedHosts != "" {
+		if err := json.Unmarshal([]byte(allowedHosts), &source.AllowedResultHosts); err != nil {
+			return sourceadmin.Source{}, errors.New("invalid source row")
+		}
 	}
 	if source.Revision == 0 || source.CreatedAt.IsZero() || source.UpdatedAt.IsZero() {
 		return sourceadmin.Source{}, errors.New("invalid source row")
@@ -215,6 +229,17 @@ func scanSource(row scanner) (sourceadmin.Source, error) {
 	source.CreatedAt = source.CreatedAt.UTC()
 	source.UpdatedAt = source.UpdatedAt.UTC()
 	return source, nil
+}
+
+func allowedHostsJSON(hosts []string) string {
+	if hosts == nil {
+		hosts = []string{}
+	}
+	data, err := json.Marshal(hosts)
+	if err != nil {
+		return "[]"
+	}
+	return string(data)
 }
 
 type sqlStateError interface {

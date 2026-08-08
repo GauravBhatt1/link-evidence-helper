@@ -20,16 +20,27 @@ func TestRegistryCreateUpdateDisableAndList(t *testing.T) {
 	if created.Revision != 1 || created.CreatedAt.Location() != time.UTC || created.Endpoint != "https://example.test/api" {
 		t.Fatalf("unexpected created source: %#v", created)
 	}
+	if created.QueryParameter != "q" || created.TitleField != "title" || created.URLField != "url" || created.ResultRoot != "" || len(created.AllowedResultHosts) != 0 {
+		t.Fatalf("unexpected default search mapping: %#v", created)
+	}
 
 	updated, err := registry.Update(created.ID, created.Revision, Draft{
 		ID: created.ID, DisplayName: "Catalog Primary v2", Kind: "http-html",
-		Endpoint: "https://example.test/search/", Enabled: true,
+		Endpoint: "https://example.test/search/", QueryParameter: "query",
+		ResultRoot: "payload.items", TitleField: "metadata.title", URLField: "links.download",
+		AllowedResultHosts: []string{"downloads.example.test", "cdn.example.test."}, Enabled: true,
 	}, createdAt.Add(time.Minute))
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
 	if updated.Revision != 2 || updated.DisplayName != "Catalog Primary v2" {
 		t.Fatalf("unexpected updated source: %#v", updated)
+	}
+	if updated.QueryParameter != "query" || updated.ResultRoot != "payload.items" || updated.TitleField != "metadata.title" || updated.URLField != "links.download" {
+		t.Fatalf("unexpected updated mapping: %#v", updated)
+	}
+	if len(updated.AllowedResultHosts) != 2 || updated.AllowedResultHosts[0] != "cdn.example.test" || updated.AllowedResultHosts[1] != "downloads.example.test" {
+		t.Fatalf("unexpected allowed hosts: %#v", updated.AllowedResultHosts)
 	}
 
 	disabled, err := registry.Disable(updated.ID, updated.Revision, createdAt.Add(2*time.Minute))
@@ -55,6 +66,11 @@ func TestRegistryRejectsSensitiveOrUnboundedConfiguration(t *testing.T) {
 		{ID: "source", DisplayName: "Name", Kind: "http-json", Endpoint: "https://user:secret@example.test", Enabled: true},
 		{ID: "source", DisplayName: "Name", Kind: "http-json", Endpoint: "https://example.test/?token=secret", Enabled: true},
 		{ID: "source", DisplayName: "Name", Kind: "http-json", Endpoint: "file:///etc/passwd", Enabled: true},
+		{ID: "source", DisplayName: "Name", Kind: "http-json", Endpoint: "https://example.test", QueryParameter: "bad param", Enabled: true},
+		{ID: "source", DisplayName: "Name", Kind: "http-json", Endpoint: "https://example.test", TitleField: "items[0].title", Enabled: true},
+		{ID: "source", DisplayName: "Name", Kind: "http-json", Endpoint: "https://example.test", URLField: " links.url", Enabled: true},
+		{ID: "source", DisplayName: "Name", Kind: "http-json", Endpoint: "https://example.test", AllowedResultHosts: []string{"127.0.0.1"}, Enabled: true},
+		{ID: "source", DisplayName: "Name", Kind: "http-json", Endpoint: "https://example.test", AllowedResultHosts: []string{"cdn.example.test", "cdn.example.test."}, Enabled: true},
 	}
 	for _, draft := range tests {
 		registry := NewMemoryRegistry()

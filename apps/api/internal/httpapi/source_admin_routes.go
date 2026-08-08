@@ -15,12 +15,26 @@ import (
 const maxSourceAdminBodyBytes = 8 << 10
 
 type sourceDraftRequest struct {
-	ID               string `json:"id"`
-	DisplayName      string `json:"displayName"`
-	Kind             string `json:"kind"`
-	Endpoint         string `json:"endpoint"`
-	Enabled          bool   `json:"enabled"`
-	ExpectedRevision uint64 `json:"expectedRevision,omitempty"`
+	ID                 string   `json:"id"`
+	DisplayName        string   `json:"displayName"`
+	Kind               string   `json:"kind"`
+	Endpoint           string   `json:"endpoint"`
+	QueryParameter     string   `json:"queryParameter,omitempty"`
+	ResultRoot         string   `json:"resultRoot,omitempty"`
+	TitleField         string   `json:"titleField,omitempty"`
+	URLField           string   `json:"urlField,omitempty"`
+	AllowedResultHosts []string `json:"allowedResultHosts,omitempty"`
+	Enabled            bool     `json:"enabled"`
+	ExpectedRevision   uint64   `json:"expectedRevision,omitempty"`
+}
+
+func (body sourceDraftRequest) draft() sourceadmin.Draft {
+	return sourceadmin.Draft{
+		ID: body.ID, DisplayName: body.DisplayName, Kind: body.Kind, Endpoint: body.Endpoint,
+		QueryParameter: body.QueryParameter, ResultRoot: body.ResultRoot, TitleField: body.TitleField,
+		URLField: body.URLField, AllowedResultHosts: append([]string(nil), body.AllowedResultHosts...),
+		Enabled: body.Enabled,
+	}
 }
 
 func SourceAdminHandler(verifier *adminauth.Verifier, registry sourceadmin.Registry) http.Handler {
@@ -62,7 +76,7 @@ func (api *apiHandler) sourceCollection(verifier *adminauth.Verifier, registry s
 				writeError(writer, http.StatusBadRequest, "invalid_request", "expectedRevision is not valid when creating a source.", requestID)
 				return
 			}
-			source, err := registry.Create(sourceadmin.Draft{ID: body.ID, DisplayName: body.DisplayName, Kind: body.Kind, Endpoint: body.Endpoint, Enabled: body.Enabled}, time.Now().UTC())
+			source, err := registry.Create(body.draft(), time.Now().UTC())
 			if !recordSourceAudit(writer, requestID, recorder, "source.create", body.ID, err) {
 				return
 			}
@@ -108,7 +122,7 @@ func (api *apiHandler) sourceResource(verifier *adminauth.Verifier, registry sou
 				writeError(writer, http.StatusBadRequest, "invalid_request", "The source id must match the route.", requestID)
 				return
 			}
-			source, err := registry.Update(id, body.ExpectedRevision, sourceadmin.Draft{ID: body.ID, DisplayName: body.DisplayName, Kind: body.Kind, Endpoint: body.Endpoint, Enabled: body.Enabled}, time.Now().UTC())
+			source, err := registry.Update(id, body.ExpectedRevision, body.draft(), time.Now().UTC())
 			if !recordSourceAudit(writer, requestID, recorder, "source.update", id, err) {
 				return
 			}

@@ -11,6 +11,11 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
+# Go local build outputs
+/apps/api/server
+/apps/worker/worker
+/apps/worker/shadow-search
+
 # Node/web build artifacts
 node_modules/
 dist/

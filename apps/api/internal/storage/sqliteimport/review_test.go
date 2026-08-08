@@ -60,6 +60,12 @@ func TestReviewRejectsMutatedPlan(t *testing.T) {
 	}
 
 	mutated = plan.Clone()
+	mutated.Sources[0].Draft.TitleField = "changed.title"
+	if err := review.Verify(mutated); !errors.Is(err, ErrPlanChanged) {
+		t.Fatalf("Verify() mapping error = %v, want ErrPlanChanged", err)
+	}
+
+	mutated = plan.Clone()
 	mutated.Rollback = nil
 	if err := review.Verify(mutated); !errors.Is(err, ErrPlanChanged) {
 		t.Fatalf("Verify() rollback error = %v, want ErrPlanChanged", err)

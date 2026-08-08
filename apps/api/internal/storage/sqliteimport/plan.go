@@ -76,11 +76,16 @@ func NewPlan(rows []LegacySource, now time.Time) (Plan, error) {
 			return Plan{}, ErrInvalidInput
 		}
 		steps = append(steps, SourceStep{Draft: sourceadmin.Draft{
-			ID:          validated.ID,
-			DisplayName: validated.DisplayName,
-			Kind:        validated.Kind,
-			Endpoint:    validated.Endpoint,
-			Enabled:     validated.Enabled,
+			ID:                 validated.ID,
+			DisplayName:        validated.DisplayName,
+			Kind:               validated.Kind,
+			Endpoint:           validated.Endpoint,
+			QueryParameter:     validated.QueryParameter,
+			ResultRoot:         validated.ResultRoot,
+			TitleField:         validated.TitleField,
+			URLField:           validated.URLField,
+			AllowedResultHosts: append([]string(nil), validated.AllowedResultHosts...),
+			Enabled:            validated.Enabled,
 		}})
 	}
 

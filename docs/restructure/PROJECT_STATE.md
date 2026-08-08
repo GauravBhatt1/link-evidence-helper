@@ -74,6 +74,7 @@ Follow-up VPS readiness rehearsal on 2026-08-08 fixed and verified two release-c
 - API contract Go models are gofmt-clean.
 - The loopback Caddy preview now starts under read-only rootfs, dropped capabilities, and `no-new-privileges:true`, and proxies `/healthz` successfully on port `18781`.
 - The loopback Caddy preview now also builds and serves the React web application at `/` with same-origin API transports, while proxying `/api/*` and `/healthz` to the Go API.
+- Administrative source records now carry the credential-free HTTP JSON search mapping required for live search configuration: query parameter, optional result root, title field, URL field, and allowed result hosts.
 
 Repository readiness does not mean production has been changed. The final deployment remains intentionally blocked on live-behavior parity, production-only verification, and explicit operator action.
 
@@ -109,7 +110,7 @@ Required verification and inputs:
 
 ## Remaining work
 
-Repository-side preview routing is now closer to the intended production shape, but the release candidate is still not a safe replacement for the live Python app because search remains fixture-only. Remaining work:
+Repository-side preview routing and source configuration are now closer to the intended production shape, but the release candidate is still not a safe replacement for the live Python app because API search execution remains fixture-only. Remaining work:
 
 - VPS inventory and secret-safe runtime configuration
 - backup and restore verification

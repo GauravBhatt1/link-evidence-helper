@@ -92,6 +92,14 @@ func planHash(plan Plan) (string, error) {
 		writeField(step.Draft.DisplayName)
 		writeField(step.Draft.Kind)
 		writeField(step.Draft.Endpoint)
+		writeField(step.Draft.QueryParameter)
+		writeField(step.Draft.ResultRoot)
+		writeField(step.Draft.TitleField)
+		writeField(step.Draft.URLField)
+		writeUint64(uint64(len(step.Draft.AllowedResultHosts)))
+		for _, host := range step.Draft.AllowedResultHosts {
+			writeField(host)
+		}
 		if step.Draft.Enabled {
 			writeField("1")
 		} else {

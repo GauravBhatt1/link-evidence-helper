@@ -21,6 +21,10 @@ func TestInitialMigrationContainsRequiredTablesAndConstraints(t *testing.T) {
 		"admin_sources_endpoint_no_userinfo",
 		"admin_sources_endpoint_no_query",
 		"admin_sources_endpoint_no_fragment",
+		"admin_sources_query_parameter_safe",
+		"admin_sources_title_field_safe",
+		"admin_sources_url_field_safe",
+		"admin_sources_allowed_result_hosts_array",
 		"admin_audit_action_allowed",
 		"admin_audit_outcome_allowed",
 		"timestamptz",
@@ -42,6 +46,8 @@ func TestSourceSchemaMatchesCredentialFreeDomainBoundary(t *testing.T) {
 		"position('?' IN endpoint) = 0",
 		"position('#' IN endpoint) = 0",
 		"kind IN ('http-json', 'http-html', 'browser-html')",
+		"query_parameter ~ '^[A-Za-z0-9_-]{1,64}$'",
+		"jsonb_typeof(allowed_result_hosts) = 'array'",
 		"revision > 0",
 	} {
 		if !strings.Contains(sql, required) {
