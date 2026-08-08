@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { CircleAlert, Database, Film, RefreshCw, Tv } from "lucide-react";
+import { apiPath, publicPath } from "../../../app/runtime-paths";
 import type { LibraryItem, LibraryView } from "../../../types/contracts";
 import {
   defaultLibraryTransportConfiguration,
@@ -44,13 +45,32 @@ function stateLabel(item: LibraryItem) {
   return "Status unknown";
 }
 
+function posterURL(item: LibraryItem) {
+  const poster = item.poster?.trim();
+  if (!poster) return "";
+  if (/^https?:\/\//i.test(poster)) return poster;
+  if (poster.startsWith("/api/")) return apiPath(poster);
+  return publicPath(poster);
+}
+
 function LibraryCard({ item }: { item: LibraryItem }) {
   const Icon = item.mediaType === "movie" ? Film : Tv;
+  const poster = posterURL(item);
   return (
     <article className="library-card">
-      <div className="library-poster-fallback" aria-hidden="true">
-        <span>{itemInitials(item.title)}</span>
-      </div>
+      {poster ? (
+        <img
+          className="library-poster"
+          src={poster}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        <div className="library-poster-fallback" aria-hidden="true">
+          <span>{itemInitials(item.title)}</span>
+        </div>
+      )}
       <div className="library-card-body">
         <div className="library-card-title-row">
           <div>

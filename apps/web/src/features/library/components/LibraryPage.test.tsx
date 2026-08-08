@@ -37,6 +37,49 @@ describe("LibraryPage", () => {
     expect(screen.queryByRole("heading", { level: 2, name: "Horizon Gate" })).not.toBeInTheDocument();
   });
 
+  it("renders production library posters when the API provides poster artwork", async () => {
+    const { container } = renderLibrary("movies", {
+      async list() {
+        return {
+          ok: true,
+          success: true,
+          code: "ok",
+          view: "movies",
+          generatedAt: "2026-08-08T00:00:00Z",
+          summary: { total: 1, movies: 1, tv: 0, missing: 0 },
+          jellyfin: { configured: true, mode: "connected", lastSyncedAt: "2026-08-08T00:00:00Z" },
+          items: [{
+            itemId: "movie-1",
+            contentId: "library_movie-1",
+            tmdbId: "1163258",
+            title: "12th Fail",
+            year: 2023,
+            mediaType: "movie",
+            season: null,
+            episode: null,
+            poster: "/api/tmdb-image?path=w342/poster.jpg",
+            libraryState: "available",
+            missing: false,
+            dateAdded: "2026-08-08T00:00:00Z",
+            updatedAt: "2026-08-08T00:00:00Z",
+            jellyfin: {
+              configured: true,
+              present: true,
+              itemId: "movie-1",
+              serverId: null,
+              lastSyncedAt: "2026-08-08T00:00:00Z",
+            },
+          }],
+        };
+      },
+    });
+
+    expect(await screen.findByRole("heading", { level: 2, name: "12th Fail" })).toBeVisible();
+    const poster = container.querySelector("img.library-poster");
+    expect(poster).toHaveAttribute("src", "/api/tmdb-image?path=w342/poster.jpg");
+    expect(container.querySelector(".library-poster-fallback")).toBeNull();
+  });
+
   it("presents a safe retry state without leaking transport details", async () => {
     const user = userEvent.setup();
     const list = vi.fn(async () => {
