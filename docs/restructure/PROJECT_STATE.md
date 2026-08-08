@@ -1,6 +1,6 @@
 # Restructuring project state
 
-Last updated: 2026-08-06
+Last updated: 2026-08-08
 
 ## Goal
 
@@ -69,6 +69,11 @@ The release-candidate workflow and all relevant checks passed before merge into 
 
 The repository restructuring line is ready for controlled deployment verification. No additional repository-only production requirement is currently known to be incomplete.
 
+Follow-up VPS readiness rehearsal on 2026-08-08 fixed and verified two release-candidate gate gaps:
+
+- API contract Go models are gofmt-clean.
+- The loopback Caddy preview now starts under read-only rootfs, dropped capabilities, and `no-new-privileges:true`, and proxies `/healthz` successfully on port `18781`.
+
 Repository readiness does not mean production has been changed. The final deployment remains intentionally blocked on production-only verification and explicit operator action.
 
 ## Current integration branch
@@ -77,7 +82,7 @@ Repository readiness does not mean production has been changed. The final deploy
 
 Current recorded implementation commit:
 
-`e599fc1785af74e02c0cfbf373c732c53a07959a`
+`0e3eec313fe0c1a18f3747efc2e2ce1d2d3a3355`
 
 This branch is the cumulative non-production release-candidate line.
 
