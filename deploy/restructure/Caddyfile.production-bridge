@@ -21,7 +21,7 @@
 	@unsafe_methods method TRACE CONNECT
 	respond @unsafe_methods 405
 
-	handle /api/* {
+	handle /api/v1/* {
 		reverse_proxy api:8780 {
 			health_uri /healthz
 			health_interval 10s
@@ -29,6 +29,10 @@
 			lb_try_duration 2s
 			lb_try_interval 250ms
 		}
+	}
+
+	handle /api/* {
+		reverse_proxy legacy:8766
 	}
 
 	handle /healthz {
@@ -57,8 +61,6 @@
 	}
 
 	handle {
-		root * /srv/link-evidence-web
-		try_files {path} /index.html
-		file_server
+		reverse_proxy legacy:8766
 	}
 }
