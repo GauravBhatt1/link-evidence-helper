@@ -11,6 +11,12 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
+# Node/web build artifacts
+node_modules/
+dist/
+test-results/
+playwright-report/
+
 # Local backups and test output
 backups/
 *.tar.gz

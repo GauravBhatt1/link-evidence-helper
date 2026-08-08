@@ -1,6 +1,27 @@
 # syntax=docker/dockerfile:1.7
+FROM node:24.18.0-alpine AS web-build
+
+WORKDIR /workspace
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json apps/web/package.json
+COPY packages/contracts/package.json packages/contracts/package.json
+
+RUN corepack enable \
+    && corepack pnpm@10.18.3 install --frozen-lockfile
+
+COPY apps/web apps/web
+COPY packages/contracts packages/contracts
+COPY packages/testing packages/testing
+
+ENV VITE_SEARCH_TRANSPORT=api
+ENV VITE_LIBRARY_TRANSPORT=api
+RUN corepack pnpm@10.18.3 --filter @link-evidence/web build
+
 FROM caddy:2.10.0-alpine
 
 RUN apk add --no-cache libcap \
     && setcap -r /usr/bin/caddy \
     && apk del libcap
+
+COPY --from=web-build /workspace/apps/web/dist /srv/link-evidence-web

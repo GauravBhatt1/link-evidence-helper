@@ -73,16 +73,17 @@ Follow-up VPS readiness rehearsal on 2026-08-08 fixed and verified two release-c
 
 - API contract Go models are gofmt-clean.
 - The loopback Caddy preview now starts under read-only rootfs, dropped capabilities, and `no-new-privileges:true`, and proxies `/healthz` successfully on port `18781`.
+- The loopback Caddy preview now also builds and serves the React web application at `/` with same-origin API transports, while proxying `/api/*` and `/healthz` to the Go API.
 
-Repository readiness does not mean production has been changed. The final deployment remains intentionally blocked on production-only verification and explicit operator action.
+Repository readiness does not mean production has been changed. The final deployment remains intentionally blocked on live-behavior parity, production-only verification, and explicit operator action.
 
 ## Current integration branch
 
 `restructure/integration`
 
-Current recorded implementation commit:
+Current recorded implementation state:
 
-`0e3eec313fe0c1a18f3747efc2e2ce1d2d3a3355`
+Use the pushed head of `restructure/integration`.
 
 This branch is the cumulative non-production release-candidate line.
 
@@ -108,13 +109,14 @@ Required verification and inputs:
 
 ## Remaining work
 
-Only production-environment execution remains:
+Repository-side preview routing is now closer to the intended production shape, but the release candidate is still not a safe replacement for the live Python app because search remains fixture-only. Remaining work:
 
 - VPS inventory and secret-safe runtime configuration
 - backup and restore verification
 - migration dry run and controlled migration
 - side-by-side release-candidate startup
-- behavioral parity and load verification against the production oracle
+- live search implementation and behavioral parity verification against the production oracle
+- load verification
 - rollback rehearsal
 - explicit traffic-switch decision
 

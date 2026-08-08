@@ -42,6 +42,11 @@ jobs:
         run: |
           grep -Fq 'Dockerfile.caddy-preview' deploy/restructure/compose.caddy.yaml
           grep -Fq '127.0.0.1:${LINK_EVIDENCE_CADDY_PREVIEW_PORT:-18781}:8080' deploy/restructure/compose.caddy.yaml
+          grep -Fq 'VITE_SEARCH_TRANSPORT=api' deploy/restructure/Dockerfile.caddy-preview
+          grep -Fq 'VITE_LIBRARY_TRANSPORT=api' deploy/restructure/Dockerfile.caddy-preview
+          grep -Fq 'handle /api/*' deploy/restructure/Caddyfile.preview
+          grep -Fq 'root * /srv/link-evidence-web' deploy/restructure/Caddyfile.preview
+          grep -Fq 'try_files {path} /index.html' deploy/restructure/Caddyfile.preview
           grep -Fq 'reverse_proxy api:8780' deploy/restructure/Caddyfile.preview
           grep -Fq 'health_uri /healthz' deploy/restructure/Caddyfile.preview
           grep -Fq 'auto_https off' deploy/restructure/Caddyfile.preview
