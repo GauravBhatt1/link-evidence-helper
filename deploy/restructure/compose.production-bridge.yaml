@@ -22,7 +22,7 @@ services:
       - /home/ubuntu/Config/Jellyfin/data/data/jellyfin.db:/home/ubuntu/Config/Jellyfin/data/data/jellyfin.db:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    networks: [backend]
+    networks: [backend, egress]
 
   api:
     build:
@@ -128,6 +128,7 @@ services:
 
 networks:
   frontend: {}
+  egress: {}
   backend:
     internal: true
 
