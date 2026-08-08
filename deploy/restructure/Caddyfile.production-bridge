@@ -21,6 +21,9 @@
 	@unsafe_methods method TRACE CONNECT
 	respond @unsafe_methods 405
 
+	@index_legacy_setup path /index/legacy/setup
+	redir @index_legacy_setup /index/legacy/admin 302
+
 	handle / {
 		redir /index/ 308
 	}
@@ -64,8 +67,7 @@
 		reverse_proxy legacy:8766
 	}
 
-	handle /index/legacy/* {
-		uri strip_prefix /index
+	handle_path /index/legacy/* {
 		reverse_proxy legacy:8766
 	}
 

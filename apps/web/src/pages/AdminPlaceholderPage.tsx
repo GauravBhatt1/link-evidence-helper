@@ -37,7 +37,7 @@ export function AdminPlaceholderPage() {
             </div>
           </div>
         </a>
-        <a className="library-card admin-link-card" href={publicPath("/legacy/setup")}>
+        <a className="library-card admin-link-card" href={publicPath("/legacy/admin")}>
           <div className="library-poster-fallback" aria-hidden="true"><Settings /></div>
           <div className="library-card-body">
             <div className="library-card-title-row">
