@@ -78,12 +78,19 @@ type legacyVariant struct {
 }
 
 type legacySource struct {
-	SourceID          string `json:"sourceId"`
-	DisplayName       string `json:"displayName"`
-	SourceName        string `json:"sourceName"`
-	AdapterName       string `json:"adapterName"`
-	Priority          int    `json:"priority"`
-	VerificationState string `json:"verificationState"`
+	SourceID          string          `json:"sourceId"`
+	DisplayName       string          `json:"displayName"`
+	SourceName        string          `json:"sourceName"`
+	AdapterName       string          `json:"adapterName"`
+	Priority          int             `json:"priority"`
+	VerificationState string          `json:"verificationState"`
+	WorkflowMetadata  json.RawMessage `json:"workflowMetadata"`
+}
+
+type legacyWorkflowMetadata struct {
+	Candidate struct {
+		LibraryStatus string `json:"library_status"`
+	} `json:"candidate"`
 }
 
 func NewLegacyBridge(config LegacyBridgeConfig) (*LegacyBridge, error) {
@@ -182,10 +189,7 @@ func bridgeContents(contents []legacyContent) []contracts.Content {
 		if value := stringify(content.TMDBID); value != "" {
 			tmdbID = &value
 		}
-		jellyfinStatus := strings.TrimSpace(content.JellyfinStatus)
-		if jellyfinStatus == "" {
-			jellyfinStatus = "unknown"
-		}
+		jellyfinStatus := legacyJellyfinStatus(content)
 		result = append(result, contracts.Content{
 			ContentID:       strings.TrimSpace(content.ContentID),
 			TMDBID:          tmdbID,
@@ -200,6 +204,47 @@ func bridgeContents(contents []legacyContent) []contracts.Content {
 		})
 	}
 	return result
+}
+
+func legacyJellyfinStatus(content legacyContent) string {
+	status := normalizeJellyfinStatus(content.JellyfinStatus)
+	if status != "" {
+		return status
+	}
+	for _, variant := range content.ReleaseVariants {
+		for _, source := range variant.Sources {
+			status = legacySourceLibraryStatus(source)
+			if status == "available" {
+				return status
+			}
+			if status == "missing" {
+				return status
+			}
+		}
+	}
+	return "unknown"
+}
+
+func legacySourceLibraryStatus(source legacySource) string {
+	if len(source.WorkflowMetadata) == 0 {
+		return ""
+	}
+	var metadata legacyWorkflowMetadata
+	if err := json.Unmarshal(source.WorkflowMetadata, &metadata); err != nil {
+		return ""
+	}
+	return normalizeJellyfinStatus(metadata.Candidate.LibraryStatus)
+}
+
+func normalizeJellyfinStatus(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "available":
+		return "available"
+	case "missing", "not_available", "not-available":
+		return "missing"
+	default:
+		return ""
+	}
 }
 
 func bridgeVariants(variants []legacyVariant) []contracts.ReleaseVariant {

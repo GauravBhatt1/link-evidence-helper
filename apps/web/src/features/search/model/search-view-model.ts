@@ -15,10 +15,12 @@ export type ContentCardViewModel = {
   title: string;
   year: string;
   mediaType: "movie" | "tv";
+  poster: string;
   languages: string[];
   releaseCount: number;
   totalSources: number;
-  fixtureLibraryStatus: "Available" | "Missing" | "Unknown";
+  libraryStatus: "available" | "missing" | "unknown";
+  libraryStatusLabel: "Available in Jellyfin" | "Not in Jellyfin" | "Availability unknown";
   variants: ReleaseVariantViewModel[];
 };
 
@@ -34,18 +36,20 @@ function packLabel(variant: ReleaseVariant) {
 }
 
 export function toContentCardViewModel(content: Content): ContentCardViewModel {
-  const status = content.jellyfinStatus === "available"
-    ? "Available"
-    : content.jellyfinStatus === "missing" ? "Missing" : "Unknown";
+  const statusLabel = content.jellyfinStatus === "available"
+    ? "Available in Jellyfin"
+    : content.jellyfinStatus === "missing" ? "Not in Jellyfin" : "Availability unknown";
   return {
     contentId: content.contentId,
     title: content.title,
     year: content.year,
     mediaType: content.mediaType,
+    poster: content.poster,
     languages: [...content.languages],
     releaseCount: content.releaseVariants.length,
     totalSources: content.totalSources,
-    fixtureLibraryStatus: status,
+    libraryStatus: content.jellyfinStatus,
+    libraryStatusLabel: statusLabel,
     variants: content.releaseVariants.map((variant) => ({
       variantId: variant.variantId,
       language: variant.language,

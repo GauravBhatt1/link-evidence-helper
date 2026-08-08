@@ -12,13 +12,12 @@ describe("release and quality selection", () => {
     expect(selectedQuality(selected, content.contentId, variant.variantId)).toBe(variant.availableQualities[0]);
   });
 
-  it("requires an explicit choice for multi-quality releases", () => {
+  it("auto-selects the first quality for multi-quality releases", () => {
     const content = fixtureResponseForScenario("multi-quality", "Multi Quality").contents[0]!;
     const variant = content.releaseVariants[0]!;
     const selectable = { variantId: variant.variantId, qualities: variant.availableQualities };
     const releaseSelected = selectRelease({}, content.contentId, selectable);
-    expect(selectedQuality(releaseSelected, content.contentId, variant.variantId)).toBe("");
-    expect(buildResolutionIntent(content.contentId, selectable, "")).toBeNull();
+    expect(selectedQuality(releaseSelected, content.contentId, variant.variantId)).toBe(variant.availableQualities[0]);
 
     const qualitySelected = selectQuality(releaseSelected, content.contentId, selectable, "1080P");
     expect(selectedQuality(qualitySelected, content.contentId, variant.variantId)).toBe("1080p");
@@ -36,7 +35,7 @@ describe("release and quality selection", () => {
       qualities: ["720p", "1080p"],
     });
     expect(next.content?.selectedVariantId).toBe("variant");
-    expect(selectedQuality(next, "content", "variant")).toBe("");
+    expect(selectedQuality(next, "content", "variant")).toBe("720p");
   });
 
   it("builds a strict canonical intent with exactly three public fields", () => {

@@ -30,12 +30,46 @@ function renderCard(active = false) {
   return { ...result, onToggle, viewModel };
 }
 
+function renderCardWithPoster() {
+  const content = fixtureResponseForScenario("multiple-sources", "Multiple Sources").contents[0]!;
+  const viewModel = {
+    ...toContentCardViewModel(content),
+    poster: "/api/tmdb-image?path=w342/poster.jpg",
+  };
+  const result = render(
+    <ContentCard
+      content={viewModel}
+      active={false}
+      selectedVariantId={null}
+      selectedQuality=""
+      helper="Select a release to continue."
+      findEnabled={false}
+      findBusy={false}
+      intentNotice=""
+      resolution={null}
+      onToggle={vi.fn()}
+      onSelectVariant={vi.fn()}
+      onSelectQuality={vi.fn()}
+      onFind={vi.fn()}
+      onCancelResolution={vi.fn()}
+    />,
+  );
+  return { ...result, viewModel };
+}
+
 describe("ContentCard", () => {
-  it("renders one approved identification summary with a local decorative fallback", () => {
-    const { container, viewModel } = renderCard();
+  it("renders one approved identification summary with poster and availability status", () => {
+    const { container, viewModel } = renderCardWithPoster();
     expect(screen.getAllByRole("heading", { level: 2, name: viewModel.title })).toHaveLength(1);
-    expect(screen.getByText("Fixture library status")).toBeVisible();
-    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByText(viewModel.libraryStatusLabel)).toBeVisible();
+    const poster = container.querySelector("img.content-poster");
+    expect(poster).toHaveAttribute("src", viewModel.poster);
+    expect(container.querySelector(".poster-fallback")).toBeNull();
+  });
+
+  it("uses a local decorative fallback only when a poster is unavailable", () => {
+    const { container } = renderCard();
+    expect(container.querySelector("img.content-poster")).toBeNull();
     expect(container.querySelector(".poster-fallback")).toHaveAttribute("aria-hidden", "true");
   });
 

@@ -100,6 +100,11 @@ export function SearchPage({
           }}
           onToggleContent={(contentId) => {
             setActiveContentId((current) => current === contentId ? null : contentId);
+            const content = contentViewModels.find((item) => item.contentId === contentId);
+            const firstVariant = content?.variants.find((variant) => variant.qualities.length > 0);
+            if (firstVariant) {
+              setSelections((current) => selectRelease(current, contentId, firstVariant));
+            }
             clearResolutionDecision();
           }}
           onSelectVariant={(contentId, variantId) => {

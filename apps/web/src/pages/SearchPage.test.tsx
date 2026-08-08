@@ -137,13 +137,13 @@ describe("SearchPage", () => {
     await screen.findByText("1 unified content item");
     await user.click(screen.getByRole("button", { name: /choose releases for/i }));
     const findButton = screen.getByRole("button", { name: "Find Links" });
-    expect(findButton).toBeDisabled();
-    expect(screen.getByText("Select a release to continue.")).toBeVisible();
-    await user.click(screen.getByRole("radio", { name: /Hindi/ }));
     expect(screen.getByRole("group", { name: "Select one quality" })).toBeVisible();
-    expect(findButton).toBeDisabled();
-    expect(screen.getByText("Select a quality to continue.")).toBeVisible();
+    expect(screen.getByRole("radio", { name: "480p" })).toBeChecked();
+    expect(findButton).toBeEnabled();
+    expect(screen.getByText("Ready to find links.")).toBeVisible();
+    expect(screen.getByRole("group", { name: "Select one quality" })).toBeVisible();
     await user.click(screen.getByRole("radio", { name: "1080p" }));
+    expect(screen.getByRole("radio", { name: "1080p" })).toBeChecked();
     expect(findButton).toBeEnabled();
   });
 
@@ -154,8 +154,6 @@ describe("SearchPage", () => {
     await screen.findByText("1 unified content item");
     await user.click(screen.getByRole("button", { name: /choose releases for/i }));
     const findButton = screen.getByRole("button", { name: "Find Links" });
-    expect(findButton).toBeDisabled();
-    await user.click(screen.getByRole("radio", { name: /Hindi/ }));
     expect(screen.getByRole("radio", { name: "1080p" })).toBeChecked();
     expect(findButton).toBeEnabled();
     await user.click(findButton);

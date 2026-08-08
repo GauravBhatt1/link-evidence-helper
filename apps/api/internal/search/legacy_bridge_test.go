@@ -40,7 +40,10 @@ func TestLegacyBridgeMapsSearchResponseToContract(t *testing.T) {
 					"sources": [{
 						"sourceId": "source_hdmovie2r_ltd",
 						"adapterName": "HDMovie2",
-						"workflowMetadata": {"internal": true}
+						"workflowMetadata": {
+							"internal": true,
+							"candidate": {"library_status": "available"}
+						}
 					}]
 				}]
 			}],
@@ -68,7 +71,7 @@ func TestLegacyBridgeMapsSearchResponseToContract(t *testing.T) {
 	if content.TMDBID != nil {
 		t.Fatalf("empty tmdbId should map to nil: %#v", *content.TMDBID)
 	}
-	if content.JellyfinStatus != "unknown" {
+	if content.JellyfinStatus != "available" {
 		t.Fatalf("jellyfinStatus = %q", content.JellyfinStatus)
 	}
 	if content.Languages == nil {

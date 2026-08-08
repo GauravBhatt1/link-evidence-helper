@@ -44,7 +44,7 @@ export function selectRelease(
   const existing = selections[contentId] ?? { selectedVariantId: null, qualityByVariantId: {} };
   const previous = existing.qualityByVariantId[variant.variantId];
   const canonicalPrevious = previous ? matchingQuality(variant.qualities, previous) : undefined;
-  const nextSelectedQuality = canonicalPrevious ?? (variant.qualities.length === 1 ? variant.qualities[0] : undefined);
+  const nextSelectedQuality = canonicalPrevious ?? variant.qualities[0];
   const qualityByVariantId = { ...existing.qualityByVariantId };
 
   if (nextSelectedQuality) {
