@@ -25,4 +25,8 @@ LINK_EVIDENCE_ADMIN_TOKEN='local-only-value' \
 
 The preview Caddyfile deliberately disables automatic HTTPS and the Caddy admin API. It contains no domain, certificate issuer, DNS provider, credentials, or production listener. The existing production service and port `8765` are outside this topology.
 
+The Caddy overlay builds a preview-only image from `Dockerfile.caddy-preview`.
+It removes Caddy's inherited low-port file capability so the container can keep
+`no-new-privileges:true` while listening only on the internal high port `8080`.
+
 Before any controlled deployment, create a separate release-candidate configuration with an explicitly reviewed hostname, certificate strategy, trusted-proxy policy, request-size limits, and rollback procedure. Do not reuse the preview Caddyfile as a production cutover configuration.

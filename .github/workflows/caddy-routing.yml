@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "deploy/restructure/Caddyfile.preview"
+      - "deploy/restructure/Dockerfile.caddy-preview"
       - "deploy/restructure/compose.caddy.yaml"
       - "deploy/restructure/README.md"
       - ".github/workflows/caddy-routing.yml"
@@ -31,10 +32,18 @@ jobs:
           -f deploy/restructure/compose.yaml
           -f deploy/restructure/compose.caddy.yaml
           config --quiet
+      - name: Build hardened preview Caddy image
+        run: >-
+          docker build
+          -f deploy/restructure/Dockerfile.caddy-preview
+          -t link-evidence-caddy-preview-ci
+          .
       - name: Enforce preview-only routing boundary
         run: |
+          grep -Fq 'Dockerfile.caddy-preview' deploy/restructure/compose.caddy.yaml
           grep -Fq '127.0.0.1:${LINK_EVIDENCE_CADDY_PREVIEW_PORT:-18781}:8080' deploy/restructure/compose.caddy.yaml
           grep -Fq 'reverse_proxy api:8780' deploy/restructure/Caddyfile.preview
+          grep -Fq 'health_uri /healthz' deploy/restructure/Caddyfile.preview
           grep -Fq 'auto_https off' deploy/restructure/Caddyfile.preview
           grep -Fq 'admin off' deploy/restructure/Caddyfile.preview
           ! grep -RInE '(^|[^0-9])8765([^0-9]|$)' deploy/restructure/Caddyfile.preview deploy/restructure/compose.caddy.yaml

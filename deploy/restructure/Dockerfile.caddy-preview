@@ -1,0 +1,6 @@
+# syntax=docker/dockerfile:1.7
+FROM caddy:2.10.0-alpine
+
+RUN apk add --no-cache libcap \
+    && setcap -r /usr/bin/caddy \
+    && apk del libcap
